@@ -108,7 +108,9 @@ func run() error {
 	// Card endpoints
 	mux.HandleFunc("POST /api/cards", cardHandler.Create)
 	mux.HandleFunc("GET /api/cards", cardHandler.List)
+	mux.HandleFunc("GET /api/cards/archive", cardHandler.Archive)
 	mux.HandleFunc("GET /api/cards/{id}", cardHandler.Get)
+	mux.HandleFunc("GET /api/cards/{id}/stats", cardHandler.Stats)
 	mux.HandleFunc("POST /api/cards/{id}/items", cardHandler.AddItem)
 	mux.HandleFunc("PUT /api/cards/{id}/items/{pos}", cardHandler.UpdateItem)
 	mux.HandleFunc("DELETE /api/cards/{id}/items/{pos}", cardHandler.RemoveItem)
@@ -131,6 +133,7 @@ func run() error {
 	mux.HandleFunc("DELETE /api/friends/{id}", friendHandler.Remove)
 	mux.HandleFunc("DELETE /api/friends/{id}/cancel", friendHandler.CancelRequest)
 	mux.HandleFunc("GET /api/friends/{id}/card", friendHandler.GetFriendCard)
+	mux.HandleFunc("GET /api/friends/{id}/cards", friendHandler.GetFriendCards)
 
 	// Reaction endpoints
 	mux.HandleFunc("POST /api/items/{id}/react", reactionHandler.AddReaction)

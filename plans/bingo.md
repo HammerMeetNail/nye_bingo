@@ -363,10 +363,10 @@ GET /api/cards/:id/stats        - Card statistics
 ```
 
 ### 7.3 Deliverables
-- [ ] Archive page listing past cards
-- [ ] Read-only historical card view
-- [ ] Completion statistics
-- [ ] Visual distinction for archived cards
+- [x] Archive page listing past cards
+- [x] Read-only historical card view
+- [x] Completion statistics
+- [x] Visual distinction for archived cards
 
 ---
 

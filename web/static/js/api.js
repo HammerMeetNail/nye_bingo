@@ -131,6 +131,14 @@ const API = {
         proof_url: proofUrl,
       });
     },
+
+    async getArchive() {
+      return API.request('GET', '/api/cards/archive');
+    },
+
+    async getStats(cardId) {
+      return API.request('GET', `/api/cards/${cardId}/stats`);
+    },
   },
 
   // Suggestion endpoints
@@ -184,6 +192,10 @@ const API = {
 
     async getCard(friendshipId) {
       return API.request('GET', `/api/friends/${friendshipId}/card`);
+    },
+
+    async getCards(friendshipId) {
+      return API.request('GET', `/api/friends/${friendshipId}/cards`);
     },
   },
 

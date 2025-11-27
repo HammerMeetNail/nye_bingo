@@ -9,6 +9,7 @@ A web application for creating and tracking New Year's Resolution Bingo cards. C
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
 - **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo
 - **Social Features**: Add friends, view their cards, and react to their achievements with emojis
+- **Card Archive**: View past years' cards with completion statistics and bingo counts
 - **Accessible Design**: Uses OpenDyslexic font for improved readability
 
 ## Tech Stack
@@ -108,7 +109,9 @@ nye_bingo/
 ### Cards
 - `POST /api/cards` - Create new card
 - `GET /api/cards` - List user's cards
+- `GET /api/cards/archive` - List archived cards from past years
 - `GET /api/cards/{id}` - Get card details
+- `GET /api/cards/{id}/stats` - Get card statistics (completion rate, bingos)
 - `POST /api/cards/{id}/items` - Add item to card
 - `POST /api/cards/{id}/shuffle` - Shuffle card items
 - `POST /api/cards/{id}/finalize` - Lock card for play
@@ -130,7 +133,8 @@ nye_bingo/
 - `PUT /api/friends/{id}/accept` - Accept request
 - `PUT /api/friends/{id}/reject` - Reject request
 - `DELETE /api/friends/{id}` - Remove friend
-- `GET /api/friends/{id}/card` - View friend's card
+- `GET /api/friends/{id}/card` - View friend's current card
+- `GET /api/friends/{id}/cards` - View all friend's cards (with year selector)
 
 ### Reactions
 - `POST /api/items/{id}/react` - React to completed item
@@ -158,8 +162,13 @@ Seeds the database with test data for development and testing.
   - `alice@test.com` (Alice Anderson)
   - `bob@test.com` (Bob Builder)
   - `carol@test.com` (Carol Chen)
-- Finalized 2025 bingo cards for Alice and Bob with 24 unique goals each
-- 6 completed items on each card with notes
+- Alice's cards:
+  - 2025: 6/24 completed (current year)
+  - 2024: 18/24 completed, 2 bingos (archived)
+  - 2023: 12/24 completed, 1 bingo (archived)
+- Bob's cards:
+  - 2025: 6/24 completed (current year)
+  - 2024: 24/24 completed, 12 bingos - perfect year! (archived)
 - Friendships: Alice ↔ Bob (accepted), Carol → Alice (pending)
 - Emoji reactions from Bob on Alice's completed items
 
@@ -182,6 +191,24 @@ Removes friendships and reactions for test accounts via the API.
 ```bash
 podman compose down -v && podman compose up
 ```
+
+### test-archive.sh
+
+Tests the archive and statistics endpoints.
+
+```bash
+# Use default URL (http://localhost:8080)
+./scripts/test-archive.sh
+
+# Use custom URL
+./scripts/test-archive.sh http://localhost:3000
+```
+
+**Tests:**
+- `GET /api/cards/archive` - Lists cards from past years
+- `GET /api/cards/{id}/stats` - Card statistics including completion rate and bingo count
+
+**Note:** Archive only shows cards from past years. Cards created by `seed.sh` (2025) won't appear in archive until 2026.
 
 ### Adding New Scripts
 

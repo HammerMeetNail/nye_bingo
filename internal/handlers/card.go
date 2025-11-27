@@ -48,10 +48,11 @@ type UpdateNotesRequest struct {
 }
 
 type CardResponse struct {
-	Card    *models.BingoCard `json:"card,omitempty"`
+	Card    *models.BingoCard   `json:"card,omitempty"`
 	Cards   []*models.BingoCard `json:"cards,omitempty"`
-	Item    *models.BingoItem `json:"item,omitempty"`
-	Message string            `json:"message,omitempty"`
+	Item    *models.BingoItem   `json:"item,omitempty"`
+	Stats   *models.CardStats   `json:"stats,omitempty"`
+	Message string              `json:"message,omitempty"`
 }
 
 func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -72,10 +73,10 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Year = time.Now().Year()
 	}
 
-	// Validate year (allow current year and next year)
+	// Validate year (reasonable range: 2020 to next year)
 	currentYear := time.Now().Year()
-	if req.Year < currentYear || req.Year > currentYear+1 {
-		writeError(w, http.StatusBadRequest, "Year must be current year or next year")
+	if req.Year < 2020 || req.Year > currentYear+1 {
+		writeError(w, http.StatusBadRequest, "Year must be between 2020 and next year")
 		return
 	}
 
@@ -572,4 +573,56 @@ func parsePosition(r *http.Request) (int, error) {
 		}
 	}
 	return 0, errors.New("position not found in path")
+}
+
+func (h *CardHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cards, err := h.cardService.GetArchive(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error getting archive: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	if cards == nil {
+		cards = []*models.BingoCard{}
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Cards: cards})
+}
+
+func (h *CardHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	stats, err := h.cardService.GetStats(r.Context(), user.ID, cardID)
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if err != nil {
+		log.Printf("Error getting stats: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Stats: stats})
 }

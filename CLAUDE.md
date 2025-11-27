@@ -30,11 +30,14 @@ go build -o server ./cmd/server
 # Download dependencies
 go mod tidy
 
-# Seed database with test data
+# Seed database with test data (includes archive cards)
 ./scripts/seed.sh
 
 # Clean up test friendships
 ./scripts/cleanup.sh
+
+# Test archive functionality
+./scripts/test-archive.sh
 
 # Full database reset
 podman compose down -v && podman compose up
@@ -51,7 +54,7 @@ podman compose down -v && podman compose up
 - `internal/services/` - Business logic layer (UserService, AuthService, CardService, SuggestionService, FriendService, ReactionService)
 - `internal/handlers/` - HTTP handlers that call services and return JSON
 - `internal/middleware/` - Auth validation, CSRF protection
-- `scripts/` - Development/testing scripts (seed.sh, cleanup.sh) - use API, not direct DB access
+- `scripts/` - Development/testing scripts (seed.sh, cleanup.sh, test-archive.sh) - use API, not direct DB access
 
 ### Frontend Structure
 
@@ -66,7 +69,8 @@ podman compose down -v && podman compose up
 - `route()` - Hash-based routing, renders appropriate page
 - `renderFinalizedCard()` / `renderCardEditor()` - Card views
 - `showItemDetailModal()` - Modal for viewing/completing items
-- `renderFriends()` / `renderFriendCard()` - Friends list and viewing friend cards
+- `renderFriends()` / `renderFriendCard()` - Friends list and viewing friend cards (with year selector for multiple cards)
+- `renderArchive()` / `renderArchiveCard()` - Archive views for past years
 - `openModal()` / `closeModal()` - Generic modal system
 
 **API Object**: Wraps fetch calls with CSRF handling. Namespaced: `API.auth.*`, `API.cards.*`, `API.suggestions.*`, `API.friends.*`, `API.reactions.*`
@@ -97,13 +101,13 @@ Migrations in `migrations/` directory using numeric prefix ordering.
 
 Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`
 
-Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/{id}`, `POST /api/cards/{id}/{items,shuffle,finalize}`
+Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 
 Suggestions: `GET /api/suggestions`, `GET /api/suggestions/categories`
 
-Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/request`, `PUT /api/friends/{id}/{accept,reject}`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`
+Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/request`, `PUT /api/friends/{id}/{accept,reject}`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`, `GET /api/friends/{id}/cards`
 
 Reactions: `POST/DELETE /api/items/{id}/react`, `GET /api/items/{id}/reactions`, `GET /api/reactions/emojis`
 
@@ -115,14 +119,15 @@ Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 
 ## Implementation Status
 
-Phases 1-6 complete:
+Phases 1-7 complete:
 - Phase 1: Foundation (Go project, PostgreSQL, Redis, migrations, Podman)
 - Phase 2: Authentication (register, login, sessions, CSRF)
 - Phase 3: Bingo Card API (create, items, shuffle, finalize, suggestions)
 - Phase 4: Frontend Card Creation UI (SPA, grid, drag-drop, animations)
 - Phase 5: Card Interaction (mark complete, notes, bingo detection)
 - Phase 6: Social Features (friends, shared card view, reactions)
+- Phase 7: Archive & History (past years cards, completion statistics, bingo counts)
 
-**Next: Phase 7 (Archive & History)** - View past years' cards with statistics.
+**Next: Phase 8 (Polish & Production Readiness)** - Performance, security, accessibility.
 
 See `plans/bingo.md` for the full implementation plan.

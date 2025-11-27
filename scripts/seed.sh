@@ -4,10 +4,10 @@
 #
 # Creates:
 #   - 3 test users (alice, bob, carol) with password "Password1"
-#   - Finalized bingo cards for alice and bob (2025)
-#   - Some completed items on each card
+#   - Alice: 2025 card (6 completed), 2024 card (18 completed, 2 bingos), 2023 card (12 completed, 1 bingo)
+#   - Bob: 2025 card (6 completed), 2024 card (24 completed - perfect year!, 12 bingos)
 #   - Friendships: alice <-> bob (accepted), carol -> alice (pending)
-#   - Reactions from bob on alice's completed items
+#   - Reactions from bob on alice's 2025 completed items
 
 set -e
 
@@ -224,8 +224,8 @@ if ! curl -s "$BASE_URL/health" > /dev/null 2>&1; then
     exit 1
 fi
 
-# Alice's goals
-ALICE_GOALS=(
+# Alice's 2025 goals
+ALICE_2025_GOALS=(
     "Run a 5K"
     "Read 12 books"
     "Learn to cook 5 new recipes"
@@ -252,8 +252,64 @@ ALICE_GOALS=(
     "Write letters to old friends"
 )
 
-# Bob's goals
-BOB_GOALS=(
+# Alice's 2024 goals (archived - 75% complete)
+ALICE_2024_GOALS=(
+    "Complete a half marathon"
+    "Learn to play ukulele"
+    "Read 20 books"
+    "Take a pottery class"
+    "Visit 3 national parks"
+    "Learn basic sign language"
+    "Start composting"
+    "Do a month of no social media"
+    "Learn to make sushi"
+    "Volunteer at animal shelter"
+    "Take an improv class"
+    "Learn to knit"
+    "Do a polar plunge"
+    "Visit a new city solo"
+    "Complete a puzzle over 1000 pieces"
+    "Learn calligraphy basics"
+    "Do 30 days of yoga"
+    "Plant a vegetable garden"
+    "Learn to change a tire"
+    "Host a game night monthly"
+    "Read a book in another language"
+    "Take a dance class"
+    "Complete a digital art course"
+    "Write a short story"
+)
+
+# Alice's 2023 goals (archived - 50% complete)
+ALICE_2023_GOALS=(
+    "Run my first 5K"
+    "Learn to bake bread"
+    "Read 15 books"
+    "Start a bullet journal"
+    "Visit the Grand Canyon"
+    "Learn basic Python"
+    "Declutter entire house"
+    "Try 10 new restaurants"
+    "Take a photography walk monthly"
+    "Meditate daily for a month"
+    "Learn origami"
+    "Do a spending freeze month"
+    "Try paddleboarding"
+    "Watch all Oscar best pictures"
+    "Learn to make cocktails"
+    "Complete a 10K"
+    "Start a blog"
+    "Learn chess"
+    "Do a road trip"
+    "Try rock climbing"
+    "Learn to sew"
+    "Visit a museum monthly"
+    "Learn to juggle"
+    "Write in gratitude journal daily"
+)
+
+# Bob's 2025 goals
+BOB_2025_GOALS=(
     "Build a piece of furniture"
     "Run a marathon"
     "Learn woodworking basics"
@@ -280,6 +336,34 @@ BOB_GOALS=(
     "Teach kids to build something"
 )
 
+# Bob's 2024 goals (archived - 100% complete!)
+BOB_2024_GOALS=(
+    "Build a deck"
+    "Complete an Ironman"
+    "Master dovetail joints"
+    "Restore a vintage motorcycle"
+    "Get welding certification"
+    "Build custom kitchen cabinets"
+    "Complete a triathlon"
+    "Learn blacksmithing basics"
+    "Build a treehouse"
+    "Coach kids soccer team"
+    "Learn Italian"
+    "Tile the bathroom"
+    "Start a woodworking YouTube channel"
+    "Hike the Appalachian Trail section"
+    "Build a workbench from scratch"
+    "Restore an antique dresser"
+    "Complete a century bike ride"
+    "Build a pergola"
+    "Learn to weld aluminum"
+    "Organize and insulate garage"
+    "Build a canoe"
+    "Host a neighborhood BBQ"
+    "Get electrician apprenticeship"
+    "Teach woodworking class"
+)
+
 # Create users
 log_info "Creating users..."
 ALICE_ID=$(register_user "alice@test.com" "Password1" "Alice Anderson")
@@ -293,21 +377,21 @@ logout_user
 
 echo ""
 
-# Create Alice's card
-log_info "Creating Alice's card..."
+# Create Alice's 2025 card (current year)
+log_info "Creating Alice's 2025 card..."
 login_user "alice@test.com" "Password1" > /dev/null
 ALICE_CARD=$(create_card 2025)
 
 if [ -n "$ALICE_CARD" ]; then
-    log_info "Adding items to Alice's card..."
-    for goal in "${ALICE_GOALS[@]}"; do
+    log_info "Adding items to Alice's 2025 card..."
+    for goal in "${ALICE_2025_GOALS[@]}"; do
         add_item "$ALICE_CARD" "$goal"
     done
 
     finalize_card "$ALICE_CARD"
 
     # Complete some items (positions 0, 2, 5, 7, 11, 18)
-    log_info "Completing some of Alice's items..."
+    log_info "Completing some of Alice's 2025 items..."
     complete_item "$ALICE_CARD" 0 "Completed the Turkey Trot!"
     complete_item "$ALICE_CARD" 2 "Made pad thai, ramen, and more"
     complete_item "$ALICE_CARD" 5 ""
@@ -315,31 +399,137 @@ if [ -n "$ALICE_CARD" ]; then
     complete_item "$ALICE_CARD" 11 "So refreshing!"
     complete_item "$ALICE_CARD" 18 "Finally got a good rise!"
 fi
+
+# Create Alice's 2024 card (archived - 75% complete with bingos)
+log_info "Creating Alice's 2024 archived card..."
+ALICE_2024_CARD=$(create_card 2024)
+
+if [ -n "$ALICE_2024_CARD" ]; then
+    log_info "Adding items to Alice's 2024 card..."
+    for goal in "${ALICE_2024_GOALS[@]}"; do
+        add_item "$ALICE_2024_CARD" "$goal"
+    done
+
+    finalize_card "$ALICE_2024_CARD"
+
+    # Complete 18 items (75%) - includes row 1 bingo and row 3 bingo
+    log_info "Completing Alice's 2024 items (75%)..."
+    # Row 1: positions 0-4
+    complete_item "$ALICE_2024_CARD" 0 "Finished in 2:15!"
+    complete_item "$ALICE_2024_CARD" 1 "Can play 5 songs now"
+    complete_item "$ALICE_2024_CARD" 2 "Read 22 books actually!"
+    complete_item "$ALICE_2024_CARD" 3 "Made some nice bowls"
+    complete_item "$ALICE_2024_CARD" 4 "Yellowstone, Zion, Arches"
+    # Row 3: positions 10, 11, (12 is FREE), 13, 14
+    complete_item "$ALICE_2024_CARD" 10 "So much fun!"
+    complete_item "$ALICE_2024_CARD" 11 "Made a scarf"
+    complete_item "$ALICE_2024_CARD" 13 "Freezing but worth it"
+    complete_item "$ALICE_2024_CARD" 14 "Portland was amazing"
+    # Additional items
+    complete_item "$ALICE_2024_CARD" 5 ""
+    complete_item "$ALICE_2024_CARD" 6 "Garden is thriving"
+    complete_item "$ALICE_2024_CARD" 7 "Best decision ever"
+    complete_item "$ALICE_2024_CARD" 8 "Hosted 3 sushi nights"
+    complete_item "$ALICE_2024_CARD" 15 "Beautiful handwriting now"
+    complete_item "$ALICE_2024_CARD" 16 "Feel so flexible"
+    complete_item "$ALICE_2024_CARD" 17 "Tomatoes and peppers!"
+    complete_item "$ALICE_2024_CARD" 18 "Changed it myself!"
+fi
+
+# Create Alice's 2023 card (archived - 50% complete with diagonal bingo)
+log_info "Creating Alice's 2023 archived card..."
+ALICE_2023_CARD=$(create_card 2023)
+
+if [ -n "$ALICE_2023_CARD" ]; then
+    log_info "Adding items to Alice's 2023 card..."
+    for goal in "${ALICE_2023_GOALS[@]}"; do
+        add_item "$ALICE_2023_CARD" "$goal"
+    done
+
+    finalize_card "$ALICE_2023_CARD"
+
+    # Complete 12 items (50%) - includes diagonal bingo (0, 6, FREE, 18, 24)
+    log_info "Completing Alice's 2023 items (50%)..."
+    # Diagonal: 0, 6, (12 FREE), 18, 24
+    complete_item "$ALICE_2023_CARD" 0 "First race ever!"
+    complete_item "$ALICE_2023_CARD" 6 "Marie Kondo style"
+    complete_item "$ALICE_2023_CARD" 18 "Epic road trip"
+    complete_item "$ALICE_2023_CARD" 24 "365 days of gratitude"
+    # Additional items
+    complete_item "$ALICE_2023_CARD" 1 "Sourdough master"
+    complete_item "$ALICE_2023_CARD" 2 "Read 18 books!"
+    complete_item "$ALICE_2023_CARD" 3 "Love my bujo"
+    complete_item "$ALICE_2023_CARD" 7 "Found 12 new favorites"
+    complete_item "$ALICE_2023_CARD" 8 "Great photos"
+    complete_item "$ALICE_2023_CARD" 13 "So peaceful"
+    complete_item "$ALICE_2023_CARD" 14 "Can make 10 cocktails"
+    complete_item "$ALICE_2023_CARD" 15 "Beat my 5K time"
+fi
 logout_user
 
 echo ""
 
-# Create Bob's card
-log_info "Creating Bob's card..."
+# Create Bob's 2025 card (current year)
+log_info "Creating Bob's 2025 card..."
 login_user "bob@test.com" "Password1" > /dev/null
 BOB_CARD=$(create_card 2025)
 
 if [ -n "$BOB_CARD" ]; then
-    log_info "Adding items to Bob's card..."
-    for goal in "${BOB_GOALS[@]}"; do
+    log_info "Adding items to Bob's 2025 card..."
+    for goal in "${BOB_2025_GOALS[@]}"; do
         add_item "$BOB_CARD" "$goal"
     done
 
     finalize_card "$BOB_CARD"
 
     # Complete some items (positions 0, 2, 7, 11, 16, 20)
-    log_info "Completing some of Bob's items..."
+    log_info "Completing some of Bob's 2025 items..."
     complete_item "$BOB_CARD" 0 "Made a bookshelf from scratch"
     complete_item "$BOB_CARD" 2 ""
     complete_item "$BOB_CARD" 7 "New tiles look great!"
     complete_item "$BOB_CARD" 11 ""
     complete_item "$BOB_CARD" 16 "Heavy duty!"
     complete_item "$BOB_CARD" 20 "Finally found the floor!"
+fi
+
+# Create Bob's 2024 card (archived - 100% complete with ALL bingos!)
+log_info "Creating Bob's 2024 archived card..."
+BOB_2024_CARD=$(create_card 2024)
+
+if [ -n "$BOB_2024_CARD" ]; then
+    log_info "Adding items to Bob's 2024 card..."
+    for goal in "${BOB_2024_GOALS[@]}"; do
+        add_item "$BOB_2024_CARD" "$goal"
+    done
+
+    finalize_card "$BOB_2024_CARD"
+
+    # Complete ALL 24 items (100%) - Bob crushed it!
+    log_info "Completing ALL of Bob's 2024 items (100%)..."
+    complete_item "$BOB_2024_CARD" 0 "Beautiful cedar deck"
+    complete_item "$BOB_2024_CARD" 1 "14 hours but finished!"
+    complete_item "$BOB_2024_CARD" 2 "Tight joints every time"
+    complete_item "$BOB_2024_CARD" 3 "1975 Honda CB750"
+    complete_item "$BOB_2024_CARD" 4 "AWS D1.1 certified"
+    complete_item "$BOB_2024_CARD" 5 "Shaker style, so clean"
+    complete_item "$BOB_2024_CARD" 6 "Olympic distance"
+    complete_item "$BOB_2024_CARD" 7 "Made my first knife"
+    complete_item "$BOB_2024_CARD" 8 "Kids love it"
+    complete_item "$BOB_2024_CARD" 9 "U10 champions!"
+    complete_item "$BOB_2024_CARD" 10 "Parlo italiano!"
+    complete_item "$BOB_2024_CARD" 11 "Herringbone pattern"
+    complete_item "$BOB_2024_CARD" 13 "200 miles in 5 days"
+    complete_item "$BOB_2024_CARD" 14 "Maple and walnut"
+    complete_item "$BOB_2024_CARD" 15 "Better than new"
+    complete_item "$BOB_2024_CARD" 16 "100 miles in one day"
+    complete_item "$BOB_2024_CARD" 17 "Perfect for summer"
+    complete_item "$BOB_2024_CARD" 18 "TIG welding mastered"
+    complete_item "$BOB_2024_CARD" 19 "R-30 insulation"
+    complete_item "$BOB_2024_CARD" 20 "Cedar strip canoe"
+    complete_item "$BOB_2024_CARD" 21 "50 neighbors came!"
+    complete_item "$BOB_2024_CARD" 22 "Starting next month"
+    complete_item "$BOB_2024_CARD" 23 "Community center class"
+    complete_item "$BOB_2024_CARD" 24 "Taught 12 students"
 fi
 
 # Bob sends friend request to Alice
@@ -396,16 +586,21 @@ echo "=========================================="
 echo ""
 echo "Test accounts created:"
 echo "  - alice@test.com / Password1"
-echo "    - Has 2025 card with 6 completed items"
+echo "    - 2025 card: 6/24 completed (25%)"
+echo "    - 2024 card: 18/24 completed (75%), 2 bingos [ARCHIVED]"
+echo "    - 2023 card: 12/24 completed (50%), 1 bingo [ARCHIVED]"
 echo "    - Friends with Bob"
 echo "    - Pending request from Carol"
 echo ""
 echo "  - bob@test.com / Password1"
-echo "    - Has 2025 card with 6 completed items"
+echo "    - 2025 card: 6/24 completed (25%)"
+echo "    - 2024 card: 24/24 completed (100%), 12 bingos! [ARCHIVED]"
 echo "    - Friends with Alice"
 echo "    - Has reacted to Alice's completed items"
 echo ""
 echo "  - carol@test.com / Password1"
 echo "    - No card yet"
 echo "    - Pending friend request to Alice"
+echo ""
+echo "Test archive with: ./scripts/test-archive.sh"
 echo ""

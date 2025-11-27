@@ -31,6 +31,7 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="#dashboard" class="nav-link">My Cards</a>
+        <a href="#archive" class="nav-link">Archive</a>
         <a href="#friends" class="nav-link">Friends</a>
         <span class="nav-link text-muted">Hi, ${this.escapeHtml(this.user.display_name)}</span>
         <button class="btn btn-ghost" onclick="App.logout()">Logout</button>
@@ -108,6 +109,12 @@ const App = {
         break;
       case 'friend-card':
         this.requireAuth(() => this.renderFriendCard(container, params[0]));
+        break;
+      case 'archive':
+        this.requireAuth(() => this.renderArchive(container));
+        break;
+      case 'archive-card':
+        this.requireAuth(() => this.renderArchiveCard(container, params[0]));
         break;
       default:
         this.renderHome(container);
@@ -1212,28 +1219,39 @@ const App = {
   },
 
   // Friend's card view (read-only with reactions)
-  async renderFriendCard(container, friendshipId) {
+  async renderFriendCard(container, friendshipId, selectedYear = null) {
     container.innerHTML = `
       <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
     `;
 
     try {
-      const response = await API.friends.getCard(friendshipId);
+      const response = await API.friends.getCards(friendshipId);
 
-      if (!response.card) {
+      if (!response.cards || response.cards.length === 0) {
         container.innerHTML = `
           <div class="card text-center" style="padding: 3rem;">
-            <h3>No Card Available</h3>
-            <p class="text-muted mb-lg">${response.message || 'This friend has no finalized cards yet.'}</p>
+            <h3>No Cards Available</h3>
+            <p class="text-muted mb-lg">This friend has no finalized cards yet.</p>
             <a href="#friends" class="btn btn-primary">Back to Friends</a>
           </div>
         `;
         return;
       }
 
-      this.currentCard = response.card;
+      this.friendCards = response.cards;
       this.friendCardOwner = response.owner;
       this.friendshipId = friendshipId;
+
+      // Sort by year descending
+      this.friendCards.sort((a, b) => b.year - a.year);
+
+      // Select the requested year or default to most recent
+      if (selectedYear) {
+        this.currentCard = this.friendCards.find(c => c.year === parseInt(selectedYear)) || this.friendCards[0];
+      } else {
+        this.currentCard = this.friendCards[0];
+      }
+
       this.renderFriendCardView(container);
     } catch (error) {
       container.innerHTML = `
@@ -1249,17 +1267,37 @@ const App = {
   renderFriendCardView(container) {
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const progress = Math.round((completedCount / 24) * 100);
+    const currentYear = new Date().getFullYear();
+    const isArchived = this.currentCard.year < currentYear;
+
+    // Build year selector if multiple cards
+    let yearSelector = '';
+    if (this.friendCards && this.friendCards.length > 1) {
+      const yearOptions = this.friendCards.map(card => {
+        const selected = card.year === this.currentCard.year ? 'selected' : '';
+        const archived = card.year < currentYear ? ' (archived)' : '';
+        return `<option value="${card.year}" ${selected}>${card.year}${archived}</option>`;
+      }).join('');
+      yearSelector = `
+        <select id="friend-year-select" class="year-selector" onchange="App.switchFriendYear(this.value)">
+          ${yearOptions}
+        </select>
+      `;
+    }
 
     container.innerHTML = `
       <div class="finalized-card-view">
         <div class="finalized-card-header">
           <a href="#friends" class="btn btn-ghost">&larr; Friends</a>
-          <h2>${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${this.currentCard.year} Card</h2>
-          <div></div>
+          <div class="friend-card-title">
+            <h2>${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${this.currentCard.year} Card</h2>
+            ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
+          </div>
+          ${yearSelector || '<div></div>'}
         </div>
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid">
+          <div class="bingo-grid bingo-grid--finalized ${isArchived ? 'bingo-grid--archive' : ''}" id="bingo-grid">
             ${this.renderFriendGrid()}
           </div>
         </div>
@@ -1274,6 +1312,15 @@ const App = {
     `;
 
     this.setupFriendCardEvents();
+  },
+
+  switchFriendYear(year) {
+    const card = this.friendCards.find(c => c.year === parseInt(year));
+    if (card) {
+      this.currentCard = card;
+      const container = document.getElementById('main-container');
+      this.renderFriendCardView(container);
+    }
   },
 
   renderFriendGrid() {
@@ -1419,6 +1466,227 @@ const App = {
     } catch (error) {
       this.toast(error.message, 'error');
     }
+  },
+
+  // Archive page
+  async renderArchive(container) {
+    container.innerHTML = `
+      <div class="archive-page">
+        <div class="archive-header">
+          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <h2>Card Archive</h2>
+          <div></div>
+        </div>
+        <div id="archive-list">
+          <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const response = await API.cards.getArchive();
+      const cards = response.cards || [];
+
+      const listEl = document.getElementById('archive-list');
+      if (cards.length === 0) {
+        listEl.innerHTML = `
+          <div class="card text-center" style="padding: 3rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
+            <h3>No archived cards yet</h3>
+            <p class="text-muted mb-lg">Completed cards from past years will appear here.</p>
+            <a href="#dashboard" class="btn btn-primary">Go to Dashboard</a>
+          </div>
+        `;
+      } else {
+        listEl.innerHTML = cards.map(card => this.renderArchiveCardPreview(card)).join('');
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  renderArchiveCardPreview(card) {
+    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
+    const progress = Math.round((completedCount / 24) * 100);
+
+    return `
+      <a href="#archive-card/${card.id}" class="card archive-card-preview" style="display: block; margin-bottom: 1rem; text-decoration: none;">
+        <div class="archive-card-preview-header">
+          <div>
+            <h3 style="margin-bottom: 0.5rem;">${card.year} Bingo Card</h3>
+            <p class="text-muted">${completedCount}/24 completed</p>
+          </div>
+          <div class="archive-badge">Archived</div>
+        </div>
+        <div class="progress-bar mt-md">
+          <div class="progress-fill" style="width: ${progress}%"></div>
+        </div>
+      </a>
+    `;
+  },
+
+  async renderArchiveCard(container, cardId) {
+    container.innerHTML = `
+      <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+    `;
+
+    try {
+      const [cardResponse, statsResponse] = await Promise.all([
+        API.cards.get(cardId),
+        API.cards.getStats(cardId),
+      ]);
+
+      this.currentCard = cardResponse.card;
+      this.currentStats = statsResponse.stats;
+
+      this.renderArchiveCardView(container);
+    } catch (error) {
+      container.innerHTML = `
+        <div class="card text-center" style="padding: 3rem;">
+          <h3>Card not found</h3>
+          <p class="text-muted mb-lg">${error.message}</p>
+          <a href="#archive" class="btn btn-primary">Back to Archive</a>
+        </div>
+      `;
+    }
+  },
+
+  renderArchiveCardView(container) {
+    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
+    const progress = Math.round((completedCount / 24) * 100);
+    const stats = this.currentStats;
+
+    container.innerHTML = `
+      <div class="archive-card-view">
+        <div class="archive-card-header">
+          <a href="#archive" class="btn btn-ghost">&larr; Archive</a>
+          <h2>${this.currentCard.year} Bingo Card</h2>
+          <div class="archive-badge">Archived</div>
+        </div>
+
+        <div class="archive-stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${stats.completed_items}/${stats.total_items}</div>
+            <div class="stat-label">Completed</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats.completion_rate.toFixed(0)}%</div>
+            <div class="stat-label">Completion Rate</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats.bingos_achieved}</div>
+            <div class="stat-label">Bingos</div>
+          </div>
+        </div>
+
+        ${stats.first_completion ? `
+          <div class="archive-dates">
+            <p class="text-muted">
+              First completion: ${new Date(stats.first_completion).toLocaleDateString()}
+              ${stats.last_completion ? ` | Last completion: ${new Date(stats.last_completion).toLocaleDateString()}` : ''}
+            </p>
+          </div>
+        ` : ''}
+
+        <div class="bingo-container bingo-container--finalized">
+          <div class="bingo-grid bingo-grid--finalized bingo-grid--archive" id="bingo-grid">
+            ${this.renderArchiveGrid()}
+          </div>
+        </div>
+
+        <div class="finalized-card-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <p class="progress-text">${completedCount}/24 completed</p>
+        </div>
+      </div>
+    `;
+
+    this.setupArchiveCardEvents();
+  },
+
+  renderArchiveGrid() {
+    const headers = ['B', 'I', 'N', 'G', 'O'];
+    const headerRow = headers.map(letter => `
+      <div class="bingo-header">${letter}</div>
+    `).join('');
+
+    const cells = [];
+    const itemsByPosition = {};
+
+    if (this.currentCard.items) {
+      this.currentCard.items.forEach(item => {
+        itemsByPosition[item.position] = item;
+      });
+    }
+
+    for (let i = 0; i < 25; i++) {
+      if (i === 12) {
+        cells.push(`
+          <div class="bingo-cell bingo-cell--free">
+            <span class="bingo-cell-content">FREE</span>
+          </div>
+        `);
+      } else {
+        const item = itemsByPosition[i];
+        if (item) {
+          const isCompleted = item.is_completed;
+          const shortText = this.truncateText(item.content, 50);
+          cells.push(`
+            <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
+                 data-position="${i}"
+                 data-item-id="${item.id}"
+                 data-content="${this.escapeHtml(item.content)}"
+                 title="${this.escapeHtml(item.content)}">
+              <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
+            </div>
+          `);
+        } else {
+          cells.push(`
+            <div class="bingo-cell bingo-cell--empty" data-position="${i}"></div>
+          `);
+        }
+      }
+    }
+
+    return headerRow + cells.join('');
+  },
+
+  setupArchiveCardEvents() {
+    document.getElementById('bingo-grid').addEventListener('click', (e) => {
+      const cell = e.target.closest('.bingo-cell');
+      if (!cell || cell.classList.contains('bingo-cell--free') || cell.classList.contains('bingo-cell--empty')) return;
+
+      const position = parseInt(cell.dataset.position);
+      const content = cell.dataset.content;
+      const isCompleted = cell.classList.contains('bingo-cell--completed');
+
+      this.showArchiveItemModal(position, content, isCompleted);
+    });
+  },
+
+  showArchiveItemModal(position, content, isCompleted) {
+    const item = this.currentCard.items?.find(i => i.position === position);
+    const notes = item?.notes || '';
+    const completedAt = item?.completed_at ? new Date(item.completed_at).toLocaleDateString() : null;
+
+    this.openModal(isCompleted ? 'Completed Goal' : 'Goal', `
+      <div class="item-detail">
+        <p class="item-detail-content">${this.escapeHtml(content)}</p>
+        ${isCompleted ? `
+          ${completedAt ? `<p class="text-muted" style="margin-top: 0.5rem;">Completed on ${completedAt}</p>` : ''}
+          ${notes ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
+        ` : `
+          <p class="text-muted" style="margin-top: 1rem;">This goal was not completed.</p>
+        `}
+      </div>
+      <div style="margin-top: 1.5rem;">
+        <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+          Close
+        </button>
+      </div>
+    `);
   },
 
   async logout() {

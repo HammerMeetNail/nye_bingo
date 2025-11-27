@@ -1194,3 +1194,227 @@ a:hover {
     width: 100%;
   }
 }
+
+/* Archive Page */
+.archive-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.archive-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.archive-header h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.archive-header > :last-child {
+  justify-self: end;
+}
+
+.archive-card-preview {
+  transition: all var(--transition-fast);
+}
+
+.archive-card-preview:hover {
+  border-color: var(--color-silver);
+  transform: translateY(-2px);
+}
+
+.archive-card-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.archive-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-silver);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  color: var(--color-silver);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Archive Card View */
+.archive-card-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: calc(100vh - 120px);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.archive-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.archive-card-header h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.archive-card-header > :last-child {
+  justify-self: end;
+}
+
+/* Archive Stats Grid */
+.archive-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-md);
+  width: 100%;
+  max-width: 600px;
+  margin-bottom: var(--spacing-lg);
+  padding: 0 var(--spacing-md);
+}
+
+.stat-card {
+  background: var(--color-bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  text-align: center;
+}
+
+.stat-value {
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-gold);
+  margin-bottom: var(--spacing-xs);
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.archive-dates {
+  text-align: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.archive-dates p {
+  font-size: var(--font-size-sm);
+}
+
+/* Archive Grid - slightly muted appearance */
+.bingo-grid--archive .bingo-cell:not(.bingo-cell--free):not(.bingo-cell--completed) {
+  opacity: 0.7;
+}
+
+/* Archive responsive */
+@media (max-width: 768px) {
+  .archive-header {
+    grid-template-columns: auto;
+    justify-items: center;
+    gap: var(--spacing-md);
+  }
+
+  .archive-header > :first-child {
+    order: -1;
+    justify-self: start;
+    width: 100%;
+  }
+
+  .archive-card-header {
+    grid-template-columns: auto;
+    justify-items: center;
+    gap: var(--spacing-md);
+    padding: 0 var(--spacing-sm);
+  }
+
+  .archive-card-header > :first-child {
+    order: -1;
+    justify-self: start;
+    width: 100%;
+  }
+
+  .archive-card-header h2 {
+    font-size: var(--font-size-xl);
+  }
+
+  .archive-stats-grid {
+    grid-template-columns: 1fr;
+    max-width: 100%;
+  }
+
+  .stat-card {
+    padding: var(--spacing-md);
+  }
+
+  .stat-value {
+    font-size: var(--font-size-xl);
+  }
+}
+
+/* Year Selector */
+.year-selector {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+
+.year-selector:hover {
+  border-color: var(--color-silver);
+}
+
+.year-selector:focus {
+  outline: none;
+  border-color: var(--color-gold);
+}
+
+/* Friend Card Title */
+.friend-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.friend-card-title h2 {
+  margin: 0;
+}
+
+/* Friend card header responsive */
+@media (max-width: 768px) {
+  .finalized-card-header {
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+  }
+
+  .friend-card-title {
+    order: 1;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .year-selector {
+    order: 2;
+  }
+}

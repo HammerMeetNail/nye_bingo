@@ -56,3 +56,15 @@ type CompleteItemParams struct {
 	Notes    *string
 	ProofURL *string
 }
+
+// CardStats contains statistics for a bingo card
+type CardStats struct {
+	CardID         uuid.UUID `json:"card_id"`
+	Year           int       `json:"year"`
+	TotalItems     int       `json:"total_items"`
+	CompletedItems int       `json:"completed_items"`
+	CompletionRate float64   `json:"completion_rate"`
+	BingosAchieved int       `json:"bingos_achieved"`
+	FirstCompletion *time.Time `json:"first_completion,omitempty"`
+	LastCompletion  *time.Time `json:"last_completion,omitempty"`
+}

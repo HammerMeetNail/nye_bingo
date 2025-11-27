@@ -41,9 +41,14 @@ type UserSearchResponse struct {
 }
 
 type FriendCardResponse struct {
-	Card        *models.BingoCard `json:"card,omitempty"`
-	Owner       *FriendOwner      `json:"owner,omitempty"`
-	Message     string            `json:"message,omitempty"`
+	Card    *models.BingoCard `json:"card,omitempty"`
+	Owner   *FriendOwner      `json:"owner,omitempty"`
+	Message string            `json:"message,omitempty"`
+}
+
+type FriendCardsResponse struct {
+	Cards []*models.BingoCard `json:"cards,omitempty"`
+	Owner *FriendOwner        `json:"owner,omitempty"`
 }
 
 type FriendOwner struct {
@@ -347,6 +352,77 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, FriendCardResponse{
 		Card:  activeCard,
+		Owner: &FriendOwner{DisplayName: ownerName},
+	})
+}
+
+func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	friendshipID, err := parseFriendshipID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid friendship ID")
+		return
+	}
+
+	// Get the friend's user ID
+	friendUserID, err := h.friendService.GetFriendUserID(r.Context(), user.ID, friendshipID)
+	if errors.Is(err, services.ErrFriendshipNotFound) {
+		writeError(w, http.StatusNotFound, "Friendship not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotFriend) {
+		writeError(w, http.StatusForbidden, "You are not friends with this user")
+		return
+	}
+	if err != nil {
+		log.Printf("Error getting friend user ID: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Get all friend's cards
+	cards, err := h.cardService.ListByUser(r.Context(), friendUserID)
+	if err != nil {
+		log.Printf("Error listing friend cards: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Filter to only finalized cards, sorted by year descending
+	var finalizedCards []*models.BingoCard
+	for _, card := range cards {
+		if card.IsFinalized {
+			finalizedCards = append(finalizedCards, card)
+		}
+	}
+
+	// Get friend's display name
+	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error getting friends list: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	var ownerName string
+	for _, f := range friends {
+		friendID := f.FriendID
+		if f.UserID != user.ID {
+			friendID = f.UserID
+		}
+		if friendID == friendUserID {
+			ownerName = f.FriendDisplayName
+			break
+		}
+	}
+
+	writeJSON(w, http.StatusOK, FriendCardsResponse{
+		Cards: finalizedCards,
 		Owner: &FriendOwner{DisplayName: ownerName},
 	})
 }
