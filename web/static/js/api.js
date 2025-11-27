@@ -151,6 +151,60 @@ const API = {
       return API.request('GET', '/api/suggestions/categories');
     },
   },
+
+  // Friend endpoints
+  friends: {
+    async list() {
+      return API.request('GET', '/api/friends');
+    },
+
+    async search(query) {
+      return API.request('GET', `/api/friends/search?q=${encodeURIComponent(query)}`);
+    },
+
+    async sendRequest(friendId) {
+      return API.request('POST', '/api/friends/request', { friend_id: friendId });
+    },
+
+    async acceptRequest(friendshipId) {
+      return API.request('PUT', `/api/friends/${friendshipId}/accept`);
+    },
+
+    async rejectRequest(friendshipId) {
+      return API.request('PUT', `/api/friends/${friendshipId}/reject`);
+    },
+
+    async remove(friendshipId) {
+      return API.request('DELETE', `/api/friends/${friendshipId}`);
+    },
+
+    async cancelRequest(friendshipId) {
+      return API.request('DELETE', `/api/friends/${friendshipId}/cancel`);
+    },
+
+    async getCard(friendshipId) {
+      return API.request('GET', `/api/friends/${friendshipId}/card`);
+    },
+  },
+
+  // Reaction endpoints
+  reactions: {
+    async add(itemId, emoji) {
+      return API.request('POST', `/api/items/${itemId}/react`, { emoji });
+    },
+
+    async remove(itemId) {
+      return API.request('DELETE', `/api/items/${itemId}/react`);
+    },
+
+    async get(itemId) {
+      return API.request('GET', `/api/items/${itemId}/reactions`);
+    },
+
+    async getAllowedEmojis() {
+      return API.request('GET', '/api/reactions/emojis');
+    },
+  },
 };
 
 class APIError extends Error {

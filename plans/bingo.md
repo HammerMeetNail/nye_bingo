@@ -338,12 +338,12 @@ DELETE /api/items/:id/react      - Remove reaction
 ```
 
 ### 6.5 Deliverables
-- [ ] Friend search and discovery
-- [ ] Friend request flow
-- [ ] Friends list UI
-- [ ] Shared card view (read-only)
-- [ ] Reaction picker component
-- [ ] Reaction display on items
+- [x] Friend search and discovery
+- [x] Friend request flow
+- [x] Friends list UI
+- [x] Shared card view (read-only)
+- [x] Reaction picker component
+- [x] Reaction display on items
 - [ ] Notification for reactions (optional)
 
 ---

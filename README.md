@@ -8,6 +8,7 @@ A web application for creating and tracking New Year's Resolution Bingo cards. C
 - **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
 - **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo
+- **Social Features**: Add friends, view their cards, and react to their achievements with emojis
 - **Accessible Design**: Uses OpenDyslexic font for improved readability
 
 ## Tech Stack
@@ -120,6 +121,20 @@ nye_bingo/
 ### Suggestions
 - `GET /api/suggestions` - Get all suggestions
 - `GET /api/suggestions/categories` - Get grouped by category
+
+### Friends
+- `GET /api/friends` - List friends and requests
+- `GET /api/friends/search?q=` - Search users
+- `POST /api/friends/request` - Send friend request
+- `PUT /api/friends/{id}/accept` - Accept request
+- `PUT /api/friends/{id}/reject` - Reject request
+- `DELETE /api/friends/{id}` - Remove friend
+- `GET /api/friends/{id}/card` - View friend's card
+
+### Reactions
+- `POST /api/items/{id}/react` - React to completed item
+- `DELETE /api/items/{id}/react` - Remove reaction
+- `GET /api/items/{id}/reactions` - Get item reactions
 
 ## License
 

@@ -68,12 +68,16 @@ func run() error {
 	authService := services.NewAuthService(db.Pool, redisDB.Client)
 	cardService := services.NewCardService(db.Pool)
 	suggestionService := services.NewSuggestionService(db.Pool)
+	friendService := services.NewFriendService(db.Pool)
+	reactionService := services.NewReactionService(db.Pool, friendService)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
 	authHandler := handlers.NewAuthHandler(userService, authService, cfg.Server.Secure)
 	cardHandler := handlers.NewCardHandler(cardService)
 	suggestionHandler := handlers.NewSuggestionHandler(suggestionService)
+	friendHandler := handlers.NewFriendHandler(friendService, cardService)
+	reactionHandler := handlers.NewReactionHandler(reactionService)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
@@ -119,6 +123,22 @@ func run() error {
 	// Suggestion endpoints
 	mux.HandleFunc("GET /api/suggestions", suggestionHandler.GetAll)
 	mux.HandleFunc("GET /api/suggestions/categories", suggestionHandler.GetCategories)
+
+	// Friend endpoints
+	mux.HandleFunc("GET /api/friends", friendHandler.List)
+	mux.HandleFunc("GET /api/friends/search", friendHandler.Search)
+	mux.HandleFunc("POST /api/friends/request", friendHandler.SendRequest)
+	mux.HandleFunc("PUT /api/friends/{id}/accept", friendHandler.AcceptRequest)
+	mux.HandleFunc("PUT /api/friends/{id}/reject", friendHandler.RejectRequest)
+	mux.HandleFunc("DELETE /api/friends/{id}", friendHandler.Remove)
+	mux.HandleFunc("DELETE /api/friends/{id}/cancel", friendHandler.CancelRequest)
+	mux.HandleFunc("GET /api/friends/{id}/card", friendHandler.GetFriendCard)
+
+	// Reaction endpoints
+	mux.HandleFunc("POST /api/items/{id}/react", reactionHandler.AddReaction)
+	mux.HandleFunc("DELETE /api/items/{id}/react", reactionHandler.RemoveReaction)
+	mux.HandleFunc("GET /api/items/{id}/reactions", reactionHandler.GetReactions)
+	mux.HandleFunc("GET /api/reactions/emojis", reactionHandler.GetAllowedEmojis)
 
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))

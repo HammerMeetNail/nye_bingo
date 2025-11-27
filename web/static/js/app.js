@@ -5,6 +5,7 @@ const App = {
   currentCard: null,
   suggestions: [],
   usedSuggestions: new Set(),
+  allowedEmojis: ['🎉', '👏', '🔥', '❤️', '⭐'],
 
   async init() {
     await API.init();
@@ -30,6 +31,7 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="#dashboard" class="nav-link">My Cards</a>
+        <a href="#friends" class="nav-link">Friends</a>
         <span class="nav-link text-muted">Hi, ${this.escapeHtml(this.user.display_name)}</span>
         <button class="btn btn-ghost" onclick="App.logout()">Logout</button>
       `;
@@ -100,6 +102,12 @@ const App = {
         break;
       case 'card':
         this.requireAuth(() => this.renderCard(container, params[0]));
+        break;
+      case 'friends':
+        this.requireAuth(() => this.renderFriends(container));
+        break;
+      case 'friend-card':
+        this.requireAuth(() => this.renderFriendCard(container, params[0]));
         break;
       default:
         this.renderHome(container);
@@ -990,6 +998,426 @@ const App = {
       this.toast('BINGO! Diagonal complete! 🎉🎉🎉', 'success');
       this.confetti(100);
       return;
+    }
+  },
+
+  // Friends page
+  async renderFriends(container) {
+    container.innerHTML = `
+      <div class="friends-page">
+        <div class="friends-header">
+          <h2>Friends</h2>
+        </div>
+
+        <div class="friends-search card">
+          <h3>Find Friends</h3>
+          <div class="search-input-group">
+            <input type="text" id="friend-search" class="form-input" placeholder="Search by name or email...">
+            <button class="btn btn-primary" id="search-btn">Search</button>
+          </div>
+          <div id="search-results" class="search-results"></div>
+        </div>
+
+        <div id="friend-requests" class="card" style="display: none;">
+          <h3>Friend Requests</h3>
+          <div id="requests-list"></div>
+        </div>
+
+        <div id="sent-requests" class="card" style="display: none;">
+          <h3>Sent Requests</h3>
+          <div id="sent-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>My Friends</h3>
+          <div id="friends-list">
+            <div class="text-center"><div class="spinner"></div></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.setupFriendsEvents();
+    await this.loadFriends();
+  },
+
+  setupFriendsEvents() {
+    const searchInput = document.getElementById('friend-search');
+    const searchBtn = document.getElementById('search-btn');
+
+    searchBtn.addEventListener('click', () => this.searchFriends());
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.searchFriends();
+    });
+
+    let debounceTimer;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => this.searchFriends(), 300);
+    });
+  },
+
+  async searchFriends() {
+    const query = document.getElementById('friend-search').value.trim();
+    const resultsEl = document.getElementById('search-results');
+
+    if (query.length < 2) {
+      resultsEl.innerHTML = '';
+      return;
+    }
+
+    try {
+      const response = await API.friends.search(query);
+      const users = response.users || [];
+
+      if (users.length === 0) {
+        resultsEl.innerHTML = '<p class="text-muted">No users found</p>';
+      } else {
+        resultsEl.innerHTML = users.map(user => `
+          <div class="search-result-item">
+            <div>
+              <strong>${this.escapeHtml(user.display_name)}</strong>
+              <span class="text-muted">${this.escapeHtml(user.email)}</span>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="App.sendFriendRequest('${user.id}')">
+              Add Friend
+            </button>
+          </div>
+        `).join('');
+      }
+    } catch (error) {
+      resultsEl.innerHTML = `<p class="text-muted">${error.message}</p>`;
+    }
+  },
+
+  async sendFriendRequest(friendId) {
+    try {
+      await API.friends.sendRequest(friendId);
+      this.toast('Friend request sent!', 'success');
+      document.getElementById('friend-search').value = '';
+      document.getElementById('search-results').innerHTML = '';
+      await this.loadFriends();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async loadFriends() {
+    try {
+      const response = await API.friends.list();
+      const { friends, requests, sent } = response;
+
+      // Pending requests (received)
+      const requestsEl = document.getElementById('friend-requests');
+      const requestsListEl = document.getElementById('requests-list');
+      if (requests && requests.length > 0) {
+        requestsEl.style.display = 'block';
+        requestsListEl.innerHTML = requests.map(req => `
+          <div class="friend-item">
+            <div>
+              <strong>${this.escapeHtml(req.requester_display_name)}</strong>
+              <span class="text-muted">${this.escapeHtml(req.requester_email)}</span>
+            </div>
+            <div class="friend-actions">
+              <button class="btn btn-primary btn-sm" onclick="App.acceptRequest('${req.id}')">Accept</button>
+              <button class="btn btn-ghost btn-sm" onclick="App.rejectRequest('${req.id}')">Reject</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        requestsEl.style.display = 'none';
+      }
+
+      // Sent requests
+      const sentEl = document.getElementById('sent-requests');
+      const sentListEl = document.getElementById('sent-list');
+      if (sent && sent.length > 0) {
+        sentEl.style.display = 'block';
+        sentListEl.innerHTML = sent.map(req => `
+          <div class="friend-item">
+            <div>
+              <strong>${this.escapeHtml(req.friend_display_name)}</strong>
+              <span class="text-muted">${this.escapeHtml(req.friend_email)}</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="App.cancelRequest('${req.id}')">Cancel</button>
+          </div>
+        `).join('');
+      } else {
+        sentEl.style.display = 'none';
+      }
+
+      // Friends list
+      const friendsListEl = document.getElementById('friends-list');
+      if (friends && friends.length > 0) {
+        friendsListEl.innerHTML = friends.map(friend => `
+          <div class="friend-item">
+            <div>
+              <strong>${this.escapeHtml(friend.friend_display_name)}</strong>
+            </div>
+            <div class="friend-actions">
+              <a href="#friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
+              <button class="btn btn-ghost btn-sm" onclick="App.removeFriend('${friend.id}', '${this.escapeHtml(friend.friend_display_name)}')">Remove</button>
+            </div>
+          </div>
+        `).join('');
+      } else {
+        friendsListEl.innerHTML = '<p class="text-muted">No friends yet. Search for people to add!</p>';
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async acceptRequest(friendshipId) {
+    try {
+      await API.friends.acceptRequest(friendshipId);
+      this.toast('Friend request accepted!', 'success');
+      await this.loadFriends();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async rejectRequest(friendshipId) {
+    try {
+      await API.friends.rejectRequest(friendshipId);
+      this.toast('Friend request rejected', 'success');
+      await this.loadFriends();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async cancelRequest(friendshipId) {
+    try {
+      await API.friends.cancelRequest(friendshipId);
+      this.toast('Friend request canceled', 'success');
+      await this.loadFriends();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async removeFriend(friendshipId, friendName) {
+    if (!confirm(`Are you sure you want to remove ${friendName} as a friend?`)) {
+      return;
+    }
+    try {
+      await API.friends.remove(friendshipId);
+      this.toast('Friend removed', 'success');
+      await this.loadFriends();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  // Friend's card view (read-only with reactions)
+  async renderFriendCard(container, friendshipId) {
+    container.innerHTML = `
+      <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+    `;
+
+    try {
+      const response = await API.friends.getCard(friendshipId);
+
+      if (!response.card) {
+        container.innerHTML = `
+          <div class="card text-center" style="padding: 3rem;">
+            <h3>No Card Available</h3>
+            <p class="text-muted mb-lg">${response.message || 'This friend has no finalized cards yet.'}</p>
+            <a href="#friends" class="btn btn-primary">Back to Friends</a>
+          </div>
+        `;
+        return;
+      }
+
+      this.currentCard = response.card;
+      this.friendCardOwner = response.owner;
+      this.friendshipId = friendshipId;
+      this.renderFriendCardView(container);
+    } catch (error) {
+      container.innerHTML = `
+        <div class="card text-center" style="padding: 3rem;">
+          <h3>Error</h3>
+          <p class="text-muted mb-lg">${error.message}</p>
+          <a href="#friends" class="btn btn-primary">Back to Friends</a>
+        </div>
+      `;
+    }
+  },
+
+  renderFriendCardView(container) {
+    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
+    const progress = Math.round((completedCount / 24) * 100);
+
+    container.innerHTML = `
+      <div class="finalized-card-view">
+        <div class="finalized-card-header">
+          <a href="#friends" class="btn btn-ghost">&larr; Friends</a>
+          <h2>${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${this.currentCard.year} Card</h2>
+          <div></div>
+        </div>
+
+        <div class="bingo-container bingo-container--finalized">
+          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid">
+            ${this.renderFriendGrid()}
+          </div>
+        </div>
+
+        <div class="finalized-card-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <p class="progress-text">${completedCount}/24 completed</p>
+        </div>
+      </div>
+    `;
+
+    this.setupFriendCardEvents();
+  },
+
+  renderFriendGrid() {
+    const headers = ['B', 'I', 'N', 'G', 'O'];
+    const headerRow = headers.map(letter => `
+      <div class="bingo-header">${letter}</div>
+    `).join('');
+
+    const cells = [];
+    const itemsByPosition = {};
+
+    if (this.currentCard.items) {
+      this.currentCard.items.forEach(item => {
+        itemsByPosition[item.position] = item;
+      });
+    }
+
+    for (let i = 0; i < 25; i++) {
+      if (i === 12) {
+        cells.push(`
+          <div class="bingo-cell bingo-cell--free">
+            <span class="bingo-cell-content">FREE</span>
+          </div>
+        `);
+      } else {
+        const item = itemsByPosition[i];
+        if (item) {
+          const isCompleted = item.is_completed;
+          const shortText = this.truncateText(item.content, 50);
+          cells.push(`
+            <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
+                 data-position="${i}"
+                 data-item-id="${item.id}"
+                 data-content="${this.escapeHtml(item.content)}"
+                 title="${this.escapeHtml(item.content)}">
+              <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
+            </div>
+          `);
+        } else {
+          cells.push(`
+            <div class="bingo-cell bingo-cell--empty" data-position="${i}"></div>
+          `);
+        }
+      }
+    }
+
+    return headerRow + cells.join('');
+  },
+
+  setupFriendCardEvents() {
+    document.getElementById('bingo-grid').addEventListener('click', async (e) => {
+      const cell = e.target.closest('.bingo-cell');
+      if (!cell || cell.classList.contains('bingo-cell--free') || cell.classList.contains('bingo-cell--empty')) return;
+
+      const itemId = cell.dataset.itemId;
+      const content = cell.dataset.content;
+      const isCompleted = cell.classList.contains('bingo-cell--completed');
+
+      this.showFriendItemModal(itemId, content, isCompleted);
+    });
+  },
+
+  async showFriendItemModal(itemId, content, isCompleted) {
+    const item = this.currentCard.items?.find(i => i.id === itemId);
+    const notes = item?.notes || '';
+
+    let reactionsHtml = '';
+    let userReaction = null;
+
+    if (isCompleted) {
+      try {
+        const response = await API.reactions.get(itemId);
+        const reactions = response.reactions || [];
+        const summary = response.summary || [];
+
+        userReaction = reactions.find(r => r.user_id === this.user.id);
+
+        if (summary.length > 0) {
+          reactionsHtml = `
+            <div class="reactions-summary">
+              ${summary.map(s => `<span class="reaction-badge">${s.emoji} ${s.count}</span>`).join('')}
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Failed to load reactions:', error);
+      }
+    }
+
+    const emojiPickerHtml = isCompleted ? `
+      <div class="reaction-picker">
+        <p>React to this achievement:</p>
+        <div class="emoji-buttons">
+          ${this.allowedEmojis.map(emoji => `
+            <button class="emoji-btn ${userReaction?.emoji === emoji ? 'emoji-btn--selected' : ''}"
+                    onclick="App.reactToItem('${itemId}', '${emoji}')">${emoji}</button>
+          `).join('')}
+          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" onclick="App.removeReaction('${itemId}')">✕</button>` : ''}
+        </div>
+      </div>
+    ` : '';
+
+    this.openModal(isCompleted ? 'Completed Goal' : 'Goal', `
+      <div class="item-detail">
+        <p class="item-detail-content">${this.escapeHtml(content)}</p>
+        ${notes && isCompleted ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
+        ${reactionsHtml}
+        ${emojiPickerHtml}
+        ${!isCompleted ? '<p class="text-muted" style="margin-top: 1rem;">This goal hasn\'t been completed yet.</p>' : ''}
+      </div>
+      <div style="margin-top: 1.5rem;">
+        <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+          Close
+        </button>
+      </div>
+    `);
+  },
+
+  async reactToItem(itemId, emoji) {
+    try {
+      await API.reactions.add(itemId, emoji);
+      this.toast('Reaction added!', 'success');
+      this.closeModal();
+      // Refresh the modal with updated reactions
+      const item = this.currentCard.items?.find(i => i.id === itemId);
+      if (item) {
+        this.showFriendItemModal(itemId, item.content, item.is_completed);
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async removeReaction(itemId) {
+    try {
+      await API.reactions.remove(itemId);
+      this.toast('Reaction removed', 'success');
+      this.closeModal();
+      const item = this.currentCard.items?.find(i => i.id === itemId);
+      if (item) {
+        this.showFriendItemModal(itemId, item.content, item.is_completed);
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
     }
   },
 
