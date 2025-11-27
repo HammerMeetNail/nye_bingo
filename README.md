@@ -64,7 +64,7 @@ nye_bingo/
 │   ├── config/          # Environment configuration
 │   ├── database/        # PostgreSQL and Redis clients
 │   ├── handlers/        # HTTP request handlers
-│   ├── middleware/      # Auth, CSRF, rate limiting
+│   ├── middleware/      # Auth, CSRF protection
 │   ├── models/          # Data structures
 │   └── services/        # Business logic
 ├── migrations/          # Database migrations
@@ -73,6 +73,7 @@ nye_bingo/
 │   │   ├── css/         # Stylesheets
 │   │   └── js/          # Frontend JavaScript
 │   └── templates/       # HTML templates
+├── scripts/             # Development and testing scripts
 ├── compose.yaml         # Container orchestration
 ├── Containerfile        # Container build instructions
 └── CLAUDE.md            # AI assistant guidance
@@ -135,6 +136,62 @@ nye_bingo/
 - `POST /api/items/{id}/react` - React to completed item
 - `DELETE /api/items/{id}/react` - Remove reaction
 - `GET /api/items/{id}/reactions` - Get item reactions
+
+## Scripts
+
+Development and testing scripts are located in the `scripts/` directory. All scripts use the API (not direct database access) and require `curl` and `jq`.
+
+### seed.sh
+
+Seeds the database with test data for development and testing.
+
+```bash
+# Use default URL (http://localhost:8080)
+./scripts/seed.sh
+
+# Use custom URL
+./scripts/seed.sh http://localhost:3000
+```
+
+**Creates:**
+- 3 test users with password `Password1`:
+  - `alice@test.com` (Alice Anderson)
+  - `bob@test.com` (Bob Builder)
+  - `carol@test.com` (Carol Chen)
+- Finalized 2025 bingo cards for Alice and Bob with 24 unique goals each
+- 6 completed items on each card with notes
+- Friendships: Alice ↔ Bob (accepted), Carol → Alice (pending)
+- Emoji reactions from Bob on Alice's completed items
+
+**Idempotent behavior:** If users/cards already exist, the script logs in and fetches existing data rather than failing.
+
+### cleanup.sh
+
+Removes friendships and reactions for test accounts via the API.
+
+```bash
+# Use default URL (http://localhost:8080)
+./scripts/cleanup.sh
+
+# Use custom URL
+./scripts/cleanup.sh http://localhost:3000
+```
+
+**Note:** User accounts and cards remain after cleanup (no delete API). For a complete reset:
+
+```bash
+podman compose down -v && podman compose up
+```
+
+### Adding New Scripts
+
+When adding new scripts to this directory:
+1. Use the API, not direct database access
+2. Include a header comment explaining purpose and usage
+3. Support a custom base URL as the first argument
+4. Use the shared patterns: `get_csrf()`, `login_user()`, `logout_user()`
+5. Log to stderr (`>&2`) so function return values aren't polluted
+6. Handle "already exists" cases gracefully for idempotency
 
 ## License
 

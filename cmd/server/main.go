@@ -86,8 +86,6 @@ func run() error {
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
 	csrfMiddleware := middleware.NewCSRFMiddleware(cfg.Server.Secure)
-	authRateLimiter := middleware.NewAuthRateLimiter(redisDB.Client)
-	apiRateLimiter := middleware.NewAPIRateLimiter(redisDB.Client)
 
 	// Set up router
 	mux := http.NewServeMux()
@@ -100,9 +98,9 @@ func run() error {
 	// CSRF token endpoint
 	mux.HandleFunc("GET /api/csrf", csrfMiddleware.GetToken)
 
-	// Auth endpoints (rate limited)
-	mux.Handle("POST /api/auth/register", authRateLimiter.Limit(http.HandlerFunc(authHandler.Register)))
-	mux.Handle("POST /api/auth/login", authRateLimiter.Limit(http.HandlerFunc(authHandler.Login)))
+	// Auth endpoints
+	mux.HandleFunc("POST /api/auth/register", authHandler.Register)
+	mux.HandleFunc("POST /api/auth/login", authHandler.Login)
 	mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
 	mux.HandleFunc("GET /api/auth/me", authHandler.Me)
 	mux.HandleFunc("POST /api/auth/password", authHandler.ChangePassword)
@@ -152,7 +150,6 @@ func run() error {
 	var handler http.Handler = mux
 	handler = authMiddleware.Authenticate(handler)
 	handler = csrfMiddleware.Protect(handler)
-	handler = apiRateLimiter.Limit(handler)
 
 	// Create server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

@@ -29,6 +29,15 @@ go build -o server ./cmd/server
 
 # Download dependencies
 go mod tidy
+
+# Seed database with test data
+./scripts/seed.sh
+
+# Clean up test friendships
+./scripts/cleanup.sh
+
+# Full database reset
+podman compose down -v && podman compose up
 ```
 
 ## Architecture
@@ -41,7 +50,8 @@ go mod tidy
 - `internal/models/` - Data structures (User, Session, BingoCard, BingoItem, Suggestion, Friendship, Reaction)
 - `internal/services/` - Business logic layer (UserService, AuthService, CardService, SuggestionService, FriendService, ReactionService)
 - `internal/handlers/` - HTTP handlers that call services and return JSON
-- `internal/middleware/` - Auth validation, CSRF protection, rate limiting
+- `internal/middleware/` - Auth validation, CSRF protection
+- `scripts/` - Development/testing scripts (seed.sh, cleanup.sh) - use API, not direct DB access
 
 ### Frontend Structure
 
@@ -65,7 +75,9 @@ go mod tidy
 
 ### Key Patterns
 
-**Middleware Chain**: Requests flow through `apiRateLimiter → csrfMiddleware → authMiddleware → handler`
+**Middleware Chain**: Requests flow through `csrfMiddleware → authMiddleware → handler`
+
+**Rate Limiting**: Not implemented at the application level. Rate limiting should be handled by upstream infrastructure (load balancer, API gateway, CDN) in production environments.
 
 **Session Management**: Sessions stored in Redis first with PostgreSQL fallback. Token stored in HttpOnly cookie, hash stored in database.
 
@@ -105,7 +117,7 @@ Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 
 Phases 1-6 complete:
 - Phase 1: Foundation (Go project, PostgreSQL, Redis, migrations, Podman)
-- Phase 2: Authentication (register, login, sessions, CSRF, rate limiting)
+- Phase 2: Authentication (register, login, sessions, CSRF)
 - Phase 3: Bingo Card API (create, items, shuffle, finalize, suggestions)
 - Phase 4: Frontend Card Creation UI (SPA, grid, drag-drop, animations)
 - Phase 5: Card Interaction (mark complete, notes, bingo detection)
