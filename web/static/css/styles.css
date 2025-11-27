@@ -29,6 +29,7 @@
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-family-display: 'Playfair Display', Georgia, serif;
+  --font-family-readable: 'OpenDyslexic', 'Comic Sans MS', sans-serif;
 
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
@@ -321,6 +322,72 @@ a:hover {
   color: var(--color-text-muted);
 }
 
+/* Card Editor Layout */
+.card-editor-layout {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .card-editor-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Finalized Card View */
+.finalized-card-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: calc(100vh - 120px);
+  width: 100%;
+  margin: 0 auto;
+}
+
+.finalized-card-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  max-width: 900px;
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.finalized-card-header h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.finalized-card-header > :last-child {
+  justify-self: end;
+}
+
+.bingo-container--finalized {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 100%;
+  padding: 1rem;
+}
+
+.bingo-grid--finalized {
+  max-width: 900px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.finalized-card-progress {
+  width: 100%;
+  max-width: 900px;
+  padding: 1rem;
+  margin: 0 auto;
+}
+
 /* Bingo Grid */
 .bingo-container {
   display: flex;
@@ -332,10 +399,23 @@ a:hover {
 .bingo-grid {
   display: grid;
   grid-template-columns: repeat(var(--grid-size), 1fr);
+  grid-template-rows: auto repeat(var(--grid-size), 1fr);
   gap: var(--cell-gap);
   width: 100%;
-  max-width: 600px;
-  aspect-ratio: 1;
+  max-width: 700px;
+}
+
+/* B-I-N-G-O Header */
+.bingo-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-gold);
+  padding: var(--spacing-sm) 0;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
 }
 
 .bingo-cell {
@@ -348,13 +428,22 @@ a:hover {
   justify-content: center;
   text-align: center;
   padding: var(--spacing-sm);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  font-family: var(--font-family-readable);
+  font-size: 0.8rem;
+  color: var(--color-text-primary);
   cursor: pointer;
   transition: all var(--transition-base);
   overflow: hidden;
+  aspect-ratio: 1;
+  line-height: 1.3;
+}
+
+.bingo-cell-content {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   word-break: break-word;
-  hyphens: auto;
 }
 
 .bingo-cell:hover:not(.bingo-cell--free):not(.bingo-cell--empty) {
@@ -645,16 +734,56 @@ a:hover {
 /* Responsive */
 @media (max-width: 768px) {
   :root {
-    --cell-gap: 4px;
+    --cell-gap: 6px;
+  }
+
+  .container {
+    padding: 0 var(--spacing-sm);
   }
 
   .bingo-grid {
     max-width: 100%;
   }
 
+  .bingo-grid--finalized {
+    max-width: 100%;
+  }
+
+  .bingo-header {
+    font-size: var(--font-size-xl);
+    padding: var(--spacing-sm) 0;
+  }
+
   .bingo-cell {
-    font-size: 0.65rem;
-    padding: var(--spacing-xs);
+    font-size: 0.7rem;
+    padding: 6px;
+    line-height: 1.2;
+    border-radius: var(--radius-sm);
+  }
+
+  .bingo-cell-content {
+    -webkit-line-clamp: 3;
+  }
+
+  .finalized-card-view {
+    min-height: calc(100vh - 80px);
+  }
+
+  .finalized-card-header {
+    padding: 0 var(--spacing-sm);
+    margin-bottom: 0.5rem;
+  }
+
+  .finalized-card-header h2 {
+    font-size: var(--font-size-xl);
+  }
+
+  .bingo-container--finalized {
+    padding: 0.5rem;
+  }
+
+  .finalized-card-progress {
+    padding: 0.5rem var(--spacing-sm);
   }
 
   .header-content {
@@ -673,11 +802,41 @@ a:hover {
   .action-bar .btn {
     width: 100%;
   }
+
+  .modal {
+    padding: var(--spacing-lg);
+    width: 95%;
+  }
+
+  .item-detail {
+    padding: var(--spacing-md);
+  }
+
+  .item-detail-content {
+    font-size: var(--font-size-base);
+  }
 }
 
 @media (max-width: 480px) {
+  :root {
+    --cell-gap: 4px;
+  }
+
+  .bingo-header {
+    font-size: var(--font-size-lg);
+  }
+
   .bingo-cell {
-    font-size: 0.55rem;
+    font-size: 0.6rem;
+    padding: 4px;
+  }
+
+  .bingo-cell-content {
+    -webkit-line-clamp: 2;
+  }
+
+  .finalized-card-header h2 {
+    font-size: var(--font-size-lg);
   }
 
   .suggestions-categories {
@@ -816,4 +975,26 @@ a:hover {
 
 .modal-close:hover {
   color: var(--color-text-primary);
+}
+
+/* Item Detail in Modal */
+.item-detail {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-lg);
+  border-left: 4px solid var(--color-gold);
+}
+
+.item-detail-content {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.item-detail-notes {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-md);
+  margin-bottom: 0;
 }

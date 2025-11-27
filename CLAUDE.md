@@ -45,10 +45,10 @@ go mod tidy
 
 ### Frontend Structure
 
-- `web/templates/index.html` - Single HTML entry point for SPA
+- `web/templates/index.html` - Single HTML entry point for SPA (main container has `id="main-container"`)
 - `web/static/js/api.js` - API client with CSRF token handling
 - `web/static/js/app.js` - SPA router and all UI logic
-- `web/static/css/styles.css` - Design system with CSS variables
+- `web/static/css/styles.css` - Design system with CSS variables, uses OpenDyslexic font for bingo cells
 
 ### Key Patterns
 
@@ -59,6 +59,8 @@ go mod tidy
 **Card State Machine**: Cards start unfinalized (can add/remove/shuffle items), then finalize (locks layout, enables completion marking).
 
 **Grid Positions**: 5x5 grid uses positions 0-24, with position 12 being the center FREE space. Items occupy 24 positions (excluding 12).
+
+**Bingo Card Display**: Grid renders with B-I-N-G-O header row. Cell text is truncated with CSS line-clamp (4 lines desktop, 3 tablet, 2 mobile). Full text shown in modal on click. Finalized card view uses `.finalized-card-view` class with centered grid layout.
 
 ### Database Schema
 

@@ -79,7 +79,7 @@ const App = {
     const hash = window.location.hash.slice(1) || 'home';
     const [page, ...params] = hash.split('/');
 
-    const container = document.querySelector('.container');
+    const container = document.getElementById('main-container');
     if (!container) return;
 
     switch (page) {
@@ -435,7 +435,7 @@ const App = {
       </div>
       <p class="progress-text mb-lg">${itemCount}/24 items added</p>
 
-      <div style="display: grid; grid-template-columns: 1fr 350px; gap: 2rem; align-items: start;">
+      <div class="card-editor-layout">
         <div class="bingo-container">
           <div class="bingo-grid" id="bingo-grid">
             ${this.renderGrid()}
@@ -482,20 +482,24 @@ const App = {
     const progress = Math.round((completedCount / 24) * 100);
 
     container.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
-        <h2>${this.currentCard.year} Bingo Card</h2>
-        <div></div>
-      </div>
+      <div class="finalized-card-view">
+        <div class="finalized-card-header">
+          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <h2>${this.currentCard.year} Bingo Card</h2>
+          <div></div>
+        </div>
 
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: ${progress}%"></div>
-      </div>
-      <p class="progress-text mb-lg">${completedCount}/24 completed</p>
+        <div class="bingo-container bingo-container--finalized">
+          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid">
+            ${this.renderGrid(true)}
+          </div>
+        </div>
 
-      <div class="bingo-container">
-        <div class="bingo-grid" id="bingo-grid">
-          ${this.renderGrid(true)}
+        <div class="finalized-card-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+          <p class="progress-text">${completedCount}/24 completed</p>
         </div>
       </div>
     `;
@@ -504,6 +508,12 @@ const App = {
   },
 
   renderGrid(finalized = false) {
+    // B-I-N-G-O header row
+    const headers = ['B', 'I', 'N', 'G', 'O'];
+    const headerRow = headers.map(letter => `
+      <div class="bingo-header">${letter}</div>
+    `).join('');
+
     const cells = [];
     const itemsByPosition = {};
 
@@ -525,12 +535,15 @@ const App = {
         const item = itemsByPosition[i];
         if (item) {
           const isCompleted = item.is_completed;
+          const shortText = this.truncateText(item.content, 50);
           cells.push(`
             <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
                  data-position="${i}"
                  data-item-id="${item.id}"
-                 ${!finalized ? 'draggable="true"' : ''}>
-              <span class="bingo-cell-content">${this.escapeHtml(item.content)}</span>
+                 data-content="${this.escapeHtml(item.content)}"
+                 ${!finalized ? 'draggable="true"' : ''}
+                 title="${this.escapeHtml(item.content)}">
+              <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
             </div>
           `);
         } else {
@@ -541,7 +554,18 @@ const App = {
       }
     }
 
-    return cells.join('');
+    return headerRow + cells.join('');
+  },
+
+  truncateText(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    // Find a good break point (space) near maxLength
+    const truncated = text.substring(0, maxLength);
+    const lastSpace = truncated.lastIndexOf(' ');
+    if (lastSpace > maxLength * 0.5) {
+      return truncated.substring(0, lastSpace) + '…';
+    }
+    return truncated + '…';
   },
 
   renderSuggestions(category) {
@@ -597,52 +621,82 @@ const App = {
       if (!cell || cell.classList.contains('bingo-cell--free')) return;
 
       const position = parseInt(cell.dataset.position);
+      const content = cell.dataset.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
       const isCompleted = cell.classList.contains('bingo-cell--completed');
 
-      try {
-        if (isCompleted) {
-          await API.cards.uncompleteItem(this.currentCard.id, position);
-          cell.classList.remove('bingo-cell--completed');
-          this.toast('Item unchecked', 'success');
-        } else {
-          // Show completion modal
-          this.showCompletionModal(position, cell);
-        }
-
-        // Update progress
-        const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
-        const progress = Math.round((completedCount / 24) * 100);
-        document.querySelector('.progress-fill').style.width = `${progress}%`;
-        document.querySelector('.progress-text').textContent = `${completedCount}/24 completed`;
-      } catch (error) {
-        this.toast(error.message, 'error');
-      }
+      // Show item detail modal
+      this.showItemDetailModal(position, content, isCompleted);
     });
   },
 
-  showCompletionModal(position, cell) {
-    this.openModal('Mark Complete', `
-      <form id="complete-form">
-        <div class="form-group">
-          <label class="form-label">Notes (optional)</label>
-          <textarea id="complete-notes" class="form-input" rows="3" placeholder="How did you accomplish this?"></textarea>
-        </div>
-        <div style="display: flex; gap: 1rem;">
-          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.completeItemQuick(${position})">
-            Just Mark Complete
-          </button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
-            Save with Notes
-          </button>
-        </div>
-      </form>
-    `);
+  showItemDetailModal(position, content, isCompleted) {
+    const item = this.currentCard.items?.find(i => i.position === position);
+    const notes = item?.notes || '';
 
-    document.getElementById('complete-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const notes = document.getElementById('complete-notes').value;
-      await this.completeItem(position, notes);
-    });
+    if (isCompleted) {
+      this.openModal('Goal Completed!', `
+        <div class="item-detail">
+          <p class="item-detail-content">${this.escapeHtml(content)}</p>
+          ${notes ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
+        </div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+            Close
+          </button>
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.uncompleteItem(${position})">
+            Mark Incomplete
+          </button>
+        </div>
+      `);
+    } else {
+      this.openModal('Mark Complete', `
+        <div class="item-detail">
+          <p class="item-detail-content">${this.escapeHtml(content)}</p>
+        </div>
+        <form id="complete-form">
+          <div class="form-group" style="margin-top: 1rem;">
+            <label class="form-label">Notes (optional)</label>
+            <textarea id="complete-notes" class="form-input" rows="3" placeholder="How did you accomplish this?"></textarea>
+          </div>
+          <div style="display: flex; gap: 1rem;">
+            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.completeItemQuick(${position})">
+              Just Complete
+            </button>
+            <button type="submit" class="btn btn-primary" style="flex: 1;">
+              Complete with Notes
+            </button>
+          </div>
+        </form>
+      `);
+
+      document.getElementById('complete-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const notes = document.getElementById('complete-notes').value;
+        await this.completeItem(position, notes);
+      });
+    }
+  },
+
+  async uncompleteItem(position) {
+    try {
+      await API.cards.uncompleteItem(this.currentCard.id, position);
+      const cell = document.querySelector(`[data-position="${position}"]`);
+      cell.classList.remove('bingo-cell--completed');
+      this.closeModal();
+      this.toast('Item marked incomplete', 'success');
+
+      // Update progress
+      const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
+      const progress = Math.round((completedCount / 24) * 100);
+      document.querySelector('.progress-fill').style.width = `${progress}%`;
+      document.querySelector('.progress-text').textContent = `${completedCount}/24 completed`;
+
+      // Update local state
+      const item = this.currentCard.items?.find(i => i.position === position);
+      if (item) item.is_completed = false;
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
   },
 
   async completeItemQuick(position) {
@@ -739,11 +793,13 @@ const App = {
 
   showItemOptions(cell) {
     const position = cell.dataset.position;
-    const content = cell.querySelector('.bingo-cell-content').textContent;
+    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content').textContent;
 
     this.openModal('Edit Item', `
-      <p style="margin-bottom: 1rem;">${this.escapeHtml(content)}</p>
-      <div style="display: flex; gap: 1rem;">
+      <div class="item-detail">
+        <p class="item-detail-content">${this.escapeHtml(content)}</p>
+      </div>
+      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
         <button class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
           Cancel
         </button>
