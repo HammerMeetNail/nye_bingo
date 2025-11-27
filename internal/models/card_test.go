@@ -46,13 +46,13 @@ func TestGridPositionCalculations(t *testing.T) {
 		row      int
 		col      int
 	}{
-		{0, 0, 0},   // Top-left
-		{4, 0, 4},   // Top-right
-		{12, 2, 2},  // Center (free space)
-		{20, 4, 0},  // Bottom-left
-		{24, 4, 4},  // Bottom-right
-		{6, 1, 1},   // Second row, second col
-		{18, 3, 3},  // Fourth row, fourth col
+		{0, 0, 0},  // Top-left
+		{4, 0, 4},  // Top-right
+		{12, 2, 2}, // Center (free space)
+		{20, 4, 0}, // Bottom-left
+		{24, 4, 4}, // Bottom-right
+		{6, 1, 1},  // Second row, second col
+		{18, 3, 3}, // Fourth row, fourth col
 	}
 
 	for _, tt := range tests {
@@ -74,11 +74,11 @@ func TestBingoLinePositions(t *testing.T) {
 	// Test that bingo line positions are correct
 	t.Run("rows", func(t *testing.T) {
 		expectedRows := [][]int{
-			{0, 1, 2, 3, 4},       // Row 0
-			{5, 6, 7, 8, 9},       // Row 1
-			{10, 11, 12, 13, 14},  // Row 2 (contains free space)
-			{15, 16, 17, 18, 19},  // Row 3
-			{20, 21, 22, 23, 24},  // Row 4
+			{0, 1, 2, 3, 4},      // Row 0
+			{5, 6, 7, 8, 9},      // Row 1
+			{10, 11, 12, 13, 14}, // Row 2 (contains free space)
+			{15, 16, 17, 18, 19}, // Row 3
+			{20, 21, 22, 23, 24}, // Row 4
 		}
 
 		for rowNum, expected := range expectedRows {
@@ -94,11 +94,11 @@ func TestBingoLinePositions(t *testing.T) {
 
 	t.Run("columns", func(t *testing.T) {
 		expectedCols := [][]int{
-			{0, 5, 10, 15, 20},    // Column 0 (B)
-			{1, 6, 11, 16, 21},    // Column 1 (I)
-			{2, 7, 12, 17, 22},    // Column 2 (N, contains free space)
-			{3, 8, 13, 18, 23},    // Column 3 (G)
-			{4, 9, 14, 19, 24},    // Column 4 (O)
+			{0, 5, 10, 15, 20}, // Column 0 (B)
+			{1, 6, 11, 16, 21}, // Column 1 (I)
+			{2, 7, 12, 17, 22}, // Column 2 (N, contains free space)
+			{3, 8, 13, 18, 23}, // Column 3 (G)
+			{4, 9, 14, 19, 24}, // Column 4 (O)
 		}
 
 		for colNum, expected := range expectedCols {

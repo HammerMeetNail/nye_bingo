@@ -133,7 +133,7 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 
 	if time.Now().After(session.ExpiresAt) {
 		// Clean up expired session
-		s.db.Exec(ctx, "DELETE FROM sessions WHERE id = $1", session.ID)
+		_, _ = s.db.Exec(ctx, "DELETE FROM sessions WHERE id = $1", session.ID)
 		return nil, ErrSessionExpired
 	}
 

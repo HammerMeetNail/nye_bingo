@@ -318,7 +318,7 @@ func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*m
 	if err != nil {
 		return nil, fmt.Errorf("beginning transaction: %w", err)
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	// First, set all positions to negative to avoid unique constraint violations
 	for i, item := range card.Items {

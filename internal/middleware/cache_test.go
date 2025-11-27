@@ -48,9 +48,9 @@ func TestCacheControl_StaticAssets(t *testing.T) {
 	})
 
 	tests := []struct {
-		path           string
-		expectedCache  string
-		isImmutable    bool
+		path          string
+		expectedCache string
+		isImmutable   bool
 	}{
 		{"/static/js/app.js", "public, max-age=86400, must-revalidate", false},
 		{"/static/css/styles.css", "public, max-age=86400, must-revalidate", false},

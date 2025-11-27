@@ -112,10 +112,10 @@ func (m *CSRFMiddleware) GetToken(w http.ResponseWriter, r *http.Request) {
 		})
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"token":"` + token + `"}`))
+		_, _ = w.Write([]byte(`{"token":"` + token + `"}`))
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"token":"` + cookie.Value + `"}`))
+	_, _ = w.Write([]byte(`{"token":"` + cookie.Value + `"}`))
 }

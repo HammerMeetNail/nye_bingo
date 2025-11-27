@@ -55,10 +55,10 @@ func run() error {
 		return fmt.Errorf("creating migrator: %w", err)
 	}
 	if err := migrator.Up(); err != nil {
-		migrator.Close()
+		_ = migrator.Close()
 		return fmt.Errorf("running migrations: %w", err)
 	}
-	migrator.Close()
+	_ = migrator.Close()
 	logger.Info("Migrations completed")
 
 	// Connect to Redis
@@ -69,7 +69,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("connecting to redis: %w", err)
 	}
-	defer redisDB.Close()
+	defer func() { _ = redisDB.Close() }()
 	logger.Info("Connected to Redis")
 
 	// Initialize services

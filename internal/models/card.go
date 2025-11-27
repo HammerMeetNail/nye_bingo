@@ -7,10 +7,10 @@ import (
 )
 
 const (
-	GridSize        = 5
-	TotalSquares    = GridSize * GridSize // 25
-	FreeSpacePos    = 12                  // Center position (0-indexed)
-	ItemsRequired   = TotalSquares - 1    // 24 items (excluding free space)
+	GridSize      = 5
+	TotalSquares  = GridSize * GridSize // 25
+	FreeSpacePos  = 12                  // Center position (0-indexed)
+	ItemsRequired = TotalSquares - 1    // 24 items (excluding free space)
 )
 
 type BingoCard struct {
@@ -59,12 +59,12 @@ type CompleteItemParams struct {
 
 // CardStats contains statistics for a bingo card
 type CardStats struct {
-	CardID         uuid.UUID `json:"card_id"`
-	Year           int       `json:"year"`
-	TotalItems     int       `json:"total_items"`
-	CompletedItems int       `json:"completed_items"`
-	CompletionRate float64   `json:"completion_rate"`
-	BingosAchieved int       `json:"bingos_achieved"`
+	CardID          uuid.UUID  `json:"card_id"`
+	Year            int        `json:"year"`
+	TotalItems      int        `json:"total_items"`
+	CompletedItems  int        `json:"completed_items"`
+	CompletionRate  float64    `json:"completion_rate"`
+	BingosAchieved  int        `json:"bingos_achieved"`
 	FirstCompletion *time.Time `json:"first_completion,omitempty"`
 	LastCompletion  *time.Time `json:"last_completion,omitempty"`
 }

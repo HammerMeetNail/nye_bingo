@@ -25,10 +25,30 @@ linters-settings:
   gosec:
     excludes:
       - G104  # Unhandled errors (too noisy for some cases)
+      - G404  # Weak random number generator - acceptable for non-crypto shuffle
   misspell:
     locale: US
+  errcheck:
+    # Ignore common HTTP response writer methods where errors are rarely actionable
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - (*encoding/json.Encoder).Encode
+      - io.WriteString
+      - (*compress/gzip.Writer).Close
+      - (*compress/gzip.Reader).Close
 
 issues:
   exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
+  exclude-rules:
+    # Ignore errcheck in test files for os.Setenv/Unsetenv - errors extremely rare
+    - path: _test\.go
+      linters:
+        - errcheck
+      text: "os\\.(Setenv|Unsetenv)"
+    # Ignore gosec false positives for test credentials
+    - path: _test\.go
+      linters:
+        - gosec
+      text: "G101"

@@ -146,11 +146,11 @@ func (l *Logger) log(level Level, msg string, additionalFields ...map[string]int
 	data, err := json.Marshal(entry)
 	if err != nil {
 		// Fallback to simple format
-		l.output.Write([]byte(entry.Timestamp + " " + entry.Level + " " + msg + "\n"))
+		_, _ = l.output.Write([]byte(entry.Timestamp + " " + entry.Level + " " + msg + "\n"))
 		return
 	}
-	l.output.Write(data)
-	l.output.Write([]byte("\n"))
+	_, _ = l.output.Write(data)
+	_, _ = l.output.Write([]byte("\n"))
 }
 
 // Default is the default logger instance.

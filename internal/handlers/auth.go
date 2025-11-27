@@ -158,7 +158,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil && cookie.Value != "" {
-		h.authService.DeleteSession(r.Context(), cookie.Value)
+		_ = h.authService.DeleteSession(r.Context(), cookie.Value)
 	}
 
 	h.clearSessionCookie(w)
@@ -219,7 +219,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invalidate all other sessions
-	h.authService.DeleteAllUserSessions(r.Context(), user.ID)
+	_ = h.authService.DeleteAllUserSessions(r.Context(), user.ID)
 
 	// Create new session
 	token, err := h.authService.CreateSession(r.Context(), user.ID)
@@ -288,7 +288,7 @@ func validatePassword(password string) error {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	_ = json.NewEncoder(w).Encode(data)
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {

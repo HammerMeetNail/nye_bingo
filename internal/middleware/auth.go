@@ -47,10 +47,9 @@ func (m *AuthMiddleware) RequireAuth(next http.Handler) http.Handler {
 		if user == nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"error":"Authentication required"}`))
+			_, _ = w.Write([]byte(`{"error":"Authentication required"}`))
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
-

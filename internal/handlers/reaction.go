@@ -26,7 +26,7 @@ type AddReactionRequest struct {
 }
 
 type ReactionResponse struct {
-	Reaction  *models.Reaction         `json:"reaction,omitempty"`
+	Reaction  *models.Reaction          `json:"reaction,omitempty"`
 	Reactions []models.ReactionWithUser `json:"reactions,omitempty"`
 	Summary   []models.ReactionSummary  `json:"summary,omitempty"`
 	Message   string                    `json:"message,omitempty"`

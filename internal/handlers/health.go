@@ -24,9 +24,9 @@ func NewHealthHandler(db, redis HealthChecker) *HealthHandler {
 }
 
 type HealthResponse struct {
-	Status   string            `json:"status"`
-	Checks   map[string]string `json:"checks"`
-	Timestamp string           `json:"timestamp"`
+	Status    string            `json:"status"`
+	Checks    map[string]string `json:"checks"`
+	Timestamp string            `json:"timestamp"`
 }
 
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}
 
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
@@ -76,15 +76,15 @@ func (h *HealthHandler) Ready(w http.ResponseWriter, r *http.Request) {
 
 	if dbErr != nil || redisErr != nil {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte("not ready"))
+		_, _ = w.Write([]byte("not ready"))
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ready"))
+	_, _ = w.Write([]byte("ready"))
 }
 
 func (h *HealthHandler) Live(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("alive"))
+	_, _ = w.Write([]byte("alive"))
 }

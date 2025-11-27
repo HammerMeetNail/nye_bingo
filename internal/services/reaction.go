@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	ErrReactionNotFound  = errors.New("reaction not found")
-	ErrInvalidEmoji      = errors.New("invalid emoji")
-	ErrCannotReactToOwn  = errors.New("cannot react to your own items")
-	ErrItemNotCompleted  = errors.New("can only react to completed items")
+	ErrReactionNotFound = errors.New("reaction not found")
+	ErrInvalidEmoji     = errors.New("invalid emoji")
+	ErrCannotReactToOwn = errors.New("cannot react to your own items")
+	ErrItemNotCompleted = errors.New("can only react to completed items")
 )
 
 type ReactionService struct {

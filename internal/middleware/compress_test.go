@@ -13,7 +13,7 @@ func TestCompress_GzipWhenAccepted(t *testing.T) {
 
 	responseBody := "This is a test response that should be compressed"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(responseBody))
+		_, _ = w.Write([]byte(responseBody))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -37,7 +37,7 @@ func TestCompress_GzipWhenAccepted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create gzip reader: %v", err)
 	}
-	defer gzReader.Close()
+	defer func() { _ = gzReader.Close() }()
 
 	decompressed, err := io.ReadAll(gzReader)
 	if err != nil {
@@ -54,7 +54,7 @@ func TestCompress_NoGzipWhenNotAccepted(t *testing.T) {
 
 	responseBody := "This is a test response"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(responseBody))
+		_, _ = w.Write([]byte(responseBody))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -99,7 +99,7 @@ func TestCompress_SkipPreCompressedFiles(t *testing.T) {
 	for _, path := range preCompressedPaths {
 		t.Run(path, func(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("content"))
+				_, _ = w.Write([]byte("content"))
 			})
 
 			req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -130,7 +130,7 @@ func TestCompress_CompressTextPaths(t *testing.T) {
 	for _, path := range textPaths {
 		t.Run(path, func(t *testing.T) {
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte("content"))
+				_, _ = w.Write([]byte("content"))
 			})
 
 			req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -152,7 +152,7 @@ func TestCompress_CaseInsensitiveExtension(t *testing.T) {
 
 	// Test uppercase extensions
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("content"))
+		_, _ = w.Write([]byte("content"))
 	})
 
 	uppercasePaths := []string{
@@ -207,7 +207,7 @@ func TestCompress_GzipDeflateAccepted(t *testing.T) {
 	compress := NewCompress()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("content"))
+		_, _ = w.Write([]byte("content"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
@@ -226,7 +226,7 @@ func TestCompress_VaryHeader(t *testing.T) {
 	compress := NewCompress()
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("test content"))
+		_, _ = w.Write([]byte("test content"))
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/test", nil)
