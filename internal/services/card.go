@@ -283,6 +283,34 @@ func (s *CardService) RemoveItem(ctx context.Context, userID, cardID uuid.UUID, 
 	return nil
 }
 
+func (s *CardService) Delete(ctx context.Context, userID, cardID uuid.UUID) error {
+	// Get and verify card ownership
+	card, err := s.GetByID(ctx, cardID)
+	if err != nil {
+		return err
+	}
+	if card.UserID != userID {
+		return ErrNotCardOwner
+	}
+
+	// Delete items first (foreign key constraint)
+	_, err = s.db.Exec(ctx, "DELETE FROM bingo_items WHERE card_id = $1", cardID)
+	if err != nil {
+		return fmt.Errorf("deleting card items: %w", err)
+	}
+
+	// Delete the card
+	result, err := s.db.Exec(ctx, "DELETE FROM bingo_cards WHERE id = $1", cardID)
+	if err != nil {
+		return fmt.Errorf("deleting card: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrCardNotFound
+	}
+
+	return nil
+}
+
 func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*models.BingoCard, error) {
 	// Get and verify card ownership
 	card, err := s.GetByID(ctx, cardID)

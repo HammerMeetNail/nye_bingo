@@ -151,6 +151,37 @@ func (h *CardHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, CardResponse{Card: card})
 }
 
+func (h *CardHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	err = h.cardService.Delete(r.Context(), user.ID, cardID)
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if err != nil {
+		log.Printf("Error deleting card: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Message: "Card deleted"})
+}
+
 func (h *CardHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r.Context())
 	if user == nil {

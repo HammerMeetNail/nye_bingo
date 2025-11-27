@@ -123,6 +123,7 @@ func run() error {
 	mux.HandleFunc("GET /api/cards", cardHandler.List)
 	mux.HandleFunc("GET /api/cards/archive", cardHandler.Archive)
 	mux.HandleFunc("GET /api/cards/{id}", cardHandler.Get)
+	mux.HandleFunc("DELETE /api/cards/{id}", cardHandler.Delete)
 	mux.HandleFunc("GET /api/cards/{id}/stats", cardHandler.Stats)
 	mux.HandleFunc("POST /api/cards/{id}/items", cardHandler.AddItem)
 	mux.HandleFunc("PUT /api/cards/{id}/items/{pos}", cardHandler.UpdateItem)

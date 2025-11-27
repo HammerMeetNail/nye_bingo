@@ -366,25 +366,44 @@ const App = {
     const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
 
     return `
-      <a href="#card/${card.id}" class="card" style="display: block; margin-bottom: 1rem; text-decoration: none;">
+      <div class="card" style="margin-bottom: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: start;">
-          <div>
+          <a href="#card/${card.id}" style="flex: 1; text-decoration: none; color: inherit;">
             <h3 style="margin-bottom: 0.5rem;">${card.year} Bingo Card</h3>
             <p class="text-muted">
               ${card.is_finalized
                 ? `${completedCount}/24 completed`
                 : `${itemCount}/24 items added`}
             </p>
+          </a>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <a href="#card/${card.id}" class="btn btn-ghost btn-sm">
+              ${card.is_finalized ? 'View' : 'Continue'}
+            </a>
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); App.deleteCard('${card.id}', ${card.year})" title="Delete card" style="color: var(--danger);">
+              &times;
+            </button>
           </div>
-          <span class="btn btn-ghost btn-sm">
-            ${card.is_finalized ? 'View' : 'Continue'}
-          </span>
         </div>
         <div class="progress-bar mt-md">
           <div class="progress-fill" style="width: ${progress}%"></div>
         </div>
-      </a>
+      </div>
     `;
+  },
+
+  async deleteCard(cardId, year) {
+    if (!confirm(`Are you sure you want to delete your ${year} Bingo Card? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      await API.cards.deleteCard(cardId);
+      this.toast('Card deleted', 'success');
+      this.renderDashboard(document.getElementById('main-container'));
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
   },
 
   async renderCreate(container) {

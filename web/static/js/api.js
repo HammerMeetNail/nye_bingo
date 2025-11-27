@@ -147,6 +147,10 @@ const API = {
       return API.request('GET', `/api/cards/${id}`);
     },
 
+    async deleteCard(id) {
+      return API.request('DELETE', `/api/cards/${id}`);
+    },
+
     async addItem(cardId, content, position = null) {
       const body = { content };
       if (position !== null) {
