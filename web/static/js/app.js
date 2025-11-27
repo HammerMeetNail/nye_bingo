@@ -659,11 +659,11 @@ const App = {
             <textarea id="complete-notes" class="form-input" rows="3" placeholder="How did you accomplish this?"></textarea>
           </div>
           <div style="display: flex; gap: 1rem;">
-            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.completeItemQuick(${position})">
-              Just Complete
+            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+              Cancel
             </button>
             <button type="submit" class="btn btn-primary" style="flex: 1;">
-              Complete with Notes
+              Mark Complete
             </button>
           </div>
         </form>
@@ -699,10 +699,6 @@ const App = {
     }
   },
 
-  async completeItemQuick(position) {
-    await this.completeItem(position, null);
-  },
-
   async completeItem(position, notes) {
     try {
       await API.cards.completeItem(this.currentCard.id, position, notes);
@@ -712,6 +708,13 @@ const App = {
       this.closeModal();
       this.toast('Item completed! 🎉', 'success');
       this.checkForBingo();
+
+      // Update local state
+      const item = this.currentCard.items?.find(i => i.position === position);
+      if (item) {
+        item.is_completed = true;
+        item.notes = notes || '';
+      }
 
       // Update progress
       const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
