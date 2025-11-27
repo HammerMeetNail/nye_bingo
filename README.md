@@ -272,9 +272,21 @@ The project uses GitHub Actions for continuous integration and deployment.
 
 ### Container Images
 
-Images are published to [quay.io/nye-bingo/nye-bingo](https://quay.io/repository/nye-bingo/nye-bingo):
+Multi-architecture images (linux/amd64 and linux/arm64) are published to [quay.io/nye-bingo/nye-bingo](https://quay.io/repository/nye-bingo/nye-bingo):
 - `quay.io/nye-bingo/nye-bingo:latest` - Latest main branch build
 - `quay.io/nye-bingo/nye-bingo:<sha>` - Specific commit builds
+
+### Running the Production Image
+
+```bash
+# Run the production image from quay.io
+podman compose -f compose.prod.yaml up
+
+# Or with Docker
+docker compose -f compose.prod.yaml up
+```
+
+This pulls the pre-built image from quay.io and runs it with local PostgreSQL and Redis containers.
 
 ### Running CI Locally
 
@@ -285,7 +297,7 @@ golangci-lint run
 # Run all tests
 ./scripts/test.sh
 
-# Build container image
+# Build container image locally
 podman build -f Containerfile -t nye-bingo .
 ```
 

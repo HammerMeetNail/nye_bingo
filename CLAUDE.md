@@ -190,14 +190,21 @@ GitHub Actions workflow in `.github/workflows/ci.yaml`:
 2. **Test (Go)** - `go test -v -race -coverprofile=coverage.out ./...`
 3. **Test (JS)** - `node web/static/js/tests/runner.js`
 4. **Build** - Compile binary, upload as artifact
-5. **Build & Scan Image** - Build container, Trivy security scan (fails on CRITICAL/HIGH)
-6. **Push** - Push to quay.io only after scan passes
+5. **Build Image** - Parallel builds on native runners (amd64 + arm64)
+6. **Scan & Push** - Trivy security scan, then push multi-arch manifest
 
-**Container registry:** `quay.io/nye-bingo/nye-bingo`
+**Container registry:** [quay.io/nye-bingo/nye-bingo](https://quay.io/repository/nye-bingo/nye-bingo)
+- Multi-arch: `linux/amd64` and `linux/arm64`
 - `:latest` - Latest main branch build
 - `:<sha>` - Specific commit builds
 
-**Local CI commands:**
+**Running production image locally:**
+```bash
+# Run pre-built image from quay.io (auto-selects correct arch)
+podman compose -f compose.prod.yaml up
+```
+
+**Local CI/dev commands:**
 ```bash
 # Run linting
 golangci-lint run
@@ -205,8 +212,11 @@ golangci-lint run
 # Run all tests in container
 ./scripts/test.sh
 
-# Build container
+# Build container locally
 podman build -f Containerfile -t nye-bingo .
+
+# Run local dev build
+podman compose up
 ```
 
 ## Security Features (Phase 8)
