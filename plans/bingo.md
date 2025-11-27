@@ -141,14 +141,14 @@ CREATE TABLE sessions (
 - Environment configuration via `.env` files
 
 ### 1.4 Deliverables
-- [ ] Go project initialization with modules
-- [ ] Database connection pool setup
-- [ ] Redis client setup
-- [ ] Database migrations system (golang-migrate)
-- [ ] Initial schema migrations
-- [ ] Podman compose configuration
-- [ ] Basic health check endpoint
-- [ ] Configuration management (env vars)
+- [x] Go project initialization with modules
+- [x] Database connection pool setup
+- [x] Redis client setup
+- [x] Database migrations system (golang-migrate)
+- [x] Initial schema migrations
+- [x] Podman compose configuration
+- [x] Basic health check endpoint
+- [x] Configuration management (env vars)
 
 ---
 
@@ -177,13 +177,13 @@ POST /api/auth/password     - Change password
 - Sliding expiration on activity
 
 ### 2.4 Deliverables
-- [ ] User registration with email validation
-- [ ] Password hashing and verification
-- [ ] Session creation and management
-- [ ] Login/logout functionality
-- [ ] Auth middleware for protected routes
-- [ ] CSRF token generation and validation
-- [ ] Rate limiting middleware
+- [x] User registration with email validation
+- [x] Password hashing and verification
+- [x] Session creation and management
+- [x] Login/logout functionality
+- [x] Auth middleware for protected routes
+- [x] CSRF token generation and validation
+- [x] Rate limiting middleware
 - [ ] Password reset flow (email-based)
 
 ---
@@ -225,13 +225,13 @@ GET    /api/suggestions          - Get curated suggestions
 ```
 
 ### 3.4 Deliverables
-- [ ] Card creation API
-- [ ] Item management (add, edit, remove, reposition)
-- [ ] Random position assignment algorithm
-- [ ] Shuffle functionality
-- [ ] Card finalization (lock editing)
-- [ ] Suggestions API with categories
-- [ ] Seed data for suggestions
+- [x] Card creation API
+- [x] Item management (add, edit, remove, reposition)
+- [x] Random position assignment algorithm
+- [x] Shuffle functionality
+- [x] Card finalization (lock editing)
+- [x] Suggestions API with categories
+- [x] Seed data for suggestions
 
 ---
 
@@ -260,15 +260,15 @@ GET    /api/suggestions          - Get curated suggestions
 - Shuffle button with satisfying animation
 
 ### 4.4 Deliverables
-- [ ] CSS design system (variables, typography, colors)
-- [ ] Responsive 5x5 bingo grid component
-- [ ] Item input with autocomplete suggestions
-- [ ] Suggestion panel with categories
-- [ ] Add-item animation (item flies to square)
-- [ ] Drag-and-drop reordering
-- [ ] Shuffle animation
-- [ ] Mobile touch interactions
-- [ ] Card creation wizard flow
+- [x] CSS design system (variables, typography, colors)
+- [x] Responsive 5x5 bingo grid component
+- [x] Item input with autocomplete suggestions
+- [x] Suggestion panel with categories
+- [x] Add-item animation (item flies to square)
+- [x] Drag-and-drop reordering
+- [x] Shuffle animation
+- [x] Mobile touch interactions
+- [x] Card creation wizard flow
 
 ---
 
@@ -296,13 +296,13 @@ PUT  /api/cards/:id/items/:pos/notes      - Update notes/proof
 ```
 
 ### 5.4 Deliverables
-- [ ] Click-to-complete interaction
-- [ ] Stamp/dauber visual effect
-- [ ] Completion modal with notes
+- [x] Click-to-complete interaction
+- [x] Stamp/dauber visual effect
+- [x] Completion modal with notes
 - [ ] Image upload for proof (optional)
-- [ ] Bingo detection algorithm
-- [ ] Bingo celebration animation
-- [ ] Progress indicator (X/24 complete)
+- [x] Bingo detection algorithm
+- [x] Bingo celebration animation
+- [x] Progress indicator (X/24 complete)
 
 ---
 

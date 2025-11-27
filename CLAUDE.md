@@ -46,9 +46,21 @@ go mod tidy
 ### Frontend Structure
 
 - `web/templates/index.html` - Single HTML entry point for SPA (main container has `id="main-container"`)
-- `web/static/js/api.js` - API client with CSRF token handling
-- `web/static/js/app.js` - SPA router and all UI logic
+- `web/static/js/api.js` - API client with CSRF token handling, all methods under `API` object
+- `web/static/js/app.js` - SPA router and all UI logic under global `App` object
 - `web/static/css/styles.css` - Design system with CSS variables, uses OpenDyslexic font for bingo cells
+
+### Frontend Patterns
+
+**App Object**: All frontend logic lives in global `App` object. Key methods:
+- `route()` - Hash-based routing, renders appropriate page
+- `renderFinalizedCard()` / `renderCardEditor()` - Card views
+- `showItemDetailModal()` - Modal for viewing/completing items
+- `openModal()` / `closeModal()` - Generic modal system
+
+**API Object**: Wraps fetch calls with CSRF handling. Namespaced: `API.auth.*`, `API.cards.*`, `API.suggestions.*`
+
+**Adding New Features**: Add API methods to `api.js`, UI methods to `App` object in `app.js`, styles to `styles.css`
 
 ### Key Patterns
 
@@ -86,6 +98,13 @@ Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 
 ## Implementation Status
 
-Phases 1-4 complete (Foundation, Auth, Card API, Frontend UI). Remaining: Social features, Archive, Polish, CI/CD, Launch.
+Phases 1-5 complete:
+- Phase 1: Foundation (Go project, PostgreSQL, Redis, migrations, Podman)
+- Phase 2: Authentication (register, login, sessions, CSRF, rate limiting)
+- Phase 3: Bingo Card API (create, items, shuffle, finalize, suggestions)
+- Phase 4: Frontend Card Creation UI (SPA, grid, drag-drop, animations)
+- Phase 5: Card Interaction (mark complete, notes, bingo detection)
+
+**Next: Phase 6 (Social Features)** - Database tables `friendships` and `reactions` already exist in schema.
 
 See `plans/bingo.md` for the full implementation plan.
