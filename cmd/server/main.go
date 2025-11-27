@@ -74,6 +74,10 @@ func run() error {
 	authHandler := handlers.NewAuthHandler(userService, authService, cfg.Server.Secure)
 	cardHandler := handlers.NewCardHandler(cardService)
 	suggestionHandler := handlers.NewSuggestionHandler(suggestionService)
+	pageHandler, err := handlers.NewPageHandler("web/templates")
+	if err != nil {
+		return fmt.Errorf("loading templates: %w", err)
+	}
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService)
@@ -119,6 +123,9 @@ func run() error {
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", fs))
+
+	// SPA catch-all route (serves index.html for client-side routing)
+	mux.HandleFunc("GET /", pageHandler.Index)
 
 	// Build middleware chain
 	var handler http.Handler = mux
