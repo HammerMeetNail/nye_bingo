@@ -1,10 +1,12 @@
-# NYE Bingo - Implementation Plan
+# Year of Bingo - Implementation Plan
 
-A web application for creating and tracking New Year's Resolution Bingo cards.
+A web application for creating and tracking annual Bingo cards.
+
+**Domain**: yearofbingo.com
 
 ## Overview
 
-Users create a 5x5 Bingo card on New Year's Eve with 24 personal goals (center square is free). Throughout the year, they mark items complete and track progress. Cards can be shared with friends who can view and react to completions.
+Users create a 5x5 Bingo card with 24 personal goals (center square is free). Throughout the year, they mark items complete and track progress. Cards can be shared with friends who can view and react to completions.
 
 ---
 
@@ -547,7 +549,7 @@ FROM alpine:3.19
 - [x] Production Containerfile (multi-stage, non-root user, health checks)
 - [x] compose.yaml for local development (with watch mode)
 - [x] GitHub Actions workflow for CI (.github/workflows/ci.yaml)
-- [x] Container image push to quay.io (quay.io/nye-bingo/nye-bingo)
+- [x] Container image push to quay.io (quay.io/yearofbingo/yearofbingo)
 - [x] Security scanning with Trivy (before push, fails on CRITICAL/HIGH)
 - [x] golangci-lint configuration (.golangci.yaml)
 - [ ] Deployment manifests

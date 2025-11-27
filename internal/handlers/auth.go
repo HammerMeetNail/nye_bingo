@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
-	"github.com/HammerMeetNail/nye_bingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 const (

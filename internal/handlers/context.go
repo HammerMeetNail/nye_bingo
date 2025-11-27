@@ -3,7 +3,7 @@ package handlers
 import (
 	"context"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 type contextKey string

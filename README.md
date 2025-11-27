@@ -1,11 +1,13 @@
-# NYE Bingo
+# Year of Bingo
 
-[![CI](https://github.com/HammerMeetNail/nye_bingo/actions/workflows/ci.yaml/badge.svg)](https://github.com/HammerMeetNail/nye_bingo/actions/workflows/ci.yaml)
-[![codecov](https://codecov.io/gh/HammerMeetNail/nye_bingo/graph/badge.svg)](https://codecov.io/gh/HammerMeetNail/nye_bingo)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/HammerMeetNail/nye_bingo)](https://go.dev/)
+[![CI](https://github.com/HammerMeetNail/yearofbingo/actions/workflows/ci.yaml/badge.svg)](https://github.com/HammerMeetNail/yearofbingo/actions/workflows/ci.yaml)
+[![codecov](https://codecov.io/gh/HammerMeetNail/yearofbingo/graph/badge.svg)](https://codecov.io/gh/HammerMeetNail/yearofbingo)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/HammerMeetNail/yearofbingo)](https://go.dev/)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-A web application for creating and tracking New Year's Resolution Bingo cards. Create a 5x5 card with 24 personal goals, then mark items complete throughout the year as you achieve them.
+**[yearofbingo.com](https://yearofbingo.com)**
+
+A web application for creating and tracking annual Bingo cards. Create a 5x5 card with 24 personal goals, then mark items complete throughout the year as you achieve them.
 
 ## Features
 
@@ -277,9 +279,9 @@ The project uses GitHub Actions for continuous integration and deployment.
 
 ### Container Images
 
-Multi-architecture images (linux/amd64 and linux/arm64) are published to [quay.io/nye-bingo/nye-bingo](https://quay.io/repository/nye-bingo/nye-bingo):
-- `quay.io/nye-bingo/nye-bingo:latest` - Latest main branch build
-- `quay.io/nye-bingo/nye-bingo:<sha>` - Specific commit builds
+Multi-architecture images (linux/amd64 and linux/arm64) are published to [quay.io/yearofbingo/yearofbingo](https://quay.io/repository/yearofbingo/yearofbingo):
+- `quay.io/yearofbingo/yearofbingo:latest` - Latest main branch build
+- `quay.io/yearofbingo/yearofbingo:<sha>` - Specific commit builds
 
 ### Running the Production Image
 
@@ -303,7 +305,7 @@ golangci-lint run
 ./scripts/test.sh
 
 # Build container image locally
-podman build -f Containerfile -t nye-bingo .
+podman build -f Containerfile -t yearofbingo .
 ```
 
 ## Security & Performance

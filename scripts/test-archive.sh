@@ -83,7 +83,7 @@ get_cards() {
 
 # Main test logic
 echo "=========================================="
-echo "  NYE Bingo - Archive Test Script"
+echo "  Year of Bingo - Archive Test Script"
 echo "=========================================="
 echo ""
 log_info "Using base URL: $BASE_URL"

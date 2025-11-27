@@ -9,12 +9,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/config"
-	"github.com/HammerMeetNail/nye_bingo/internal/database"
-	"github.com/HammerMeetNail/nye_bingo/internal/handlers"
-	"github.com/HammerMeetNail/nye_bingo/internal/logging"
-	"github.com/HammerMeetNail/nye_bingo/internal/middleware"
-	"github.com/HammerMeetNail/nye_bingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/config"
+	"github.com/HammerMeetNail/yearofbingo/internal/database"
+	"github.com/HammerMeetNail/yearofbingo/internal/handlers"
+	"github.com/HammerMeetNail/yearofbingo/internal/logging"
+	"github.com/HammerMeetNail/yearofbingo/internal/middleware"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 func main() {
@@ -34,7 +34,7 @@ func run() error {
 		return fmt.Errorf("loading config: %w", err)
 	}
 
-	logger.Info("Starting NYE Bingo server...")
+	logger.Info("Starting Year of Bingo server...")
 
 	// Connect to PostgreSQL
 	logger.Info("Connecting to PostgreSQL", map[string]interface{}{

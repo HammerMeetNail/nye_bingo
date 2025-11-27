@@ -30,7 +30,7 @@ func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 	// For a SPA, we serve the same template for all routes
 	// The JavaScript router handles the actual routing
 	data := PageData{
-		Title: "New Year's Resolution Bingo",
+		Title: "Year of Bingo",
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

@@ -211,7 +211,7 @@ get_friend_card_items() {
 
 # Main seeding logic
 echo "=========================================="
-echo "  NYE Bingo - Seed Script"
+echo "  Year of Bingo - Seed Script"
 echo "=========================================="
 echo ""
 log_info "Using base URL: $BASE_URL"

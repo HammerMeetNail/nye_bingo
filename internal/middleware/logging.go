@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/logging"
+	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 )
 
 // responseRecorder wraps http.ResponseWriter to capture status code and size.

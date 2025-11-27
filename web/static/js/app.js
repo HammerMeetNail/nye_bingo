@@ -1,4 +1,4 @@
-// NYE Bingo - Main Application
+// Year of Bingo - Main Application
 
 const App = {
   user: null,
@@ -180,10 +180,10 @@ const App = {
     container.innerHTML = `
       <div class="text-center" style="padding: 4rem 0;">
         <h1 style="margin-bottom: 1rem;">
-          <span class="text-gold">NYE</span> Bingo
+          Year of <span class="text-gold">Bingo</span>
         </h1>
         <p style="font-size: 1.25rem; max-width: 600px; margin: 0 auto 2rem;">
-          Turn your New Year's resolutions into an exciting game! Create a bingo card
+          Turn your goals into an exciting game! Create a bingo card
           with 24 goals and track your progress throughout the year.
         </p>
         ${this.user ? `

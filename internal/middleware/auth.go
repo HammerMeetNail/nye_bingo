@@ -3,8 +3,8 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/handlers"
-	"github.com/HammerMeetNail/nye_bingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/handlers"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 const sessionCookieName = "session_token"

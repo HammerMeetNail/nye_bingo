@@ -1,4 +1,4 @@
-// NYE Bingo - API Client
+// Year of Bingo - API Client
 
 const API = {
   csrfToken: null,

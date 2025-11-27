@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
-	"github.com/HammerMeetNail/nye_bingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 type SuggestionHandler struct {

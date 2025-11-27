@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 var (

@@ -15,7 +15,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 const (

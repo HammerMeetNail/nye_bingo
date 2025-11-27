@@ -21,13 +21,13 @@ if [[ "$1" == "--coverage" ]]; then
     COVERAGE="1"
 fi
 
-echo -e "${BLUE}NYE Bingo Test Suite${NC}"
+echo -e "${BLUE}Year of Bingo Test Suite${NC}"
 echo "================================"
 echo ""
 
 # Build test container
 echo -e "${BLUE}Building test container...${NC}"
-podman build -f "${PROJECT_DIR}/Containerfile.test" -t nye_bingo_test "${PROJECT_DIR}" >/dev/null 2>&1
+podman build -f "${PROJECT_DIR}/Containerfile.test" -t year_of_bingo_test "${PROJECT_DIR}" >/dev/null 2>&1
 
 # Run tests
 echo -e "${BLUE}Running tests...${NC}"
@@ -37,7 +37,7 @@ if [[ -n "$COVERAGE" ]]; then
     podman run --rm \
         -v "${PROJECT_DIR}:/app:ro" \
         -w /app \
-        nye_bingo_test \
+        year_of_bingo_test \
         sh -c '
             echo "=== Go Tests (with coverage) ==="
             go test -cover ./...
@@ -49,7 +49,7 @@ else
     podman run --rm \
         -v "${PROJECT_DIR}:/app:ro" \
         -w /app \
-        nye_bingo_test \
+        year_of_bingo_test \
         sh -c '
             echo "=== Go Tests ==="
             go test ./...

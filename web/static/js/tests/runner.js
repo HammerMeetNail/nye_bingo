@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * NYE Bingo - JavaScript Test Runner
+ * Year of Bingo - JavaScript Test Runner
  *
  * Zero dependencies - uses only Node.js built-ins.
  * Run with: node web/static/js/tests/runner.js
@@ -158,7 +158,7 @@ function countBingos(items) {
 // TESTS
 // ============================================================
 
-console.log(`${colors.blue}NYE Bingo JavaScript Tests${colors.reset}`);
+console.log(`${colors.blue}Year of Bingo JavaScript Tests${colors.reset}`);
 console.log('='.repeat(40));
 
 describe('escapeHtml', () => {

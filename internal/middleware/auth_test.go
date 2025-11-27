@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/handlers"
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/handlers"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 func TestAuthMiddleware_RequireAuth_NoUser(t *testing.T) {

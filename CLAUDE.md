@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-NYE Bingo is a web application for creating and tracking New Year's Resolution Bingo cards. Users create a 5x5 card with 24 personal goals (center is free space), then mark items complete throughout the year. Cards can be shared with friends who can react to completions.
+Year of Bingo is a web application for creating and tracking annual Bingo cards. Users create a 5x5 card with 24 personal goals (center is free space), then mark items complete throughout the year. Cards can be shared with friends who can react to completions.
+
+**Domain**: yearofbingo.com
 
 ## Tech Stack
 
@@ -193,7 +195,7 @@ GitHub Actions workflow in `.github/workflows/ci.yaml`:
 5. **Build Image** - Parallel builds on native runners (amd64 + arm64)
 6. **Scan & Push** - Trivy security scan, then push multi-arch manifest
 
-**Container registry:** [quay.io/nye-bingo/nye-bingo](https://quay.io/repository/nye-bingo/nye-bingo)
+**Container registry:** [quay.io/yearofbingo/yearofbingo](https://quay.io/repository/yearofbingo/yearofbingo)
 - Multi-arch: `linux/amd64` and `linux/arm64`
 - `:latest` - Latest main branch build
 - `:<sha>` - Specific commit builds
@@ -213,7 +215,7 @@ golangci-lint run
 ./scripts/test.sh
 
 # Build container locally
-podman build -f Containerfile -t nye-bingo .
+podman build -f Containerfile -t yearofbingo .
 
 # Run local dev build
 podman compose up

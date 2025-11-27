@@ -110,7 +110,7 @@ cleanup_user() {
 
 # Main cleanup logic
 echo "=========================================="
-echo "  NYE Bingo - Cleanup Script"
+echo "  Year of Bingo - Cleanup Script"
 echo "=========================================="
 echo ""
 log_info "Using base URL: $BASE_URL"

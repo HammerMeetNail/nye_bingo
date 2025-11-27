@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/HammerMeetNail/nye_bingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 func TestSetUserInContext(t *testing.T) {
