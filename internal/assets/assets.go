@@ -29,6 +29,7 @@ func (m *Manifest) Load() error {
 
 	manifestPath := filepath.Join(m.basePath, "web", "static", "dist", "manifest.json")
 
+	// #nosec G304 -- manifestPath is constructed from trusted basePath, not user input
 	data, err := os.ReadFile(manifestPath)
 	if err != nil {
 		// If manifest doesn't exist, use original paths (dev mode)

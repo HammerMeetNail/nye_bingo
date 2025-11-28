@@ -52,8 +52,13 @@ func TestCacheControl_StaticAssets(t *testing.T) {
 		expectedCache string
 		isImmutable   bool
 	}{
-		{"/static/js/app.js", "public, max-age=86400, must-revalidate", false},
-		{"/static/css/styles.css", "public, max-age=86400, must-revalidate", false},
+		// Hashed assets in /static/dist/ are immutable
+		{"/static/dist/js/app.abc123.js", "public, max-age=31536000, immutable", true},
+		{"/static/dist/css/styles.abc123.css", "public, max-age=31536000, immutable", true},
+		// Non-hashed JS/CSS (dev mode) use short cache
+		{"/static/js/app.js", "public, max-age=60, must-revalidate", false},
+		{"/static/css/styles.css", "public, max-age=60, must-revalidate", false},
+		// Fonts and images are always immutable
 		{"/static/fonts/font.woff2", "public, max-age=31536000, immutable", true},
 		{"/static/images/logo.png", "public, max-age=31536000, immutable", true},
 		{"/static/images/icon.jpg", "public, max-age=31536000, immutable", true},
@@ -227,8 +232,13 @@ func TestSetStaticCacheHeaders(t *testing.T) {
 		path     string
 		expected string
 	}{
-		{"/static/js/app.js", "public, max-age=86400, must-revalidate"},
-		{"/static/css/styles.css", "public, max-age=86400, must-revalidate"},
+		// Hashed assets in /static/dist/ are immutable
+		{"/static/dist/js/app.abc123.js", "public, max-age=31536000, immutable"},
+		{"/static/dist/css/styles.abc123.css", "public, max-age=31536000, immutable"},
+		// Non-hashed JS/CSS (dev mode) use short cache
+		{"/static/js/app.js", "public, max-age=60, must-revalidate"},
+		{"/static/css/styles.css", "public, max-age=60, must-revalidate"},
+		// Fonts and images are always immutable
 		{"/static/fonts/font.woff2", "public, max-age=31536000, immutable"},
 		{"/static/images/logo.png", "public, max-age=31536000, immutable"},
 		{"/static/unknown.txt", "public, max-age=3600"},
