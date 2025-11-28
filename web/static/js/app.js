@@ -124,6 +124,86 @@ const App = {
     if (overlay) overlay.classList.remove('modal-overlay--visible');
   },
 
+  async showEditCardMetaModal() {
+    if (!this.currentCard) return;
+
+    // Fetch categories
+    let categories = [];
+    try {
+      const response = await API.cards.getCategories();
+      categories = response.categories || [];
+    } catch (error) {
+      categories = [
+        { id: 'personal', name: 'Personal Growth' },
+        { id: 'health', name: 'Health & Fitness' },
+        { id: 'food', name: 'Food & Dining' },
+        { id: 'travel', name: 'Travel & Adventure' },
+        { id: 'hobbies', name: 'Hobbies & Creativity' },
+        { id: 'social', name: 'Social & Relationships' },
+        { id: 'professional', name: 'Professional & Career' },
+        { id: 'fun', name: 'Fun & Silly' },
+      ];
+    }
+
+    const currentTitle = this.currentCard.title || '';
+    const currentCategory = this.currentCard.category || '';
+
+    const categoryOptions = categories.map(c => {
+      const selected = c.id === currentCategory ? 'selected' : '';
+      return `<option value="${this.escapeHtml(c.id)}" ${selected}>${this.escapeHtml(c.name)}</option>`;
+    }).join('');
+
+    this.openModal('Edit Card', `
+      <form onsubmit="App.saveCardMeta(event)">
+        <div class="form-group">
+          <label for="edit-card-title">Title</label>
+          <input type="text" id="edit-card-title" class="form-input"
+                 value="${this.escapeHtml(currentTitle)}"
+                 placeholder="e.g., Life Goals, Foods to Try"
+                 maxlength="100">
+          <small class="text-muted">Leave blank for default "${this.currentCard.year} Bingo Card"</small>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-card-category">Category</label>
+          <select id="edit-card-category" class="form-input">
+            <option value="" ${!currentCategory ? 'selected' : ''}>None</option>
+            ${categoryOptions}
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    `);
+  },
+
+  async saveCardMeta(event) {
+    event.preventDefault();
+
+    const title = document.getElementById('edit-card-title').value.trim() || null;
+    const category = document.getElementById('edit-card-category').value || null;
+
+    try {
+      const response = await API.cards.updateMeta(this.currentCard.id, title, category);
+      this.currentCard = response.card;
+      this.closeModal();
+      this.toast('Card updated', 'success');
+
+      // Re-render the current view
+      const container = document.getElementById('main-container');
+      if (this.currentCard.is_finalized) {
+        this.renderFinalizedCard(container);
+      } else {
+        this.renderCardEditor(container);
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
   route() {
     const hash = window.location.hash.slice(1) || 'home';
     const [page, ...params] = hash.split('/');
@@ -360,17 +440,48 @@ const App = {
     }
   },
 
+  // Get display name for a card (title if set, otherwise "YYYY Bingo Card")
+  getCardDisplayName(card) {
+    if (card.title) {
+      return this.escapeHtml(card.title);
+    }
+    return `${card.year} Bingo Card`;
+  },
+
+  // Get category badge HTML if category is set
+  getCategoryBadge(card) {
+    if (!card.category) return '';
+    const categoryNames = {
+      personal: 'Personal Growth',
+      health: 'Health & Fitness',
+      food: 'Food & Dining',
+      travel: 'Travel & Adventure',
+      hobbies: 'Hobbies & Creativity',
+      social: 'Social & Relationships',
+      professional: 'Professional & Career',
+      fun: 'Fun & Silly',
+    };
+    const name = categoryNames[card.category] || card.category;
+    return `<span class="category-badge category-${this.escapeHtml(card.category)}">${this.escapeHtml(name)}</span>`;
+  },
+
   renderCardPreview(card) {
     const itemCount = card.items ? card.items.length : 0;
     const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
     const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
+    const displayName = this.getCardDisplayName(card);
+    const categoryBadge = this.getCategoryBadge(card);
 
     return `
       <div class="card" style="margin-bottom: 1rem;">
         <div style="display: flex; justify-content: space-between; align-items: start;">
           <a href="#card/${card.id}" style="flex: 1; text-decoration: none; color: inherit;">
-            <h3 style="margin-bottom: 0.5rem;">${card.year} Bingo Card</h3>
-            <p class="text-muted">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+              <h3 style="margin: 0;">${displayName}</h3>
+              <span class="year-badge">${card.year}</span>
+              ${categoryBadge}
+            </div>
+            <p class="text-muted" style="margin: 0.25rem 0 0 0;">
               ${card.is_finalized
                 ? `${completedCount}/24 completed`
                 : `${itemCount}/24 items added`}
@@ -380,7 +491,7 @@ const App = {
             <a href="#card/${card.id}" class="btn btn-ghost btn-sm">
               ${card.is_finalized ? 'View' : 'Continue'}
             </a>
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); App.deleteCard('${card.id}', ${card.year})" title="Delete card" style="color: var(--danger);">
+            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); App.deleteCard('${card.id}')" title="Delete card" style="color: var(--danger);">
               &times;
             </button>
           </div>
@@ -392,8 +503,19 @@ const App = {
     `;
   },
 
-  async deleteCard(cardId, year) {
-    if (!confirm(`Are you sure you want to delete your ${year} Bingo Card? This cannot be undone.`)) {
+  async deleteCard(cardId) {
+    // Get the card to show its name in the confirmation
+    let cardName = 'this card';
+    try {
+      const response = await API.cards.get(cardId);
+      if (response.card) {
+        cardName = this.getCardDisplayName(response.card);
+      }
+    } catch (e) {
+      // Ignore - use default name
+    }
+
+    if (!confirm(`Are you sure you want to delete "${cardName}"? This cannot be undone.`)) {
       return;
     }
 
@@ -410,51 +532,91 @@ const App = {
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
 
-    // Check if cards already exist
-    let existingCards = [];
+    // Fetch categories
+    let categories = [];
     try {
-      const response = await API.cards.list();
-      existingCards = response.cards || [];
+      const response = await API.cards.getCategories();
+      categories = response.categories || [];
     } catch (error) {
-      // Ignore
+      // Use fallback categories if API fails
+      categories = [
+        { id: 'personal', name: 'Personal Growth' },
+        { id: 'health', name: 'Health & Fitness' },
+        { id: 'food', name: 'Food & Dining' },
+        { id: 'travel', name: 'Travel & Adventure' },
+        { id: 'hobbies', name: 'Hobbies & Creativity' },
+        { id: 'social', name: 'Social & Relationships' },
+        { id: 'professional', name: 'Professional & Career' },
+        { id: 'fun', name: 'Fun & Silly' },
+      ];
     }
 
-    const hasCurrentYear = existingCards.some(c => c.year === currentYear);
-    const hasNextYear = existingCards.some(c => c.year === nextYear);
-
-    if (hasCurrentYear && hasNextYear) {
-      container.innerHTML = `
-        <div class="card text-center" style="max-width: 500px; margin: 2rem auto; padding: 3rem;">
-          <h3>All caught up!</h3>
-          <p class="text-muted mb-lg">You already have bingo cards for ${currentYear} and ${nextYear}.</p>
-          <a href="#dashboard" class="btn btn-primary">View My Cards</a>
-        </div>
-      `;
-      return;
-    }
+    const categoryOptions = categories.map(c =>
+      `<option value="${this.escapeHtml(c.id)}">${this.escapeHtml(c.name)}</option>`
+    ).join('');
 
     container.innerHTML = `
       <div class="card" style="max-width: 500px; margin: 2rem auto;">
         <div class="card-header text-center">
           <h2 class="card-title">Create New Card</h2>
-          <p class="card-subtitle">Choose a year for your bingo card</p>
+          <p class="card-subtitle">Set up your bingo card</p>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
-          ${!hasCurrentYear ? `
-            <button class="btn btn-secondary btn-lg" onclick="App.createCard(${currentYear})">
-              ${currentYear} Card
-            </button>
-          ` : ''}
-          ${!hasNextYear ? `
-            <button class="btn btn-primary btn-lg" onclick="App.createCard(${nextYear})">
-              ${nextYear} Card
-            </button>
-          ` : ''}
-        </div>
+        <form id="create-card-form" onsubmit="App.handleCreateCard(event)">
+          <div class="form-group">
+            <label for="card-year">Year</label>
+            <select id="card-year" class="form-input" required>
+              <option value="${currentYear}">${currentYear}</option>
+              <option value="${nextYear}">${nextYear}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="card-title">
+              Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            </label>
+            <input type="text" id="card-title" class="form-input"
+                   placeholder="e.g., Life Goals, Foods to Try"
+                   maxlength="100">
+            <small class="text-muted">Leave blank for default "${currentYear} Bingo Card"</small>
+          </div>
+
+          <div class="form-group">
+            <label for="card-category">
+              Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            </label>
+            <select id="card-category" class="form-input">
+              <option value="">None</option>
+              ${categoryOptions}
+            </select>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            Create Card
+          </button>
+        </form>
       </div>
     `;
   },
 
+  async handleCreateCard(event) {
+    event.preventDefault();
+
+    const year = parseInt(document.getElementById('card-year').value, 10);
+    const title = document.getElementById('card-title').value.trim() || null;
+    const category = document.getElementById('card-category').value || null;
+
+    try {
+      const response = await API.cards.create(year, title, category);
+      this.currentCard = response.card;
+      window.location.hash = `#card/${response.card.id}`;
+      const cardName = title || `${year} Bingo Card`;
+      this.toast(`${cardName} created!`, 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  // Legacy method for backwards compatibility
   async createCard(year) {
     try {
       const response = await API.cards.create(year);
@@ -502,11 +664,18 @@ const App = {
   renderCardEditor(container) {
     const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
     const progress = Math.round((itemCount / 24) * 100);
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
     container.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
         <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
-        <h2>${this.currentCard.year} Bingo Card</h2>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+          <h2 style="margin: 0;">${displayName}</h2>
+          <span class="year-badge">${this.currentCard.year}</span>
+          ${categoryBadge}
+          <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
+        </div>
         <div></div>
       </div>
 
@@ -560,12 +729,19 @@ const App = {
   renderFinalizedCard(container) {
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const progress = Math.round((completedCount / 24) * 100);
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
     container.innerHTML = `
       <div class="finalized-card-view">
         <div class="finalized-card-header">
           <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
-          <h2>${this.currentCard.year} Bingo Card</h2>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+            <h2 style="margin: 0;">${displayName}</h2>
+            <span class="year-badge">${this.currentCard.year}</span>
+            ${categoryBadge}
+            <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
+          </div>
           <div></div>
         </div>
 
@@ -1334,18 +1510,21 @@ const App = {
     const progress = Math.round((completedCount / 24) * 100);
     const currentYear = new Date().getFullYear();
     const isArchived = this.currentCard.year < currentYear;
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
-    // Build year selector if multiple cards
-    let yearSelector = '';
+    // Build card selector if multiple cards
+    let cardSelector = '';
     if (this.friendCards && this.friendCards.length > 1) {
-      const yearOptions = this.friendCards.map(card => {
-        const selected = card.year === this.currentCard.year ? 'selected' : '';
+      const cardOptions = this.friendCards.map(card => {
+        const selected = card.id === this.currentCard.id ? 'selected' : '';
         const archived = card.year < currentYear ? ' (archived)' : '';
-        return `<option value="${card.year}" ${selected}>${card.year}${archived}</option>`;
+        const cardName = this.getCardDisplayName(card);
+        return `<option value="${card.id}" ${selected}>${cardName} (${card.year})${archived}</option>`;
       }).join('');
-      yearSelector = `
-        <select id="friend-year-select" class="year-selector" onchange="App.switchFriendYear(this.value)">
-          ${yearOptions}
+      cardSelector = `
+        <select id="friend-card-select" class="year-selector" onchange="App.switchFriendCard(this.value)">
+          ${cardOptions}
         </select>
       `;
     }
@@ -1355,10 +1534,14 @@ const App = {
         <div class="finalized-card-header">
           <a href="#friends" class="btn btn-ghost">&larr; Friends</a>
           <div class="friend-card-title">
-            <h2>${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${this.currentCard.year} Card</h2>
-            ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+              <h2 style="margin: 0;">${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${displayName}</h2>
+              <span class="year-badge">${this.currentCard.year}</span>
+              ${categoryBadge}
+              ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
+            </div>
           </div>
-          ${yearSelector || '<div></div>'}
+          ${cardSelector || '<div></div>'}
         </div>
 
         <div class="bingo-container bingo-container--finalized">
@@ -1379,6 +1562,17 @@ const App = {
     this.setupFriendCardEvents();
   },
 
+  // Switch friend card by ID (supports multiple cards per year)
+  switchFriendCard(cardId) {
+    const card = this.friendCards.find(c => c.id === cardId);
+    if (card) {
+      this.currentCard = card;
+      const container = document.getElementById('main-container');
+      this.renderFriendCardView(container);
+    }
+  },
+
+  // Legacy method for backwards compatibility
   switchFriendYear(year) {
     const card = this.friendCards.find(c => c.year === parseInt(year));
     if (card) {
@@ -1573,13 +1767,19 @@ const App = {
   renderArchiveCardPreview(card) {
     const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
     const progress = Math.round((completedCount / 24) * 100);
+    const displayName = this.getCardDisplayName(card);
+    const categoryBadge = this.getCategoryBadge(card);
 
     return `
       <a href="#archive-card/${card.id}" class="card archive-card-preview" style="display: block; margin-bottom: 1rem; text-decoration: none;">
         <div class="archive-card-preview-header">
           <div>
-            <h3 style="margin-bottom: 0.5rem;">${card.year} Bingo Card</h3>
-            <p class="text-muted">${completedCount}/24 completed</p>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+              <h3 style="margin: 0;">${displayName}</h3>
+              <span class="year-badge">${card.year}</span>
+              ${categoryBadge}
+            </div>
+            <p class="text-muted" style="margin: 0;">${completedCount}/24 completed</p>
           </div>
           <div class="archive-badge">Archived</div>
         </div>
@@ -1620,12 +1820,18 @@ const App = {
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const progress = Math.round((completedCount / 24) * 100);
     const stats = this.currentStats;
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
     container.innerHTML = `
       <div class="archive-card-view">
         <div class="archive-card-header">
           <a href="#archive" class="btn btn-ghost">&larr; Archive</a>
-          <h2>${this.currentCard.year} Bingo Card</h2>
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+            <h2 style="margin: 0;">${displayName}</h2>
+            <span class="year-badge">${this.currentCard.year}</span>
+            ${categoryBadge}
+          </div>
           <div class="archive-badge">Archived</div>
         </div>
 

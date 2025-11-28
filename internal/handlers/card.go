@@ -24,7 +24,23 @@ func NewCardHandler(cardService *services.CardService) *CardHandler {
 }
 
 type CreateCardRequest struct {
-	Year int `json:"year"`
+	Year     int     `json:"year"`
+	Category *string `json:"category,omitempty"`
+	Title    *string `json:"title,omitempty"`
+}
+
+type UpdateCardMetaRequest struct {
+	Category *string `json:"category,omitempty"`
+	Title    *string `json:"title,omitempty"`
+}
+
+type CategoryInfo struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CategoriesResponse struct {
+	Categories []CategoryInfo `json:"categories"`
 }
 
 type AddItemRequest struct {
@@ -81,11 +97,25 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	card, err := h.cardService.Create(r.Context(), models.CreateCardParams{
-		UserID: user.ID,
-		Year:   req.Year,
+		UserID:   user.ID,
+		Year:     req.Year,
+		Category: req.Category,
+		Title:    req.Title,
 	})
 	if errors.Is(err, services.ErrCardAlreadyExists) {
-		writeError(w, http.StatusConflict, "You already have a card for this year")
+		writeError(w, http.StatusConflict, "You already have a card for this year. Give your new card a unique title.")
+		return
+	}
+	if errors.Is(err, services.ErrCardTitleExists) {
+		writeError(w, http.StatusConflict, "You already have a card with this title for this year")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidCategory) {
+		writeError(w, http.StatusBadRequest, "Invalid category")
+		return
+	}
+	if errors.Is(err, services.ErrTitleTooLong) {
+		writeError(w, http.StatusBadRequest, "Title must be 100 characters or less")
 		return
 	}
 	if err != nil {
@@ -656,4 +686,73 @@ func (h *CardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, CardResponse{Stats: stats})
+}
+
+func (h *CardHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	var req UpdateCardMetaRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Trim title if provided
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		req.Title = &trimmed
+	}
+
+	card, err := h.cardService.UpdateMeta(r.Context(), user.ID, cardID, models.UpdateCardMetaParams{
+		Category: req.Category,
+		Title:    req.Title,
+	})
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if errors.Is(err, services.ErrCardTitleExists) {
+		writeError(w, http.StatusConflict, "You already have a card with this title for this year")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidCategory) {
+		writeError(w, http.StatusBadRequest, "Invalid category")
+		return
+	}
+	if errors.Is(err, services.ErrTitleTooLong) {
+		writeError(w, http.StatusBadRequest, "Title must be 100 characters or less")
+		return
+	}
+	if err != nil {
+		log.Printf("Error updating card meta: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Card: card})
+}
+
+func (h *CardHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
+	categories := make([]CategoryInfo, len(models.ValidCategories))
+	for i, cat := range models.ValidCategories {
+		categories[i] = CategoryInfo{
+			ID:   cat,
+			Name: models.CategoryNames[cat],
+		}
+	}
+	writeJSON(w, http.StatusOK, CategoriesResponse{Categories: categories})
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,11 +18,55 @@ type BingoCard struct {
 	ID          uuid.UUID   `json:"id"`
 	UserID      uuid.UUID   `json:"user_id"`
 	Year        int         `json:"year"`
+	Category    *string     `json:"category,omitempty"`
+	Title       *string     `json:"title,omitempty"`
 	IsActive    bool        `json:"is_active"`
 	IsFinalized bool        `json:"is_finalized"`
 	CreatedAt   time.Time   `json:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at"`
 	Items       []BingoItem `json:"items,omitempty"`
+}
+
+// DisplayName returns a human-readable name for the card
+func (c *BingoCard) DisplayName() string {
+	if c.Title != nil && *c.Title != "" {
+		return *c.Title
+	}
+	return fmt.Sprintf("%d Bingo Card", c.Year)
+}
+
+// ValidCategories defines the allowed card categories
+var ValidCategories = []string{
+	"personal",     // Personal Growth
+	"health",       // Health & Fitness
+	"food",         // Food & Dining
+	"travel",       // Travel & Adventure
+	"hobbies",      // Hobbies & Creativity
+	"social",       // Social & Relationships
+	"professional", // Professional & Career
+	"fun",          // Fun & Silly
+}
+
+// CategoryNames maps category IDs to display names
+var CategoryNames = map[string]string{
+	"personal":     "Personal Growth",
+	"health":       "Health & Fitness",
+	"food":         "Food & Dining",
+	"travel":       "Travel & Adventure",
+	"hobbies":      "Hobbies & Creativity",
+	"social":       "Social & Relationships",
+	"professional": "Professional & Career",
+	"fun":          "Fun & Silly",
+}
+
+// IsValidCategory checks if a category string is valid
+func IsValidCategory(category string) bool {
+	for _, c := range ValidCategories {
+		if c == category {
+			return true
+		}
+	}
+	return false
 }
 
 type BingoItem struct {
@@ -37,8 +82,15 @@ type BingoItem struct {
 }
 
 type CreateCardParams struct {
-	UserID uuid.UUID
-	Year   int
+	UserID   uuid.UUID
+	Year     int
+	Category *string
+	Title    *string
+}
+
+type UpdateCardMetaParams struct {
+	Category *string
+	Title    *string
 }
 
 type AddItemParams struct {

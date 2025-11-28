@@ -17,6 +17,7 @@ import (
 var (
 	ErrCardNotFound      = errors.New("card not found")
 	ErrCardAlreadyExists = errors.New("card already exists for this year")
+	ErrCardTitleExists   = errors.New("you already have a card with this title for this year")
 	ErrCardFinalized     = errors.New("card is finalized and cannot be modified")
 	ErrCardNotFinalized  = errors.New("card must be finalized first")
 	ErrCardFull          = errors.New("card already has 24 items")
@@ -24,6 +25,8 @@ var (
 	ErrPositionOccupied  = errors.New("position is already occupied")
 	ErrInvalidPosition   = errors.New("invalid position")
 	ErrNotCardOwner      = errors.New("you do not own this card")
+	ErrInvalidCategory   = errors.New("invalid category")
+	ErrTitleTooLong      = errors.New("title must be 100 characters or less")
 )
 
 type CardService struct {
@@ -35,26 +38,54 @@ func NewCardService(db *pgxpool.Pool) *CardService {
 }
 
 func (s *CardService) Create(ctx context.Context, params models.CreateCardParams) (*models.BingoCard, error) {
-	// Check if card already exists for this year
-	var exists bool
-	err := s.db.QueryRow(ctx,
-		"SELECT EXISTS(SELECT 1 FROM bingo_cards WHERE user_id = $1 AND year = $2)",
-		params.UserID, params.Year,
-	).Scan(&exists)
-	if err != nil {
-		return nil, fmt.Errorf("checking card existence: %w", err)
+	// Validate category if provided
+	if params.Category != nil && *params.Category != "" {
+		if !models.IsValidCategory(*params.Category) {
+			return nil, ErrInvalidCategory
+		}
 	}
-	if exists {
-		return nil, ErrCardAlreadyExists
+
+	// Validate title length if provided
+	if params.Title != nil && len(*params.Title) > 100 {
+		return nil, ErrTitleTooLong
+	}
+
+	// Check for duplicate: same user, year, and title
+	// If title is provided, check for existing card with same title
+	// If title is nil/empty, check for existing card with null title
+	var exists bool
+	if params.Title != nil && *params.Title != "" {
+		err := s.db.QueryRow(ctx,
+			"SELECT EXISTS(SELECT 1 FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3)",
+			params.UserID, params.Year, *params.Title,
+		).Scan(&exists)
+		if err != nil {
+			return nil, fmt.Errorf("checking card existence: %w", err)
+		}
+		if exists {
+			return nil, ErrCardTitleExists
+		}
+	} else {
+		// Check for existing card without a title for this year
+		err := s.db.QueryRow(ctx,
+			"SELECT EXISTS(SELECT 1 FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title IS NULL)",
+			params.UserID, params.Year,
+		).Scan(&exists)
+		if err != nil {
+			return nil, fmt.Errorf("checking card existence: %w", err)
+		}
+		if exists {
+			return nil, ErrCardAlreadyExists
+		}
 	}
 
 	card := &models.BingoCard{}
-	err = s.db.QueryRow(ctx,
-		`INSERT INTO bingo_cards (user_id, year)
-		 VALUES ($1, $2)
-		 RETURNING id, user_id, year, is_active, is_finalized, created_at, updated_at`,
-		params.UserID, params.Year,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	err := s.db.QueryRow(ctx,
+		`INSERT INTO bingo_cards (user_id, year, category, title)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at`,
+		params.UserID, params.Year, params.Category, params.Title,
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating card: %w", err)
 	}
@@ -66,10 +97,10 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
 		 FROM bingo_cards WHERE id = $1`,
 		cardID,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -89,10 +120,10 @@ func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.Bi
 func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, year int) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
 		 FROM bingo_cards WHERE user_id = $1 AND year = $2`,
 		userID, year,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -111,8 +142,8 @@ func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, ye
 
 func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.BingoCard, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, is_active, is_finalized, created_at, updated_at
-		 FROM bingo_cards WHERE user_id = $1 ORDER BY year DESC`,
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		 FROM bingo_cards WHERE user_id = $1 ORDER BY year DESC, created_at DESC`,
 		userID,
 	)
 	if err != nil {
@@ -123,7 +154,7 @@ func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)
@@ -309,6 +340,59 @@ func (s *CardService) Delete(ctx context.Context, userID, cardID uuid.UUID) erro
 	}
 
 	return nil
+}
+
+// UpdateMeta updates the category and/or title of a card
+func (s *CardService) UpdateMeta(ctx context.Context, userID, cardID uuid.UUID, params models.UpdateCardMetaParams) (*models.BingoCard, error) {
+	// Get and verify card ownership
+	card, err := s.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if card.UserID != userID {
+		return nil, ErrNotCardOwner
+	}
+
+	// Validate category if provided
+	if params.Category != nil && *params.Category != "" {
+		if !models.IsValidCategory(*params.Category) {
+			return nil, ErrInvalidCategory
+		}
+	}
+
+	// Validate title length if provided
+	if params.Title != nil && len(*params.Title) > 100 {
+		return nil, ErrTitleTooLong
+	}
+
+	// Check for duplicate title if changing to a non-empty title
+	if params.Title != nil && *params.Title != "" {
+		var exists bool
+		err := s.db.QueryRow(ctx,
+			"SELECT EXISTS(SELECT 1 FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3 AND id != $4)",
+			card.UserID, card.Year, *params.Title, cardID,
+		).Scan(&exists)
+		if err != nil {
+			return nil, fmt.Errorf("checking title uniqueness: %w", err)
+		}
+		if exists {
+			return nil, ErrCardTitleExists
+		}
+	}
+
+	// Build update query dynamically based on what's provided
+	if params.Category != nil || params.Title != nil {
+		_, err = s.db.Exec(ctx,
+			`UPDATE bingo_cards SET category = COALESCE($1, category), title = COALESCE($2, title) WHERE id = $3`,
+			params.Category, params.Title, cardID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("updating card meta: %w", err)
+		}
+	}
+
+	// Return updated card
+	return s.GetByID(ctx, cardID)
 }
 
 func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*models.BingoCard, error) {
@@ -585,10 +669,10 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	currentYear := time.Now().Year()
 
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
 		 FROM bingo_cards
 		 WHERE user_id = $1 AND year < $2 AND is_finalized = true
-		 ORDER BY year DESC`,
+		 ORDER BY year DESC, created_at DESC`,
 		userID, currentYear,
 	)
 	if err != nil {
@@ -599,7 +683,7 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)

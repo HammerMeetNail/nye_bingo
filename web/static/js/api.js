@@ -135,8 +135,11 @@ const API = {
 
   // Card endpoints
   cards: {
-    async create(year) {
-      return API.request('POST', '/api/cards', { year });
+    async create(year, title = null, category = null) {
+      const body = { year };
+      if (title) body.title = title;
+      if (category) body.category = category;
+      return API.request('POST', '/api/cards', body);
     },
 
     async list() {
@@ -149,6 +152,17 @@ const API = {
 
     async deleteCard(id) {
       return API.request('DELETE', `/api/cards/${id}`);
+    },
+
+    async updateMeta(cardId, title = null, category = null) {
+      const body = {};
+      if (title !== null) body.title = title;
+      if (category !== null) body.category = category;
+      return API.request('PUT', `/api/cards/${cardId}/meta`, body);
+    },
+
+    async getCategories() {
+      return API.request('GET', '/api/cards/categories');
     },
 
     async addItem(cardId, content, position = null) {

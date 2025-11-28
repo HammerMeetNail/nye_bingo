@@ -1335,6 +1335,39 @@ a:hover {
   letter-spacing: 0.05em;
 }
 
+/* Year Badge */
+.year-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Category Badge */
+.category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--color-bg-hover);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--color-silver);
+  border-left: 3px solid var(--color-silver);
+}
+
+.category-personal { border-left-color: #6366f1; }
+.category-health { border-left-color: #10b981; }
+.category-food { border-left-color: #f59e0b; }
+.category-travel { border-left-color: #3b82f6; }
+.category-hobbies { border-left-color: #8b5cf6; }
+.category-social { border-left-color: #ec4899; }
+.category-professional { border-left-color: #64748b; }
+.category-fun { border-left-color: #f43f5e; }
+
 /* Archive Card View */
 .archive-card-view {
   display: flex;
