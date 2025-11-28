@@ -79,6 +79,11 @@ const API = {
           }
           throw new APIError('Access denied. Please refresh the page.', response.status);
         }
+        if (response.status === 409) {
+          // Conflict - return the data so caller can handle it
+          // This is used for card import conflicts
+          return data;
+        }
         if (response.status >= 500) {
           throw new APIError('Server error. Please try again later.', response.status);
         }
@@ -217,6 +222,10 @@ const API = {
 
     async getExportable() {
       return API.request('GET', '/api/cards/export');
+    },
+
+    async import(cardData) {
+      return API.request('POST', '/api/cards/import', cardData);
     },
   },
 

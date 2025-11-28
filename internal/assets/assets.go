@@ -69,3 +69,8 @@ func (m *Manifest) GetAPIJS() string {
 func (m *Manifest) GetAppJS() string {
 	return m.Get("js/app.js")
 }
+
+// GetAnonymousCardJS returns the hashed path for anonymous-card.js
+func (m *Manifest) GetAnonymousCardJS() string {
+	return m.Get("js/anonymous-card.js")
+}

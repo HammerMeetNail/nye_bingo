@@ -7,6 +7,7 @@ const App = {
   usedSuggestions: new Set(),
   allowedEmojis: ['🎉', '👏', '🔥', '❤️', '⭐'],
   isLoading: false,
+  isAnonymousMode: false, // True when editing an anonymous card (localStorage)
 
   async init() {
     await API.init();
@@ -85,7 +86,7 @@ const App = {
     } else {
       nav.innerHTML = `
         <a href="#login" class="btn btn-ghost">Login</a>
-        <a href="#register" class="btn btn-primary">Get Started</a>
+        <a href="#create" class="btn btn-primary">Get Started</a>
       `;
     }
   },
@@ -308,7 +309,8 @@ const App = {
         this.requireAuth(() => this.renderDashboard(container));
         break;
       case 'create':
-        this.requireAuth(() => this.renderCreate(container));
+        // Allow anonymous users to create a card
+        this.renderCreate(container);
         break;
       case 'card':
         this.requireAuth(() => this.renderCard(container, params[0]));
@@ -355,7 +357,11 @@ const App = {
             <button class="btn btn-secondary btn-lg" onclick="App.showCreateCardModal()">Create New Card</button>
           </div>
         ` : `
-          <a href="#register" class="btn btn-primary btn-lg">Create Your Card</a>
+          ${AnonymousCard.exists() ? `
+            <a href="#create" class="btn btn-primary btn-lg">Continue Your Card</a>
+          ` : `
+            <a href="#create" class="btn btn-primary btn-lg">Create Your Card</a>
+          `}
           <p class="mt-md text-muted">
             Already have an account? <a href="#login">Login</a>
           </p>
@@ -629,6 +635,20 @@ const App = {
   },
 
   async renderCreate(container) {
+    // If user is logged in, show the normal create form
+    if (this.user) {
+      await this.renderAuthenticatedCreate(container);
+      return;
+    }
+
+    // For anonymous users, check if they already have an anonymous card
+    if (AnonymousCard.exists()) {
+      // Load and edit the existing anonymous card
+      await this.renderAnonymousCardEditor(container);
+      return;
+    }
+
+    // Show the create form for a new anonymous card
     const currentYear = new Date().getFullYear();
     const nextYear = currentYear + 1;
 
@@ -638,17 +658,120 @@ const App = {
       const response = await API.cards.getCategories();
       categories = response.categories || [];
     } catch (error) {
-      // Use fallback categories if API fails
-      categories = [
-        { id: 'personal', name: 'Personal Growth' },
-        { id: 'health', name: 'Health & Fitness' },
-        { id: 'food', name: 'Food & Dining' },
-        { id: 'travel', name: 'Travel & Adventure' },
-        { id: 'hobbies', name: 'Hobbies & Creativity' },
-        { id: 'social', name: 'Social & Relationships' },
-        { id: 'professional', name: 'Professional & Career' },
-        { id: 'fun', name: 'Fun & Silly' },
-      ];
+      categories = this.getFallbackCategories();
+    }
+
+    const categoryOptions = categories.map(c =>
+      `<option value="${this.escapeHtml(c.id)}">${this.escapeHtml(c.name)}</option>`
+    ).join('');
+
+    container.innerHTML = `
+      <div class="card" style="max-width: 500px; margin: 2rem auto;">
+        <div class="card-header text-center">
+          <h2 class="card-title">Create Your Bingo Card</h2>
+          <p class="card-subtitle">Set up your bingo card - no account needed to start!</p>
+        </div>
+        <form id="create-card-form" onsubmit="App.handleAnonymousCreateCard(event)">
+          <div class="form-group">
+            <label for="card-year">Year</label>
+            <select id="card-year" class="form-input" required>
+              <option value="${currentYear}">${currentYear}</option>
+              <option value="${nextYear}">${nextYear}</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="card-title">
+              Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            </label>
+            <input type="text" id="card-title" class="form-input"
+                   placeholder="e.g., Life Goals, Foods to Try"
+                   maxlength="100">
+            <small class="text-muted">Leave blank for default "${currentYear} Bingo Card"</small>
+          </div>
+
+          <div class="form-group">
+            <label for="card-category">
+              Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            </label>
+            <select id="card-category" class="form-input">
+              <option value="">None</option>
+              ${categoryOptions}
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <a href="#home" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
+            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
+          </div>
+        </form>
+      </div>
+    `;
+  },
+
+  // Get fallback categories when API fails
+  getFallbackCategories() {
+    return [
+      { id: 'personal', name: 'Personal Growth' },
+      { id: 'health', name: 'Health & Fitness' },
+      { id: 'food', name: 'Food & Dining' },
+      { id: 'travel', name: 'Travel & Adventure' },
+      { id: 'hobbies', name: 'Hobbies & Creativity' },
+      { id: 'social', name: 'Social & Relationships' },
+      { id: 'professional', name: 'Professional & Career' },
+      { id: 'fun', name: 'Fun & Silly' },
+    ];
+  },
+
+  // Handle anonymous card creation
+  handleAnonymousCreateCard(event) {
+    event.preventDefault();
+
+    const year = parseInt(document.getElementById('card-year').value, 10);
+    const title = document.getElementById('card-title').value.trim() || null;
+    const category = document.getElementById('card-category').value || null;
+
+    // Create anonymous card in localStorage
+    const card = AnonymousCard.create(year, title, category);
+    this.isAnonymousMode = true;
+    this.currentCard = this.convertAnonymousCardToAppFormat(card);
+
+    // Navigate to the editor
+    this.renderAnonymousCardEditor(document.getElementById('main-container'));
+    const cardName = title || `${year} Bingo Card`;
+    this.toast(`${cardName} created! Add your goals below.`, 'success');
+  },
+
+  // Convert anonymous card format to the format used by the app
+  convertAnonymousCardToAppFormat(anonCard) {
+    return {
+      id: 'anonymous',
+      year: anonCard.year,
+      title: anonCard.title,
+      category: anonCard.category,
+      is_finalized: false,
+      items: anonCard.items.map(item => ({
+        id: `anon-${item.position}`,
+        position: item.position,
+        content: item.text,
+        notes: item.notes || '',
+        is_completed: false,
+      })),
+    };
+  },
+
+  // Render the authenticated create form (original behavior)
+  async renderAuthenticatedCreate(container) {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+
+    // Fetch categories
+    let categories = [];
+    try {
+      const response = await API.cards.getCategories();
+      categories = response.categories || [];
+    } catch (error) {
+      categories = this.getFallbackCategories();
     }
 
     const categoryOptions = categories.map(c =>
@@ -825,6 +948,178 @@ const App = {
     `;
 
     this.setupEditorEvents();
+  },
+
+  // Render the anonymous card editor (localStorage mode)
+  async renderAnonymousCardEditor(container) {
+    this.isAnonymousMode = true;
+
+    // Load the anonymous card from localStorage
+    const anonCard = AnonymousCard.get();
+    if (!anonCard) {
+      // No anonymous card exists, redirect to create
+      window.location.hash = '#create';
+      return;
+    }
+
+    // Convert to app format
+    this.currentCard = this.convertAnonymousCardToAppFormat(anonCard);
+
+    // Fetch suggestions
+    try {
+      const suggestionsResponse = await API.suggestions.getGrouped();
+      this.suggestions = suggestionsResponse.grouped || [];
+    } catch (error) {
+      this.suggestions = [];
+    }
+
+    // Track used suggestions
+    this.usedSuggestions = new Set(
+      (this.currentCard.items || []).map(i => i.content.toLowerCase())
+    );
+
+    const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
+    const progress = Math.round((itemCount / 24) * 100);
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const categoryBadge = this.getCategoryBadge(this.currentCard);
+
+    container.innerHTML = `
+      <div class="anonymous-card-banner">
+        <div class="anonymous-card-banner-content">
+          <span class="anonymous-card-banner-icon">💾</span>
+          <span>This card is saved locally in your browser. <a href="#register" class="anonymous-card-banner-link">Create an account</a> to save it permanently.</span>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <a href="#home" class="btn btn-ghost">&larr; Back</a>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+          <h2 style="margin: 0;">${displayName}</h2>
+          <span class="year-badge">${this.currentCard.year}</span>
+          ${categoryBadge}
+          <button class="btn btn-ghost btn-sm" onclick="App.showEditAnonymousCardMetaModal()" title="Edit card name">✏️</button>
+        </div>
+        <div></div>
+      </div>
+
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: ${progress}%"></div>
+      </div>
+      <p class="progress-text mb-lg">${itemCount}/24 items added</p>
+
+      <div class="card-editor-layout">
+        <div class="bingo-container">
+          <div class="bingo-grid" id="bingo-grid">
+            ${this.renderGrid()}
+          </div>
+
+          <div class="input-area" style="width: 100%; max-width: 600px;">
+            <input type="text" id="item-input" class="form-input" placeholder="Type your goal or pick a suggestion..." maxlength="500" ${itemCount >= 24 ? 'disabled' : ''}>
+            <button class="btn btn-primary" id="add-btn" ${itemCount >= 24 ? 'disabled' : ''}>Add</button>
+          </div>
+
+          <div class="action-bar">
+            <button class="btn btn-secondary" onclick="App.shuffleCard()" ${itemCount === 0 ? 'disabled' : ''}>
+              🔀 Shuffle
+            </button>
+            <button class="btn btn-primary" onclick="App.finalizeCard()" ${itemCount < 24 ? 'disabled' : ''}>
+              ✓ Finalize Card
+            </button>
+          </div>
+
+          <div class="action-bar" style="margin-top: 0.5rem;">
+            <button class="btn btn-ghost" style="color: var(--danger);" onclick="App.confirmDeleteAnonymousCard()">
+              Delete Card
+            </button>
+          </div>
+        </div>
+
+        <div class="suggestions-panel">
+          <div class="suggestions-header">
+            <h3 class="suggestions-title">Suggestions</h3>
+          </div>
+          <div class="suggestions-categories" id="category-tabs">
+            ${this.suggestions.map((cat, i) => `
+              <button class="category-tab ${i === 0 ? 'category-tab--active' : ''}" data-category="${cat.category}">
+                ${cat.category.split(' ')[0]}
+              </button>
+            `).join('')}
+          </div>
+          <div class="suggestions-list" id="suggestions-list">
+            ${this.renderSuggestions(this.suggestions[0]?.category)}
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.setupEditorEvents();
+  },
+
+  // Edit anonymous card metadata
+  showEditAnonymousCardMetaModal() {
+    const card = AnonymousCard.get();
+    if (!card) return;
+
+    const categories = this.getFallbackCategories();
+    const currentTitle = card.title || '';
+    const currentCategory = card.category || '';
+
+    const categoryOptions = categories.map(c => {
+      const selected = c.id === currentCategory ? 'selected' : '';
+      return `<option value="${this.escapeHtml(c.id)}" ${selected}>${this.escapeHtml(c.name)}</option>`;
+    }).join('');
+
+    this.openModal('Edit Card', `
+      <form onsubmit="App.saveAnonymousCardMeta(event)">
+        <div class="form-group">
+          <label for="edit-card-title">Title</label>
+          <input type="text" id="edit-card-title" class="form-input"
+                 value="${this.escapeHtml(currentTitle)}"
+                 placeholder="e.g., Life Goals, Foods to Try"
+                 maxlength="100">
+          <small class="text-muted">Leave blank for default "${card.year} Bingo Card"</small>
+        </div>
+
+        <div class="form-group">
+          <label for="edit-card-category">Category</label>
+          <select id="edit-card-category" class="form-input">
+            <option value="" ${!currentCategory ? 'selected' : ''}>None</option>
+            ${categoryOptions}
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    `);
+  },
+
+  saveAnonymousCardMeta(event) {
+    event.preventDefault();
+
+    const title = document.getElementById('edit-card-title').value.trim() || null;
+    const category = document.getElementById('edit-card-category').value || null;
+
+    AnonymousCard.updateMeta(title, category);
+    this.currentCard.title = title;
+    this.currentCard.category = category;
+    this.closeModal();
+    this.toast('Card updated', 'success');
+
+    // Re-render
+    this.renderAnonymousCardEditor(document.getElementById('main-container'));
+  },
+
+  confirmDeleteAnonymousCard() {
+    if (confirm('Are you sure you want to delete this card? This cannot be undone.')) {
+      AnonymousCard.clear();
+      this.isAnonymousMode = false;
+      this.currentCard = null;
+      window.location.hash = '#home';
+      this.toast('Card deleted', 'success');
+    }
   },
 
   renderFinalizedCard(container) {
@@ -1180,20 +1475,44 @@ const App = {
     }
 
     try {
-      const response = await API.cards.addItem(this.currentCard.id, content);
-      input.value = '';
+      let position;
 
-      // Update local state
-      if (!this.currentCard.items) this.currentCard.items = [];
-      this.currentCard.items.push(response.item);
+      if (this.isAnonymousMode) {
+        // Add to localStorage
+        const item = AnonymousCard.addItem(content);
+        if (!item) {
+          this.toast('Card is full', 'error');
+          return;
+        }
+        position = item.position;
+
+        // Update local state
+        if (!this.currentCard.items) this.currentCard.items = [];
+        this.currentCard.items.push({
+          id: `anon-${position}`,
+          position: position,
+          content: content,
+          notes: '',
+          is_completed: false,
+        });
+      } else {
+        // Add to server
+        const response = await API.cards.addItem(this.currentCard.id, content);
+        position = response.item.position;
+
+        // Update local state
+        if (!this.currentCard.items) this.currentCard.items = [];
+        this.currentCard.items.push(response.item);
+      }
+
+      input.value = '';
       this.usedSuggestions.add(content.toLowerCase());
 
       // Update grid with animation
-      const position = response.item.position;
       const cell = document.querySelector(`[data-position="${position}"]`);
       cell.classList.remove('bingo-cell--empty');
       cell.classList.add('bingo-cell--appearing');
-      cell.dataset.itemId = response.item.id;
+      cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : this.currentCard.items[this.currentCard.items.length - 1].id;
       cell.draggable = true;
       cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(content)}</span>`;
 
@@ -1232,7 +1551,14 @@ const App = {
   async removeItem(position) {
     try {
       const item = this.currentCard.items.find(i => i.position === position);
-      await API.cards.removeItem(this.currentCard.id, position);
+
+      if (this.isAnonymousMode) {
+        // Remove from localStorage
+        AnonymousCard.removeItem(position);
+      } else {
+        // Remove from server
+        await API.cards.removeItem(this.currentCard.id, position);
+      }
 
       // Update local state
       this.currentCard.items = this.currentCard.items.filter(i => i.position !== position);
@@ -1281,8 +1607,15 @@ const App = {
         cell.classList.add('bingo-cell--shuffling');
       });
 
-      const response = await API.cards.shuffle(this.currentCard.id);
-      this.currentCard = response.card;
+      if (this.isAnonymousMode) {
+        // Shuffle in localStorage
+        const shuffledCard = AnonymousCard.shuffle();
+        this.currentCard = this.convertAnonymousCardToAppFormat(shuffledCard);
+      } else {
+        // Shuffle on server
+        const response = await API.cards.shuffle(this.currentCard.id);
+        this.currentCard = response.card;
+      }
 
       // Wait for animation then update
       setTimeout(() => {
@@ -1297,6 +1630,12 @@ const App = {
   },
 
   async finalizeCard() {
+    // For anonymous users, show the auth modal instead of finalizing directly
+    if (this.isAnonymousMode) {
+      this.showFinalizeAuthModal();
+      return;
+    }
+
     if (!confirm('Are you sure you want to finalize this card? You won\'t be able to change the items after this.')) {
       return;
     }
@@ -1306,6 +1645,300 @@ const App = {
       this.currentCard = response.card;
       this.renderFinalizedCard(document.getElementById('main-container'));
       this.toast('Card finalized! Good luck with your goals! 🎉', 'success');
+      this.confetti(50);
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  // Show the auth modal when an anonymous user tries to finalize
+  showFinalizeAuthModal() {
+    this.openModal('Save Your Card', `
+      <div class="finalize-auth-modal">
+        <p style="margin-bottom: 1.5rem;">
+          Your bingo card is ready! Create an account to save and finalize it.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <button class="btn btn-primary btn-lg" onclick="App.showFinalizeRegisterForm()">
+            Create Account
+          </button>
+          <button class="btn btn-secondary btn-lg" onclick="App.showFinalizeLoginForm()">
+            I Already Have an Account
+          </button>
+          <button class="btn btn-ghost" onclick="App.closeModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `);
+  },
+
+  // Show inline registration form in the finalize modal
+  showFinalizeRegisterForm() {
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = `
+      <form id="finalize-register-form" onsubmit="App.handleFinalizeRegister(event)">
+        <div class="form-group">
+          <label class="form-label" for="finalize-display-name">Display Name</label>
+          <input type="text" id="finalize-display-name" class="form-input" required minlength="2" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="finalize-email">Email</label>
+          <input type="email" id="finalize-email" class="form-input" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="finalize-password">Password</label>
+          <input type="password" id="finalize-password" class="form-input" required minlength="8" autocomplete="new-password">
+          <small class="text-muted">At least 8 characters with uppercase, lowercase, and number</small>
+        </div>
+        <div id="finalize-register-error" class="form-error hidden"></div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.showFinalizeAuthModal()">
+            Back
+          </button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">
+            Create Account & Save Card
+          </button>
+        </div>
+      </form>
+    `;
+  },
+
+  // Handle registration from the finalize modal
+  async handleFinalizeRegister(event) {
+    event.preventDefault();
+
+    const displayName = document.getElementById('finalize-display-name').value;
+    const email = document.getElementById('finalize-email').value;
+    const password = document.getElementById('finalize-password').value;
+    const errorEl = document.getElementById('finalize-register-error');
+
+    try {
+      // Register the user
+      const response = await API.auth.register(email, password, displayName);
+      this.user = response.user;
+      this.setupNavigation();
+
+      // Import the anonymous card
+      await this.importAnonymousCard();
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.classList.remove('hidden');
+    }
+  },
+
+  // Show inline login form in the finalize modal
+  showFinalizeLoginForm() {
+    const modalBody = document.getElementById('modal-body');
+    modalBody.innerHTML = `
+      <form id="finalize-login-form" onsubmit="App.handleFinalizeLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="finalize-login-email">Email</label>
+          <input type="email" id="finalize-login-email" class="form-input" required autocomplete="email">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="finalize-login-password">Password</label>
+          <input type="password" id="finalize-login-password" class="form-input" required autocomplete="current-password">
+        </div>
+        <div id="finalize-login-error" class="form-error hidden"></div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.showFinalizeAuthModal()">
+            Back
+          </button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">
+            Login & Save Card
+          </button>
+        </div>
+      </form>
+    `;
+  },
+
+  // Handle login from the finalize modal
+  async handleFinalizeLogin(event) {
+    event.preventDefault();
+
+    const email = document.getElementById('finalize-login-email').value;
+    const password = document.getElementById('finalize-login-password').value;
+    const errorEl = document.getElementById('finalize-login-error');
+
+    try {
+      // Login the user
+      const response = await API.auth.login(email, password);
+      this.user = response.user;
+      this.setupNavigation();
+
+      // Import the anonymous card (with conflict detection)
+      await this.importAnonymousCard();
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.classList.remove('hidden');
+    }
+  },
+
+  // Import the anonymous card to the server
+  async importAnonymousCard() {
+    const anonCard = AnonymousCard.get();
+    if (!anonCard) {
+      this.toast('No card to import', 'error');
+      return;
+    }
+
+    try {
+      const importData = AnonymousCard.toAPIFormat();
+      const response = await API.cards.import(importData);
+
+      if (response.error === 'card_exists') {
+        // Handle conflict
+        this.showCardConflictModal(response.existing_card, anonCard);
+        return;
+      }
+
+      // Success - clear anonymous card and show finalized card
+      AnonymousCard.clear();
+      this.isAnonymousMode = false;
+      this.currentCard = response.card;
+      this.closeModal();
+      this.renderFinalizedCard(document.getElementById('main-container'));
+      this.toast('Card saved and finalized! Good luck with your goals! 🎉', 'success');
+      this.confetti(50);
+    } catch (error) {
+      this.toast(error.message || 'Failed to import card', 'error');
+    }
+  },
+
+  // Show the conflict resolution modal
+  showCardConflictModal(existingCard, anonymousCard) {
+    const existingTitle = existingCard.title || `${existingCard.year} Bingo Card`;
+    const itemCount = existingCard.item_count || (existingCard.items ? existingCard.items.length : 0);
+    const isFinalized = existingCard.is_finalized ? 'finalized' : 'in progress';
+
+    this.openModal('Card Already Exists', `
+      <div class="conflict-modal">
+        <p style="margin-bottom: 1rem;">
+          You already have a <strong>${existingCard.year}</strong> card:
+        </p>
+        <div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+          <strong>${this.escapeHtml(existingTitle)}</strong>
+          <p class="text-muted" style="margin: 0.25rem 0 0 0;">
+            ${itemCount} items, ${isFinalized}
+          </p>
+        </div>
+        <p style="margin-bottom: 1.5rem;">What would you like to do?</p>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <button class="btn btn-secondary" onclick="App.handleConflictKeepExisting('${existingCard.id}')">
+            Keep Existing Card
+          </button>
+          <button class="btn btn-primary" onclick="App.handleConflictSaveAsNew()">
+            Save as New Card (with different title)
+          </button>
+          <button class="btn btn-ghost" style="color: var(--danger);" onclick="App.handleConflictReplace('${existingCard.id}')">
+            Replace Existing Card
+          </button>
+          <button class="btn btn-ghost" onclick="App.closeModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `);
+  },
+
+  // Handle conflict: keep existing card
+  handleConflictKeepExisting(existingCardId) {
+    AnonymousCard.clear();
+    this.isAnonymousMode = false;
+    this.closeModal();
+    window.location.hash = `#card/${existingCardId}`;
+    this.toast('Keeping your existing card. Anonymous card discarded.', 'success');
+  },
+
+  // Handle conflict: save with new title
+  async handleConflictSaveAsNew() {
+    const anonCard = AnonymousCard.get();
+    const currentTitle = anonCard.title || `${anonCard.year} Bingo Card`;
+
+    this.openModal('Save with New Title', `
+      <form id="conflict-new-title-form" onsubmit="App.handleConflictSaveAsNewSubmit(event)">
+        <div class="form-group">
+          <label class="form-label" for="conflict-new-title">New Title</label>
+          <input type="text" id="conflict-new-title" class="form-input" required
+                 value="${this.escapeHtml(currentTitle)} (2)"
+                 maxlength="100">
+          <small class="text-muted">Choose a different title for your new card</small>
+        </div>
+        <div id="conflict-new-title-error" class="form-error hidden"></div>
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.importAnonymousCard()">
+            Back
+          </button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">
+            Save Card
+          </button>
+        </div>
+      </form>
+    `);
+  },
+
+  async handleConflictSaveAsNewSubmit(event) {
+    event.preventDefault();
+
+    const newTitle = document.getElementById('conflict-new-title').value.trim();
+    const errorEl = document.getElementById('conflict-new-title-error');
+
+    if (!newTitle) {
+      errorEl.textContent = 'Please enter a title';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      // Update the anonymous card with new title
+      AnonymousCard.updateMeta(newTitle, AnonymousCard.get().category);
+
+      // Try importing again
+      const importData = AnonymousCard.toAPIFormat();
+      const response = await API.cards.import(importData);
+
+      if (response.error === 'card_exists') {
+        errorEl.textContent = 'A card with this title already exists. Please choose a different title.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      // Success
+      AnonymousCard.clear();
+      this.isAnonymousMode = false;
+      this.currentCard = response.card;
+      this.closeModal();
+      this.renderFinalizedCard(document.getElementById('main-container'));
+      this.toast('Card saved and finalized! Good luck with your goals! 🎉', 'success');
+      this.confetti(50);
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.classList.remove('hidden');
+    }
+  },
+
+  // Handle conflict: replace existing card
+  async handleConflictReplace(existingCardId) {
+    if (!confirm('Are you sure you want to replace your existing card? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      // Delete the existing card
+      await API.cards.deleteCard(existingCardId);
+
+      // Import the anonymous card
+      const importData = AnonymousCard.toAPIFormat();
+      const response = await API.cards.import(importData);
+
+      // Success
+      AnonymousCard.clear();
+      this.isAnonymousMode = false;
+      this.currentCard = response.card;
+      this.closeModal();
+      this.renderFinalizedCard(document.getElementById('main-container'));
+      this.toast('Card replaced and finalized! Good luck with your goals! 🎉', 'success');
       this.confetti(50);
     } catch (error) {
       this.toast(error.message, 'error');

@@ -1115,6 +1115,45 @@ a:hover {
   }
 }
 
+/* Anonymous Card Banner */
+.anonymous-card-banner {
+  background: linear-gradient(135deg, var(--color-accent) 0%, #6b21a8 100%);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.anonymous-card-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  color: white;
+  font-size: var(--font-size-sm);
+}
+
+.anonymous-card-banner-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.anonymous-card-banner-link {
+  color: var(--color-gold-light);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.anonymous-card-banner-link:hover {
+  color: var(--color-gold);
+}
+
+@media (max-width: 480px) {
+  .anonymous-card-banner-content {
+    flex-direction: column;
+    text-align: center;
+    gap: var(--spacing-sm);
+  }
+}
+
 /* Loading Spinner */
 .spinner {
   width: 24px;

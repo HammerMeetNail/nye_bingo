@@ -33,23 +33,25 @@ func NewPageHandler(templatesDir string) (*PageHandler, error) {
 }
 
 type PageData struct {
-	Title      string
-	HideHeader bool
-	Content    template.HTML
-	Scripts    template.HTML
-	CSSPath    string
-	APIJSPath  string
-	AppJSPath  string
+	Title               string
+	HideHeader          bool
+	Content             template.HTML
+	Scripts             template.HTML
+	CSSPath             string
+	APIJSPath           string
+	AnonymousCardJSPath string
+	AppJSPath           string
 }
 
 func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 	// For a SPA, we serve the same template for all routes
 	// The JavaScript router handles the actual routing
 	data := PageData{
-		Title:     "Year of Bingo",
-		CSSPath:   h.manifest.GetCSS(),
-		APIJSPath: h.manifest.GetAPIJS(),
-		AppJSPath: h.manifest.GetAppJS(),
+		Title:               "Year of Bingo",
+		CSSPath:             h.manifest.GetCSS(),
+		APIJSPath:           h.manifest.GetAPIJS(),
+		AnonymousCardJSPath: h.manifest.GetAnonymousCardJS(),
+		AppJSPath:           h.manifest.GetAppJS(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

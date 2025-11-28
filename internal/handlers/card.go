@@ -63,6 +63,36 @@ type UpdateNotesRequest struct {
 	ProofURL *string `json:"proof_url,omitempty"`
 }
 
+// ImportCardRequest represents a request to import an anonymous card
+type ImportCardRequest struct {
+	Year     int              `json:"year"`
+	Title    *string          `json:"title,omitempty"`
+	Category *string          `json:"category,omitempty"`
+	Items    []ImportCardItem `json:"items"`
+	Finalize bool             `json:"finalize"`
+}
+
+type ImportCardItem struct {
+	Position int    `json:"position"`
+	Content  string `json:"content"`
+}
+
+// ImportCardResponse includes conflict info when a card already exists
+type ImportCardResponse struct {
+	Card         *models.BingoCard `json:"card,omitempty"`
+	Error        string            `json:"error,omitempty"`
+	Message      string            `json:"message,omitempty"`
+	ExistingCard *ExistingCardInfo `json:"existing_card,omitempty"`
+}
+
+type ExistingCardInfo struct {
+	ID          string `json:"id"`
+	Title       string `json:"title,omitempty"`
+	Year        int    `json:"year"`
+	ItemCount   int    `json:"item_count"`
+	IsFinalized bool   `json:"is_finalized"`
+}
+
 type CardResponse struct {
 	Card    *models.BingoCard   `json:"card,omitempty"`
 	Cards   []*models.BingoCard `json:"cards,omitempty"`
@@ -790,4 +820,109 @@ func (h *CardHandler) ListExportable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, CardResponse{Cards: allCards})
+}
+
+// Import imports an anonymous card, creating the card and all items in one transaction
+func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req ImportCardRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate year
+	currentYear := time.Now().Year()
+	if req.Year < 2020 || req.Year > currentYear+1 {
+		writeError(w, http.StatusBadRequest, "Year must be between 2020 and next year")
+		return
+	}
+
+	// Validate items count
+	if len(req.Items) == 0 {
+		writeError(w, http.StatusBadRequest, "At least one item is required")
+		return
+	}
+	if len(req.Items) > 24 {
+		writeError(w, http.StatusBadRequest, "Cannot import more than 24 items")
+		return
+	}
+
+	// If finalizing, must have exactly 24 items
+	if req.Finalize && len(req.Items) != 24 {
+		writeError(w, http.StatusBadRequest, "Card must have exactly 24 items to finalize")
+		return
+	}
+
+	// Check for existing card for this year/title
+	existingCard, err := h.cardService.CheckForConflict(r.Context(), user.ID, req.Year, req.Title)
+	if err != nil && !errors.Is(err, services.ErrCardNotFound) {
+		log.Printf("Error checking for conflict: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if existingCard != nil {
+		// Return conflict response
+		title := ""
+		if existingCard.Title != nil {
+			title = *existingCard.Title
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(ImportCardResponse{
+			Error:   "card_exists",
+			Message: "You already have a card for this year",
+			ExistingCard: &ExistingCardInfo{
+				ID:          existingCard.ID.String(),
+				Title:       title,
+				Year:        existingCard.Year,
+				ItemCount:   len(existingCard.Items),
+				IsFinalized: existingCard.IsFinalized,
+			},
+		})
+		return
+	}
+
+	// Convert request items to models
+	items := make([]models.ImportItem, len(req.Items))
+	for i, item := range req.Items {
+		items[i] = models.ImportItem{
+			Position: item.Position,
+			Content:  item.Content,
+		}
+	}
+
+	// Import the card
+	card, err := h.cardService.Import(r.Context(), models.ImportCardParams{
+		UserID:   user.ID,
+		Year:     req.Year,
+		Title:    req.Title,
+		Category: req.Category,
+		Items:    items,
+		Finalize: req.Finalize,
+	})
+	if errors.Is(err, services.ErrInvalidCategory) {
+		writeError(w, http.StatusBadRequest, "Invalid category")
+		return
+	}
+	if errors.Is(err, services.ErrTitleTooLong) {
+		writeError(w, http.StatusBadRequest, "Title must be 100 characters or less")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidPosition) {
+		writeError(w, http.StatusBadRequest, "Invalid item position")
+		return
+	}
+	if err != nil {
+		log.Printf("Error importing card: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, CardResponse{Card: card})
 }

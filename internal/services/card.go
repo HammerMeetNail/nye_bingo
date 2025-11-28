@@ -822,3 +822,115 @@ func (s *CardService) countBingos(items []models.BingoItem) int {
 
 	return bingos
 }
+
+// CheckForConflict checks if a card already exists for the given user, year, and optional title
+func (s *CardService) CheckForConflict(ctx context.Context, userID uuid.UUID, year int, title *string) (*models.BingoCard, error) {
+	var card models.BingoCard
+
+	// Build the query based on whether title is provided
+	var query string
+	var args []interface{}
+
+	if title != nil && *title != "" {
+		// Check for card with this specific title
+		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3`
+		args = []interface{}{userID, year, *title}
+	} else {
+		// Check for any card with null title (default card)
+		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title IS NULL`
+		args = []interface{}{userID, year}
+	}
+
+	err := s.db.QueryRow(ctx, query, args...).Scan(
+		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrCardNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("checking for conflict: %w", err)
+	}
+
+	// Load items for the card
+	items, err := s.getCardItems(ctx, card.ID)
+	if err != nil {
+		return nil, err
+	}
+	card.Items = items
+
+	return &card, nil
+}
+
+// Import imports an anonymous card, creating the card and all items in one transaction
+func (s *CardService) Import(ctx context.Context, params models.ImportCardParams) (*models.BingoCard, error) {
+	// Validate category if provided
+	if params.Category != nil && *params.Category != "" {
+		if !models.IsValidCategory(*params.Category) {
+			return nil, ErrInvalidCategory
+		}
+	}
+
+	// Validate title length if provided
+	if params.Title != nil && len(*params.Title) > 100 {
+		return nil, ErrTitleTooLong
+	}
+
+	// Validate item positions
+	positions := make(map[int]bool)
+	for _, item := range params.Items {
+		// Position must be 0-24 excluding 12 (free space)
+		if item.Position < 0 || item.Position > 24 || item.Position == models.FreeSpacePos {
+			return nil, ErrInvalidPosition
+		}
+		// Check for duplicate positions
+		if positions[item.Position] {
+			return nil, ErrPositionOccupied
+		}
+		positions[item.Position] = true
+	}
+
+	// Start a transaction
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// Create the card
+	card := &models.BingoCard{}
+	err = tx.QueryRow(ctx,
+		`INSERT INTO bingo_cards (user_id, year, category, title, is_finalized)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at`,
+		params.UserID, params.Year, params.Category, params.Title, params.Finalize,
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("creating card: %w", err)
+	}
+
+	// Insert all items
+	card.Items = make([]models.BingoItem, len(params.Items))
+	for i, itemParam := range params.Items {
+		var item models.BingoItem
+		err = tx.QueryRow(ctx,
+			`INSERT INTO bingo_items (card_id, position, content)
+			 VALUES ($1, $2, $3)
+			 RETURNING id, card_id, position, content, is_completed, completed_at, notes, proof_url, created_at`,
+			card.ID, itemParam.Position, itemParam.Content,
+		).Scan(&item.ID, &item.CardID, &item.Position, &item.Content, &item.IsCompleted, &item.CompletedAt, &item.Notes, &item.ProofURL, &item.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("creating item: %w", err)
+		}
+		card.Items[i] = item
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return card, nil
+}

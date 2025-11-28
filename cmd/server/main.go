@@ -124,6 +124,7 @@ func run() error {
 	mux.HandleFunc("GET /api/cards/archive", cardHandler.Archive)
 	mux.HandleFunc("GET /api/cards/categories", cardHandler.GetCategories)
 	mux.HandleFunc("GET /api/cards/export", cardHandler.ListExportable)
+	mux.HandleFunc("POST /api/cards/import", cardHandler.Import)
 	mux.HandleFunc("GET /api/cards/{id}", cardHandler.Get)
 	mux.HandleFunc("DELETE /api/cards/{id}", cardHandler.Delete)
 	mux.HandleFunc("GET /api/cards/{id}/stats", cardHandler.Stats)

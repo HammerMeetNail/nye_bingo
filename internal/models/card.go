@@ -120,3 +120,19 @@ type CardStats struct {
 	FirstCompletion *time.Time `json:"first_completion,omitempty"`
 	LastCompletion  *time.Time `json:"last_completion,omitempty"`
 }
+
+// ImportCardParams contains parameters for importing an anonymous card
+type ImportCardParams struct {
+	UserID   uuid.UUID
+	Year     int
+	Title    *string
+	Category *string
+	Items    []ImportItem
+	Finalize bool
+}
+
+// ImportItem represents a single item to import
+type ImportItem struct {
+	Position int
+	Content  string
+}
