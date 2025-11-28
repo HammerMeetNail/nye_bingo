@@ -172,7 +172,7 @@ Migrations in `migrations/` directory using numeric prefix ordering.
 
 Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`
 
-Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`
+Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 
@@ -259,7 +259,7 @@ podman compose up
 
 ## Security Features (Phase 8)
 
-- **Security Headers**: CSP, X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS (in secure mode)
+- **Security Headers**: CSP (includes cdnjs.cloudflare.com for JSZip), X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS (in secure mode)
 - **Compression**: Gzip compression for responses (with pool for efficiency)
 - **Cache Control**: Content-hashed assets in `/static/dist/` get immutable cache (1 year); non-hashed assets use short cache with revalidation
 - **Structured Logging**: JSON-formatted request logs with timing, status, and context

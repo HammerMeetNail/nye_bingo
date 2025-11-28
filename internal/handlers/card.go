@@ -756,3 +756,38 @@ func (h *CardHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, CategoriesResponse{Categories: categories})
 }
+
+func (h *CardHandler) ListExportable(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	// Get current year cards
+	currentCards, err := h.cardService.ListByUser(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error listing current cards for export: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Get archived cards
+	archivedCards, err := h.cardService.GetArchive(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error listing archived cards for export: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Combine all cards
+	allCards := make([]*models.BingoCard, 0, len(currentCards)+len(archivedCards))
+	allCards = append(allCards, currentCards...)
+	allCards = append(allCards, archivedCards...)
+
+	if allCards == nil {
+		allCards = []*models.BingoCard{}
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Cards: allCards})
+}
