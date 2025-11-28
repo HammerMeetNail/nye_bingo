@@ -214,6 +214,10 @@ const API = {
     async getStats(cardId) {
       return API.request('GET', `/api/cards/${cardId}/stats`);
     },
+
+    async getExportable() {
+      return API.request('GET', '/api/cards/export');
+    },
   },
 
   // Suggestion endpoints

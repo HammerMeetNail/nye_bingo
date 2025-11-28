@@ -497,12 +497,26 @@ const App = {
     container.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
         <h2>My Bingo Cards</h2>
-        <a href="#create" class="btn btn-primary">+ New Card</a>
+        <div style="display: flex; gap: 0.5rem;">
+          <div class="dropdown" id="actions-dropdown">
+            <button class="btn btn-secondary dropdown-toggle" aria-haspopup="true" aria-expanded="false">
+              Actions
+            </button>
+            <div class="dropdown-menu" role="menu">
+              <button class="dropdown-item" role="menuitem" onclick="App.showExportModal()">
+                Export Cards
+              </button>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="App.showCreateCardModal()">+ New Card</button>
+        </div>
       </div>
       <div id="cards-list">
         <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
       </div>
     `;
+
+    this.setupDropdowns();
 
     try {
       const response = await API.cards.list();
@@ -2057,6 +2071,301 @@ const App = {
     } catch (error) {
       this.toast(error.message, 'error');
     }
+  },
+
+  // Dropdown Menu
+  setupDropdowns() {
+    document.querySelectorAll('.dropdown').forEach(dropdown => {
+      const toggle = dropdown.querySelector('.dropdown-toggle');
+      const menu = dropdown.querySelector('.dropdown-menu');
+
+      if (!toggle || !menu) return;
+
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isVisible = menu.classList.contains('dropdown-menu--visible');
+
+        // Close all other dropdowns
+        document.querySelectorAll('.dropdown-menu--visible').forEach(m => {
+          m.classList.remove('dropdown-menu--visible');
+        });
+
+        if (!isVisible) {
+          menu.classList.add('dropdown-menu--visible');
+          toggle.setAttribute('aria-expanded', 'true');
+        } else {
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.dropdown-menu--visible').forEach(menu => {
+        menu.classList.remove('dropdown-menu--visible');
+      });
+      document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
+        toggle.setAttribute('aria-expanded', 'false');
+      });
+    });
+  },
+
+  // Export functionality
+  async showExportModal() {
+    // Close any open dropdowns
+    document.querySelectorAll('.dropdown-menu--visible').forEach(menu => {
+      menu.classList.remove('dropdown-menu--visible');
+    });
+
+    this.openModal('Export Cards', `
+      <div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>
+      <p class="text-muted text-center">Loading cards...</p>
+    `);
+
+    try {
+      const response = await API.cards.getExportable();
+      const cards = response.cards || [];
+
+      if (cards.length === 0) {
+        document.getElementById('modal-body').innerHTML = `
+          <div class="export-empty">
+            <p>No cards to export.</p>
+            <p class="text-muted">Create a card first to export it.</p>
+          </div>
+          <div style="margin-top: 1.5rem;">
+            <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+              Close
+            </button>
+          </div>
+        `;
+        return;
+      }
+
+      // Sort by year descending, then by title
+      cards.sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year;
+        const nameA = a.title || `${a.year} Bingo Card`;
+        const nameB = b.title || `${b.year} Bingo Card`;
+        return nameA.localeCompare(nameB);
+      });
+
+      const currentYear = new Date().getFullYear();
+      const cardListHtml = cards.map(card => {
+        const displayName = this.getCardDisplayName(card);
+        const itemCount = card.items ? card.items.length : 0;
+        const isArchived = card.year < currentYear;
+        const archivedLabel = isArchived ? ' (Archived)' : '';
+
+        return `
+          <div class="export-card-item">
+            <input type="checkbox" id="export-card-${card.id}" value="${card.id}" checked>
+            <label for="export-card-${card.id}">
+              <span class="export-card-name">${this.escapeHtml(displayName)}</span>
+              <span class="export-card-meta">${card.year}${archivedLabel} - ${itemCount} items</span>
+            </label>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('modal-body').innerHTML = `
+        <p class="text-muted">Select cards to export as CSV:</p>
+
+        <div class="export-select-all">
+          <input type="checkbox" id="export-select-all" checked>
+          <label for="export-select-all">Select All</label>
+        </div>
+
+        <div class="export-card-list">
+          ${cardListHtml}
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">
+            Cancel
+          </button>
+          <button type="button" class="btn btn-primary" style="flex: 1;" id="export-download-btn" onclick="App.downloadExport()">
+            Download ZIP
+          </button>
+        </div>
+      `;
+
+      // Store cards for export
+      this.exportableCards = cards;
+
+      // Setup select all functionality
+      const selectAllCheckbox = document.getElementById('export-select-all');
+      const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]');
+
+      selectAllCheckbox.addEventListener('change', () => {
+        cardCheckboxes.forEach(cb => {
+          cb.checked = selectAllCheckbox.checked;
+        });
+        this.updateExportButton();
+      });
+
+      cardCheckboxes.forEach(cb => {
+        cb.addEventListener('change', () => {
+          const allChecked = Array.from(cardCheckboxes).every(c => c.checked);
+          const someChecked = Array.from(cardCheckboxes).some(c => c.checked);
+          selectAllCheckbox.checked = allChecked;
+          selectAllCheckbox.indeterminate = someChecked && !allChecked;
+          this.updateExportButton();
+        });
+      });
+
+    } catch (error) {
+      document.getElementById('modal-body').innerHTML = `
+        <div class="export-empty">
+          <p>Error loading cards: ${this.escapeHtml(error.message)}</p>
+        </div>
+        <div style="margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+            Close
+          </button>
+        </div>
+      `;
+    }
+  },
+
+  updateExportButton() {
+    const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]');
+    const someChecked = Array.from(cardCheckboxes).some(c => c.checked);
+    const downloadBtn = document.getElementById('export-download-btn');
+    if (downloadBtn) {
+      downloadBtn.disabled = !someChecked;
+    }
+  },
+
+  async downloadExport() {
+    const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]:checked');
+    const selectedIds = Array.from(cardCheckboxes).map(cb => cb.value);
+
+    if (selectedIds.length === 0) {
+      this.toast('Please select at least one card to export', 'error');
+      return;
+    }
+
+    const selectedCards = this.exportableCards.filter(card => selectedIds.includes(card.id));
+
+    const downloadBtn = document.getElementById('export-download-btn');
+    if (downloadBtn) {
+      this.setButtonLoading(downloadBtn, true);
+    }
+
+    try {
+      const zip = new JSZip();
+      const usedFilenames = new Set();
+
+      for (const card of selectedCards) {
+        const csv = this.generateCSV(card);
+        const filename = this.getUniqueFilename(card, usedFilenames);
+        usedFilenames.add(filename);
+        zip.file(filename, csv);
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const timestamp = new Date().toISOString().slice(0, 10);
+      this.downloadBlob(blob, `yearofbingo_export_${timestamp}.zip`);
+
+      this.closeModal();
+      this.toast(`Exported ${selectedCards.length} card${selectedCards.length > 1 ? 's' : ''}`, 'success');
+    } catch (error) {
+      this.toast('Error generating export: ' + error.message, 'error');
+    } finally {
+      if (downloadBtn) {
+        this.setButtonLoading(downloadBtn, false);
+      }
+    }
+  },
+
+  generateCSV(card) {
+    const categoryNames = {
+      personal: 'Personal Growth',
+      health: 'Health & Fitness',
+      food: 'Food & Dining',
+      travel: 'Travel & Adventure',
+      hobbies: 'Hobbies & Creativity',
+      social: 'Social & Relationships',
+      professional: 'Professional & Career',
+      fun: 'Fun & Silly',
+    };
+
+    const cardTitle = card.title || `${card.year} Bingo Card`;
+    const categoryName = card.category ? (categoryNames[card.category] || card.category) : '';
+
+    // CSV header
+    const headers = ['card_title', 'year', 'category', 'position', 'item_text', 'completed', 'completion_date', 'notes'];
+
+    // Generate rows
+    const rows = (card.items || []).map(item => {
+      const completedDate = item.completed_at ? item.completed_at.slice(0, 10) : '';
+      const notes = item.notes || '';
+
+      return [
+        cardTitle,
+        card.year.toString(),
+        categoryName,
+        item.position.toString(),
+        item.content,
+        item.is_completed ? 'yes' : 'no',
+        completedDate,
+        notes
+      ];
+    });
+
+    // Sort by position
+    rows.sort((a, b) => parseInt(a[3]) - parseInt(b[3]));
+
+    // Build CSV with BOM for Excel compatibility
+    const BOM = '\uFEFF';
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => this.escapeCSV(cell)).join(','))
+    ].join('\r\n');
+
+    return BOM + csvContent;
+  },
+
+  escapeCSV(value) {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    const str = String(value);
+    // If the value contains comma, newline, or quote, wrap in quotes and escape quotes
+    if (str.includes(',') || str.includes('\n') || str.includes('\r') || str.includes('"')) {
+      return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+  },
+
+  getUniqueFilename(card, usedFilenames) {
+    const title = card.title || 'Bingo Card';
+    // Sanitize filename: remove/replace invalid characters
+    const sanitized = title
+      .replace(/[<>:"/\\|?*]/g, '')
+      .replace(/\s+/g, '_')
+      .slice(0, 50);
+
+    let filename = `${card.year}_${sanitized}.csv`;
+    let counter = 1;
+
+    while (usedFilenames.has(filename)) {
+      filename = `${card.year}_${sanitized}_${counter}.csv`;
+      counter++;
+    }
+
+    return filename;
+  },
+
+  downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   },
 
   // Utilities
