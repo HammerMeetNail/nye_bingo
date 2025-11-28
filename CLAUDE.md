@@ -160,6 +160,20 @@ Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/reque
 
 Reactions: `POST/DELETE /api/items/{id}/react`, `GET /api/items/{id}/reactions`, `GET /api/reactions/emojis`
 
+## Versioning
+
+The application version is displayed in the footer and must be updated with each release. The version number is located in `web/templates/index.html` in the footer element.
+
+**Version format**: Follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH)
+- MAJOR: Breaking changes or significant new features
+- MINOR: New features, backwards compatible
+- PATCH: Bug fixes, backwards compatible
+
+**When to update**: Increment the version when committing and pushing changes:
+- Bug fixes → increment PATCH (e.g., 0.1.0 → 0.1.1)
+- New features → increment MINOR, reset PATCH (e.g., 0.1.1 → 0.2.0)
+- Breaking changes → increment MAJOR, reset MINOR and PATCH (e.g., 0.2.0 → 1.0.0)
+
 ## Environment Variables
 
 Server: `SERVER_HOST`, `SERVER_PORT`, `SERVER_SECURE`
