@@ -124,6 +124,89 @@ const App = {
     if (overlay) overlay.classList.remove('modal-overlay--visible');
   },
 
+  async showCreateCardModal() {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+
+    // Fetch categories
+    let categories = [];
+    try {
+      const response = await API.cards.getCategories();
+      categories = response.categories || [];
+    } catch (error) {
+      categories = [
+        { id: 'personal', name: 'Personal Growth' },
+        { id: 'health', name: 'Health & Fitness' },
+        { id: 'food', name: 'Food & Dining' },
+        { id: 'travel', name: 'Travel & Adventure' },
+        { id: 'hobbies', name: 'Hobbies & Creativity' },
+        { id: 'social', name: 'Social & Relationships' },
+        { id: 'professional', name: 'Professional & Career' },
+        { id: 'fun', name: 'Fun & Silly' },
+      ];
+    }
+
+    const categoryOptions = categories.map(c =>
+      `<option value="${this.escapeHtml(c.id)}">${this.escapeHtml(c.name)}</option>`
+    ).join('');
+
+    this.openModal('Create New Card', `
+      <form onsubmit="App.handleCreateCardModal(event)">
+        <div class="form-group">
+          <label for="modal-card-year">Year</label>
+          <select id="modal-card-year" class="form-input" required>
+            <option value="${currentYear}">${currentYear}</option>
+            <option value="${nextYear}">${nextYear}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="modal-card-title">
+            Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+          </label>
+          <input type="text" id="modal-card-title" class="form-input"
+                 placeholder="e.g., Life Goals, Foods to Try"
+                 maxlength="100">
+          <small class="text-muted">Leave blank for default "${currentYear} Bingo Card"</small>
+        </div>
+
+        <div class="form-group">
+          <label for="modal-card-category">
+            Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+          </label>
+          <select id="modal-card-category" class="form-input">
+            <option value="">None</option>
+            ${categoryOptions}
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Create Card</button>
+        </div>
+      </form>
+    `);
+  },
+
+  async handleCreateCardModal(event) {
+    event.preventDefault();
+
+    const year = parseInt(document.getElementById('modal-card-year').value, 10);
+    const title = document.getElementById('modal-card-title').value.trim() || null;
+    const category = document.getElementById('modal-card-category').value || null;
+
+    try {
+      const response = await API.cards.create(year, title, category);
+      this.currentCard = response.card;
+      this.closeModal();
+      window.location.hash = `#card/${response.card.id}`;
+      const cardName = title || `${year} Bingo Card`;
+      this.toast(`${cardName} created!`, 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
   async showEditCardMetaModal() {
     if (!this.currentCard) return;
 
@@ -267,7 +350,10 @@ const App = {
           with 24 goals and track your progress throughout the year.
         </p>
         ${this.user ? `
-          <a href="#dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
+          <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+            <a href="#dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
+            <button class="btn btn-secondary btn-lg" onclick="App.showCreateCardModal()">Create New Card</button>
+          </div>
         ` : `
           <a href="#register" class="btn btn-primary btn-lg">Create Your Card</a>
           <p class="mt-md text-muted">
@@ -590,9 +676,10 @@ const App = {
             </select>
           </div>
 
-          <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
-            Create Card
-          </button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <a href="#dashboard" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
+            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
+          </div>
         </form>
       </div>
     `;
