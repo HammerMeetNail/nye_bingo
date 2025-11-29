@@ -248,7 +248,6 @@ jobs:
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Create and push manifest
         id: manifest

@@ -259,8 +259,7 @@ This triggers the CI pipeline which will:
 
 **Container tags created**:
 - `:1.0.5` - Exact version (immutable)
-- `:1.0` - Major.minor (points to latest patch)
-- `:latest` - Latest release
+- `:latest` - Latest release (floating)
 - `:<commit-sha>` - Specific commit
 
 **Production deploys** use the image digest (not tag) for reproducibility. The compose.yaml on the server includes the tag as a comment above the image line for easy reference.
@@ -388,7 +387,7 @@ GitHub Actions workflow in `.github/workflows/ci.yaml`:
 - Multi-arch: `linux/amd64` and `linux/arm64`
 - `:latest` - Latest main branch build
 - `:<sha>` - Specific commit builds
-- `:<version>` - Release versions (e.g., `:1.0.5`, `:1.0`)
+- `:<version>` - Release versions (e.g., `:1.0.5`)
 
 **Running production image locally:**
 ```bash
