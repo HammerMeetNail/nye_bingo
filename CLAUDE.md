@@ -366,9 +366,10 @@ Navbar contains FAQ link (`#faq`), footer contains About and legal pages (`#abou
 GitHub Actions workflow in `.github/workflows/ci.yaml`:
 
 **Pipeline triggers:**
-- Push to `main` branch - builds, tests, deploys to production
-- Version tags (`v*`) - builds, tests, creates GitHub Release, deploys to production
-- Pull requests - runs tests only (no deploy)
+- Push to `main` branch - lint, test, build binary only (no container push or deploy)
+- Version tags (`v*`) - full pipeline: lint, test, build, container push, release, deploy
+- Pull requests - lint and test only
+- Manual dispatch - deploy existing image
 
 **Pipeline stages:**
 1. **Secret Scan** - Gitleaks scans for accidentally committed secrets (runs on ALL changes)
