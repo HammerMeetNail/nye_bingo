@@ -331,6 +331,7 @@ const App = {
 
   route() {
     this.closeMobileMenu();
+    window.scrollTo(0, 0);
     const hash = window.location.hash.slice(1) || 'home';
     // Parse hash with query parameters: page?param=value
     const [pagePart, queryPart] = hash.split('?');
