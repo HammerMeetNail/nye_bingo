@@ -23,6 +23,7 @@ type BingoCard struct {
 	IsActive         bool        `json:"is_active"`
 	IsFinalized      bool        `json:"is_finalized"`
 	VisibleToFriends bool        `json:"visible_to_friends"`
+	IsArchived       bool        `json:"is_archived"`
 	CreatedAt        time.Time   `json:"created_at"`
 	UpdatedAt        time.Time   `json:"updated_at"`
 	Items            []BingoItem `json:"items,omitempty"`

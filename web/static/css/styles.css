@@ -1958,6 +1958,153 @@ a:hover {
   justify-self: end;
 }
 
+/* Dashboard Page */
+.dashboard-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.dashboard-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.dashboard-header h2 {
+  margin: 0;
+}
+
+.dashboard-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: var(--color-bg-card);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.dashboard-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
+.dashboard-sort select {
+  min-width: 160px;
+}
+
+.dashboard-selection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+}
+
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  white-space: nowrap;
+}
+
+.dashboard-card-preview {
+  transition: all var(--transition-fast);
+}
+
+.dashboard-card-preview:hover {
+  border-color: var(--color-silver);
+  transform: translateY(-2px);
+}
+
+.dashboard-card-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.dashboard-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.dashboard-card-checkbox {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+  accent-color: var(--color-gold);
+}
+
+/* Small form input variant */
+.form-input--sm {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* Dropdown disabled state */
+.dropdown-item--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.dropdown-item--danger {
+  color: var(--color-danger);
+}
+
+.dropdown-item--danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Dropdown divider */
+.dropdown-divider {
+  height: 1px;
+  margin: var(--spacing-xs) 0;
+  background: var(--color-border);
+}
+
+/* Dropdown item icons */
+.dropdown-item i {
+  margin-right: var(--spacing-sm);
+  width: 1rem;
+  text-align: center;
+}
+
+/* Responsive dashboard */
+@media (max-width: 600px) {
+  .dashboard-controls {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-sort {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .dashboard-selection {
+    flex: 1 1 100%;
+    justify-content: center;
+    order: 3;
+  }
+
+  .dashboard-actions {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .dashboard-card-preview-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .dashboard-card-preview-header > div:last-child {
+    align-self: flex-start;
+  }
+}
+
 /* Archive Bulk Controls */
 .archive-bulk-controls {
   display: flex;

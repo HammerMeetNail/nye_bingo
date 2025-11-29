@@ -134,6 +134,8 @@ func run() error {
 	mux.HandleFunc("GET /api/cards/export", cardHandler.ListExportable)
 	mux.HandleFunc("POST /api/cards/import", cardHandler.Import)
 	mux.HandleFunc("PUT /api/cards/visibility/bulk", cardHandler.BulkUpdateVisibility)
+	mux.HandleFunc("DELETE /api/cards/bulk", cardHandler.BulkDelete)
+	mux.HandleFunc("PUT /api/cards/archive/bulk", cardHandler.BulkUpdateArchive)
 	mux.HandleFunc("GET /api/cards/{id}", cardHandler.Get)
 	mux.HandleFunc("DELETE /api/cards/{id}", cardHandler.Delete)
 	mux.HandleFunc("GET /api/cards/{id}/stats", cardHandler.Stats)

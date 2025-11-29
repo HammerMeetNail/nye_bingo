@@ -78,7 +78,6 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="#dashboard" class="nav-link">My Cards</a>
-        <a href="#archive" class="nav-link">Archive</a>
         <a href="#friends" class="nav-link">Friends</a>
         <a href="#profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
         <button class="btn btn-ghost" onclick="App.logout()">Logout</button>
@@ -351,8 +350,9 @@ const App = {
         this.requireAuth(() => this.renderFriendCard(container, params[0]));
         break;
       case 'archive':
-        this.requireAuth(() => this.renderArchive(container));
-        break;
+        // Redirect to dashboard (archive merged into dashboard)
+        window.location.hash = '#dashboard';
+        return;
       case 'archive-card':
         this.requireAuth(() => this.renderArchiveCard(container, params[0]));
         break;
@@ -865,51 +865,334 @@ const App = {
     `;
   },
 
+  // Dashboard state
+  selectedCards: [],
+  dashboardCards: [],
+  dashboardSortKey: localStorage.getItem('dashboardSort') || 'updated',
+
   async renderDashboard(container) {
+    this.selectedCards = [];
+
     container.innerHTML = `
       ${this.renderEmailVerificationBanner()}
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-        <h2>My Bingo Cards</h2>
-        <div style="display: flex; gap: 0.5rem;">
+      <div class="dashboard-page">
+        <div class="dashboard-header">
+          <h2>My Bingo Cards</h2>
+        </div>
+        <div id="cards-list">
+          <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const response = await API.cards.list();
+      this.dashboardCards = response.cards || [];
+
+      this.renderDashboardCards();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  renderDashboardCards() {
+    const listEl = document.getElementById('cards-list');
+    const cards = this.getSortedCards();
+
+    if (cards.length === 0) {
+      listEl.innerHTML = `
+        <div class="card text-center" style="padding: 3rem;">
+          <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+          <h3>No cards yet</h3>
+          <p class="text-muted mb-lg">Create your first bingo card and start tracking your goals!</p>
+          <a href="#create" class="btn btn-primary btn-lg">Create Your First Card</a>
+        </div>
+      `;
+      return;
+    }
+
+    const hasSelection = this.selectedCards.length > 0;
+
+    listEl.innerHTML = `
+      <div class="dashboard-controls">
+        <div class="dashboard-sort">
+          <label for="sort-select" class="text-muted" style="font-size: 0.875rem;">Sort:</label>
+          <select id="sort-select" class="form-input form-input--sm" onchange="App.changeDashboardSort(this.value)">
+            <option value="updated" ${this.dashboardSortKey === 'updated' ? 'selected' : ''}>Recently Updated</option>
+            <option value="year-desc" ${this.dashboardSortKey === 'year-desc' ? 'selected' : ''}>Year (newest)</option>
+            <option value="year-asc" ${this.dashboardSortKey === 'year-asc' ? 'selected' : ''}>Year (oldest)</option>
+            <option value="name-asc" ${this.dashboardSortKey === 'name-asc' ? 'selected' : ''}>Name (A-Z)</option>
+            <option value="name-desc" ${this.dashboardSortKey === 'name-desc' ? 'selected' : ''}>Name (Z-A)</option>
+            <option value="progress-desc" ${this.dashboardSortKey === 'progress-desc' ? 'selected' : ''}>Completion % (highest)</option>
+            <option value="progress-asc" ${this.dashboardSortKey === 'progress-asc' ? 'selected' : ''}>Completion % (lowest)</option>
+          </select>
+        </div>
+        <div class="dashboard-selection">
+          <button class="btn btn-ghost btn-sm" onclick="App.selectAllCards()">Select All</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.deselectAllCards()">Deselect All</button>
+          <span id="selected-count" class="text-muted">${this.selectedCards.length} selected</span>
+        </div>
+        <div class="dashboard-actions">
           <div class="dropdown" id="actions-dropdown">
             <button class="btn btn-secondary dropdown-toggle" aria-haspopup="true" aria-expanded="false">
               Actions
             </button>
             <div class="dropdown-menu" role="menu">
-              <button class="dropdown-item" role="menuitem" onclick="App.showExportModal()">
-                Export Cards
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetArchive(true)" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-archive"></i> Archive
+              </button>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetArchive(false)" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-box-open"></i> Unarchive
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetVisibility(true)" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-eye"></i> Make Visible
+              </button>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetVisibility(false)" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-eye-slash"></i> Make Private
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item dropdown-item--danger ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkDeleteCards()" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-trash"></i> Delete
+              </button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.exportSelectedCards()" ${hasSelection ? '' : 'title="Select cards first"'}>
+                <i class="fas fa-download"></i> Export Cards
               </button>
             </div>
           </div>
-          <button class="btn btn-primary" onclick="App.showCreateCardModal()">+ New Card</button>
+          <button class="btn btn-primary" onclick="App.showCreateCardModal()">+ Card</button>
         </div>
       </div>
-      <div id="cards-list">
-        <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+      <div class="dashboard-cards-list">
+        ${cards.map(card => this.renderDashboardCardPreview(card)).join('')}
       </div>
     `;
 
     this.setupDropdowns();
+  },
+
+  renderDashboardCardPreview(card) {
+    const itemCount = card.items ? card.items.length : 0;
+    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
+    const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
+    const displayName = this.getCardDisplayName(card);
+    const categoryBadge = this.getCategoryBadge(card);
+    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
+    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
+    const isSelected = this.selectedCards.includes(card.id);
+    const cardLink = card.is_archived ? `#archive-card/${card.id}` : `#card/${card.id}`;
+
+    return `
+      <div class="card dashboard-card-preview" style="margin-bottom: 1rem;">
+        <div class="dashboard-card-preview-header">
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <label class="dashboard-checkbox-label" onclick="event.stopPropagation();">
+              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} onchange="App.updateDashboardSelection()">
+            </label>
+            <a href="${cardLink}" style="text-decoration: none; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+                <h3 style="margin: 0;">${displayName}</h3>
+                <span class="year-badge">${card.year}</span>
+                ${categoryBadge}
+              </div>
+              <p class="text-muted" style="margin: 0;">
+                ${card.is_finalized
+                  ? `${completedCount}/24 completed`
+                  : `${itemCount}/24 items added`}
+              </p>
+            </a>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="visibility-badge visibility-badge--${card.visible_to_friends ? 'visible' : 'private'}" title="${visibilityLabel}">
+              <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
+            </span>
+            ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
+          </div>
+        </div>
+        <a href="${cardLink}" style="text-decoration: none; display: block;">
+          <div class="progress-bar mt-md">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+        </a>
+      </div>
+    `;
+  },
+
+  getSortedCards() {
+    const cards = [...this.dashboardCards];
+    const key = this.dashboardSortKey;
+
+    const getDisplayName = (card) => {
+      if (card.title) return card.title.toLowerCase();
+      return `${card.year} bingo card`;
+    };
+
+    const getProgress = (card) => {
+      if (!card.is_finalized) {
+        const itemCount = card.items ? card.items.length : 0;
+        return itemCount / 24;
+      }
+      const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
+      return completedCount / 24;
+    };
+
+    switch (key) {
+      case 'updated':
+        return cards.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      case 'year-desc':
+        return cards.sort((a, b) => b.year - a.year || new Date(b.updated_at) - new Date(a.updated_at));
+      case 'year-asc':
+        return cards.sort((a, b) => a.year - b.year || new Date(b.updated_at) - new Date(a.updated_at));
+      case 'name-asc':
+        return cards.sort((a, b) => getDisplayName(a).localeCompare(getDisplayName(b)));
+      case 'name-desc':
+        return cards.sort((a, b) => getDisplayName(b).localeCompare(getDisplayName(a)));
+      case 'progress-desc':
+        return cards.sort((a, b) => getProgress(b) - getProgress(a));
+      case 'progress-asc':
+        return cards.sort((a, b) => getProgress(a) - getProgress(b));
+      default:
+        return cards;
+    }
+  },
+
+  changeDashboardSort(key) {
+    this.dashboardSortKey = key;
+    localStorage.setItem('dashboardSort', key);
+    this.renderDashboardCards();
+  },
+
+  updateDashboardSelection() {
+    const checkboxes = document.querySelectorAll('.dashboard-card-checkbox');
+    this.selectedCards = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.cardId);
+
+    const countEl = document.getElementById('selected-count');
+    if (countEl) {
+      countEl.textContent = `${this.selectedCards.length} selected`;
+    }
+
+    // Re-render to update disabled states on dropdown items
+    this.renderDashboardCards();
+  },
+
+  selectAllCards() {
+    this.selectedCards = this.dashboardCards.map(card => card.id);
+    this.renderDashboardCards();
+  },
+
+  deselectAllCards() {
+    this.selectedCards = [];
+    this.renderDashboardCards();
+  },
+
+  async bulkSetVisibility(visibleToFriends) {
+    if (this.selectedCards.length === 0) {
+      this.toast('Select cards first', 'warning');
+      return;
+    }
 
     try {
-      const response = await API.cards.list();
-      const cards = response.cards || [];
-
-      const listEl = document.getElementById('cards-list');
-      if (cards.length === 0) {
-        listEl.innerHTML = `
-          <div class="card text-center" style="padding: 3rem;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
-            <h3>No cards yet</h3>
-            <p class="text-muted mb-lg">Create your first bingo card and start tracking your goals!</p>
-            <a href="#create" class="btn btn-primary btn-lg">Create Your First Card</a>
-          </div>
-        `;
-      } else {
-        listEl.innerHTML = cards.map(card => this.renderCardPreview(card)).join('');
-      }
+      const response = await API.cards.bulkUpdateVisibility(this.selectedCards, visibleToFriends);
+      const count = response.updated_count || this.selectedCards.length;
+      this.toast(`${count} card${count !== 1 ? 's' : ''} updated`, 'success');
+      // Refresh the dashboard
+      this.selectedCards = [];
+      const cardsResponse = await API.cards.list();
+      this.dashboardCards = cardsResponse.cards || [];
+      this.renderDashboardCards();
     } catch (error) {
-      this.toast(error.message, 'error');
+      this.toast(error.message || 'Failed to update visibility', 'error');
+    }
+  },
+
+  async bulkSetArchive(isArchived) {
+    if (this.selectedCards.length === 0) {
+      this.toast('Select cards first', 'warning');
+      return;
+    }
+
+    try {
+      const response = await API.cards.bulkUpdateArchive(this.selectedCards, isArchived);
+      const count = response.updated_count || this.selectedCards.length;
+      const action = isArchived ? 'archived' : 'unarchived';
+      this.toast(`${count} card${count !== 1 ? 's' : ''} ${action}`, 'success');
+      // Refresh the dashboard
+      this.selectedCards = [];
+      const cardsResponse = await API.cards.list();
+      this.dashboardCards = cardsResponse.cards || [];
+      this.renderDashboardCards();
+    } catch (error) {
+      this.toast(error.message || 'Failed to update archive status', 'error');
+    }
+  },
+
+  async bulkDeleteCards() {
+    if (this.selectedCards.length === 0) {
+      this.toast('Select cards first', 'warning');
+      return;
+    }
+
+    const count = this.selectedCards.length;
+    if (!confirm(`Are you sure you want to delete ${count} card${count !== 1 ? 's' : ''}? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await API.cards.bulkDelete(this.selectedCards);
+      const deletedCount = response.deleted_count || count;
+      this.toast(`${deletedCount} card${deletedCount !== 1 ? 's' : ''} deleted`, 'success');
+      // Refresh the dashboard
+      this.selectedCards = [];
+      const cardsResponse = await API.cards.list();
+      this.dashboardCards = cardsResponse.cards || [];
+      this.renderDashboardCards();
+    } catch (error) {
+      this.toast(error.message || 'Failed to delete cards', 'error');
+    }
+  },
+
+  async exportSelectedCards() {
+    // Close any open dropdowns
+    document.querySelectorAll('.dropdown-menu--visible').forEach(menu => {
+      menu.classList.remove('dropdown-menu--visible');
+    });
+
+    if (this.selectedCards.length === 0) {
+      this.toast('Select cards first', 'warning');
+      return;
+    }
+
+    // Get the selected cards from dashboardCards
+    const cardsToExport = this.dashboardCards.filter(card =>
+      this.selectedCards.includes(card.id)
+    );
+
+    if (cardsToExport.length === 0) {
+      this.toast('No cards found to export', 'error');
+      return;
+    }
+
+    try {
+      const zip = new JSZip();
+      const usedFilenames = new Set();
+
+      for (const card of cardsToExport) {
+        const csv = this.generateCSV(card);
+        const filename = this.getUniqueFilename(card, usedFilenames);
+        usedFilenames.add(filename);
+        zip.file(filename, csv);
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const timestamp = new Date().toISOString().slice(0, 10);
+      this.downloadBlob(blob, `yearofbingo_export_${timestamp}.zip`);
+
+      this.toast(`Exported ${cardsToExport.length} card${cardsToExport.length > 1 ? 's' : ''}`, 'success');
+    } catch (error) {
+      this.toast('Error generating export: ' + error.message, 'error');
     }
   },
 
@@ -936,49 +1219,6 @@ const App = {
     };
     const name = categoryNames[card.category] || card.category;
     return `<span class="category-badge category-${this.escapeHtml(card.category)}">${this.escapeHtml(name)}</span>`;
-  },
-
-  renderCardPreview(card) {
-    const itemCount = card.items ? card.items.length : 0;
-    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
-    const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
-    const displayName = this.getCardDisplayName(card);
-    const categoryBadge = this.getCategoryBadge(card);
-    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
-    const visibilityTitle = card.visible_to_friends ? 'Visible to friends' : 'Private';
-
-    return `
-      <div class="card" style="margin-bottom: 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: start;">
-          <a href="#card/${card.id}" style="flex: 1; text-decoration: none; color: inherit;">
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
-              <h3 style="margin: 0;">${displayName}</h3>
-              <span class="year-badge">${card.year}</span>
-              ${categoryBadge}
-            </div>
-            <p class="text-muted" style="margin: 0.25rem 0 0 0;">
-              ${card.is_finalized
-                ? `${completedCount}/24 completed`
-                : `${itemCount}/24 items added`}
-            </p>
-          </a>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <button class="visibility-toggle visibility-toggle--dashboard" onclick="event.stopPropagation(); event.preventDefault(); App.toggleCardVisibility('${card.id}', ${!card.visible_to_friends})" title="${visibilityTitle}" aria-label="${visibilityTitle}">
-              <i class="fas fa-${visibilityIcon}"></i>
-            </button>
-            <a href="#card/${card.id}" class="btn btn-ghost btn-sm">
-              ${card.is_finalized ? 'View' : 'Continue'}
-            </a>
-            <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); App.deleteCard('${card.id}')" title="Delete card" style="color: var(--danger);">
-              &times;
-            </button>
-          </div>
-        </div>
-        <div class="progress-bar mt-md">
-          <div class="progress-fill" style="width: ${progress}%"></div>
-        </div>
-      </div>
-    `;
   },
 
   async deleteCard(cardId) {
@@ -3225,148 +3465,7 @@ const App = {
     });
   },
 
-  // Archive page
-  selectedArchiveCards: [],
-
-  async renderArchive(container) {
-    this.selectedArchiveCards = [];
-
-    container.innerHTML = `
-      <div class="archive-page">
-        <div class="archive-header">
-          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
-          <h2>Card Archive</h2>
-          <div></div>
-        </div>
-        <div id="archive-list">
-          <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
-        </div>
-      </div>
-    `;
-
-    try {
-      const response = await API.cards.getArchive();
-      const cards = response.cards || [];
-      this.archiveCards = cards;
-
-      const listEl = document.getElementById('archive-list');
-      if (cards.length === 0) {
-        listEl.innerHTML = `
-          <div class="card text-center" style="padding: 3rem;">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">📚</div>
-            <h3>No archived cards yet</h3>
-            <p class="text-muted mb-lg">Completed cards from past years will appear here.</p>
-            <a href="#dashboard" class="btn btn-primary">Go to Dashboard</a>
-          </div>
-        `;
-      } else {
-        listEl.innerHTML = `
-          <div class="archive-bulk-controls">
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <button class="btn btn-ghost btn-sm" onclick="App.selectAllArchiveCards()">Select All</button>
-              <button class="btn btn-ghost btn-sm" onclick="App.deselectAllArchiveCards()">Deselect All</button>
-            </div>
-            <div style="display: flex; gap: 0.5rem; align-items: center;">
-              <span id="selected-count" class="text-muted" style="font-size: 0.875rem;">0 selected</span>
-              <button class="btn btn-secondary btn-sm" onclick="App.bulkSetVisibility(true)" title="Make visible to friends">
-                <i class="fas fa-eye"></i> Make Visible
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="App.bulkSetVisibility(false)" title="Make private">
-                <i class="fas fa-eye-slash"></i> Make Private
-              </button>
-            </div>
-          </div>
-          <div class="archive-cards-list">
-            ${cards.map(card => this.renderArchiveCardPreview(card)).join('')}
-          </div>
-        `;
-      }
-    } catch (error) {
-      this.toast(error.message, 'error');
-    }
-  },
-
-  renderArchiveCardPreview(card) {
-    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
-    const progress = Math.round((completedCount / 24) * 100);
-    const displayName = this.getCardDisplayName(card);
-    const categoryBadge = this.getCategoryBadge(card);
-    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
-    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
-
-    return `
-      <div class="card archive-card-preview" style="margin-bottom: 1rem;">
-        <div class="archive-card-preview-header">
-          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-            <label class="archive-checkbox-label" onclick="event.stopPropagation();">
-              <input type="checkbox" class="archive-card-checkbox" data-card-id="${card.id}" onchange="App.updateArchiveSelection()">
-            </label>
-            <a href="#archive-card/${card.id}" style="text-decoration: none; flex: 1;">
-              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
-                <h3 style="margin: 0;">${displayName}</h3>
-                <span class="year-badge">${card.year}</span>
-                ${categoryBadge}
-              </div>
-              <p class="text-muted" style="margin: 0;">${completedCount}/24 completed</p>
-            </a>
-          </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <span class="visibility-badge visibility-badge--${card.visible_to_friends ? 'visible' : 'private'}" title="${visibilityLabel}">
-              <i class="fas fa-${visibilityIcon}"></i> ${visibilityLabel}
-            </span>
-            <div class="archive-badge">Archived</div>
-          </div>
-        </div>
-        <a href="#archive-card/${card.id}" style="text-decoration: none; display: block;">
-          <div class="progress-bar mt-md">
-            <div class="progress-fill" style="width: ${progress}%"></div>
-          </div>
-        </a>
-      </div>
-    `;
-  },
-
-  updateArchiveSelection() {
-    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
-    this.selectedArchiveCards = Array.from(checkboxes)
-      .filter(cb => cb.checked)
-      .map(cb => cb.dataset.cardId);
-
-    const countEl = document.getElementById('selected-count');
-    if (countEl) {
-      countEl.textContent = `${this.selectedArchiveCards.length} selected`;
-    }
-  },
-
-  selectAllArchiveCards() {
-    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
-    checkboxes.forEach(cb => cb.checked = true);
-    this.updateArchiveSelection();
-  },
-
-  deselectAllArchiveCards() {
-    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
-    checkboxes.forEach(cb => cb.checked = false);
-    this.updateArchiveSelection();
-  },
-
-  async bulkSetVisibility(visibleToFriends) {
-    if (this.selectedArchiveCards.length === 0) {
-      this.toast('No cards selected', 'warning');
-      return;
-    }
-
-    try {
-      const response = await API.cards.bulkUpdateVisibility(this.selectedArchiveCards, visibleToFriends);
-      const count = response.updated_count || this.selectedArchiveCards.length;
-      this.toast(`${count} card${count !== 1 ? 's' : ''} updated`, 'success');
-      // Refresh the archive list
-      this.renderArchive(document.getElementById('main-container'));
-    } catch (error) {
-      this.toast(error.message || 'Failed to update visibility', 'error');
-    }
-  },
-
+  // Archive card view (for viewing individual archived cards)
   async renderArchiveCard(container, cardId) {
     container.innerHTML = `
       <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
@@ -3387,7 +3486,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Card not found</h3>
           <p class="text-muted mb-lg">${error.message}</p>
-          <a href="#archive" class="btn btn-primary">Back to Archive</a>
+          <a href="#dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
       `;
     }
@@ -3405,7 +3504,7 @@ const App = {
     container.innerHTML = `
       <div class="archive-card-view">
         <div class="archive-card-header">
-          <a href="#archive" class="btn btn-ghost">&larr; Archive</a>
+          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
             <h2 style="margin: 0;">${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
@@ -3594,174 +3693,7 @@ const App = {
     });
   },
 
-  // Export functionality
-  async showExportModal() {
-    // Close any open dropdowns
-    document.querySelectorAll('.dropdown-menu--visible').forEach(menu => {
-      menu.classList.remove('dropdown-menu--visible');
-    });
-
-    this.openModal('Export Cards', `
-      <div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>
-      <p class="text-muted text-center">Loading cards...</p>
-    `);
-
-    try {
-      const response = await API.cards.getExportable();
-      const cards = response.cards || [];
-
-      if (cards.length === 0) {
-        document.getElementById('modal-body').innerHTML = `
-          <div class="export-empty">
-            <p>No cards to export.</p>
-            <p class="text-muted">Create a card first to export it.</p>
-          </div>
-          <div style="margin-top: 1.5rem;">
-            <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
-              Close
-            </button>
-          </div>
-        `;
-        return;
-      }
-
-      // Sort by year descending, then by title
-      cards.sort((a, b) => {
-        if (b.year !== a.year) return b.year - a.year;
-        const nameA = a.title || `${a.year} Bingo Card`;
-        const nameB = b.title || `${b.year} Bingo Card`;
-        return nameA.localeCompare(nameB);
-      });
-
-      const currentYear = new Date().getFullYear();
-      const cardListHtml = cards.map(card => {
-        const displayName = this.getCardDisplayName(card);
-        const itemCount = card.items ? card.items.length : 0;
-        const isArchived = card.year < currentYear;
-        const archivedLabel = isArchived ? ' (Archived)' : '';
-
-        return `
-          <div class="export-card-item">
-            <input type="checkbox" id="export-card-${card.id}" value="${card.id}" checked>
-            <label for="export-card-${card.id}">
-              <span class="export-card-name">${this.escapeHtml(displayName)}</span>
-              <span class="export-card-meta">${card.year}${archivedLabel} - ${itemCount} items</span>
-            </label>
-          </div>
-        `;
-      }).join('');
-
-      document.getElementById('modal-body').innerHTML = `
-        <p class="text-muted">Select cards to export as CSV:</p>
-
-        <div class="export-select-all">
-          <input type="checkbox" id="export-select-all" checked>
-          <label for="export-select-all">Select All</label>
-        </div>
-
-        <div class="export-card-list">
-          ${cardListHtml}
-        </div>
-
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">
-            Cancel
-          </button>
-          <button type="button" class="btn btn-primary" style="flex: 1;" id="export-download-btn" onclick="App.downloadExport()">
-            Download ZIP
-          </button>
-        </div>
-      `;
-
-      // Store cards for export
-      this.exportableCards = cards;
-
-      // Setup select all functionality
-      const selectAllCheckbox = document.getElementById('export-select-all');
-      const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]');
-
-      selectAllCheckbox.addEventListener('change', () => {
-        cardCheckboxes.forEach(cb => {
-          cb.checked = selectAllCheckbox.checked;
-        });
-        this.updateExportButton();
-      });
-
-      cardCheckboxes.forEach(cb => {
-        cb.addEventListener('change', () => {
-          const allChecked = Array.from(cardCheckboxes).every(c => c.checked);
-          const someChecked = Array.from(cardCheckboxes).some(c => c.checked);
-          selectAllCheckbox.checked = allChecked;
-          selectAllCheckbox.indeterminate = someChecked && !allChecked;
-          this.updateExportButton();
-        });
-      });
-
-    } catch (error) {
-      document.getElementById('modal-body').innerHTML = `
-        <div class="export-empty">
-          <p>Error loading cards: ${this.escapeHtml(error.message)}</p>
-        </div>
-        <div style="margin-top: 1.5rem;">
-          <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
-            Close
-          </button>
-        </div>
-      `;
-    }
-  },
-
-  updateExportButton() {
-    const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]');
-    const someChecked = Array.from(cardCheckboxes).some(c => c.checked);
-    const downloadBtn = document.getElementById('export-download-btn');
-    if (downloadBtn) {
-      downloadBtn.disabled = !someChecked;
-    }
-  },
-
-  async downloadExport() {
-    const cardCheckboxes = document.querySelectorAll('.export-card-item input[type="checkbox"]:checked');
-    const selectedIds = Array.from(cardCheckboxes).map(cb => cb.value);
-
-    if (selectedIds.length === 0) {
-      this.toast('Please select at least one card to export', 'error');
-      return;
-    }
-
-    const selectedCards = this.exportableCards.filter(card => selectedIds.includes(card.id));
-
-    const downloadBtn = document.getElementById('export-download-btn');
-    if (downloadBtn) {
-      this.setButtonLoading(downloadBtn, true);
-    }
-
-    try {
-      const zip = new JSZip();
-      const usedFilenames = new Set();
-
-      for (const card of selectedCards) {
-        const csv = this.generateCSV(card);
-        const filename = this.getUniqueFilename(card, usedFilenames);
-        usedFilenames.add(filename);
-        zip.file(filename, csv);
-      }
-
-      const blob = await zip.generateAsync({ type: 'blob' });
-      const timestamp = new Date().toISOString().slice(0, 10);
-      this.downloadBlob(blob, `yearofbingo_export_${timestamp}.zip`);
-
-      this.closeModal();
-      this.toast(`Exported ${selectedCards.length} card${selectedCards.length > 1 ? 's' : ''}`, 'success');
-    } catch (error) {
-      this.toast('Error generating export: ' + error.message, 'error');
-    } finally {
-      if (downloadBtn) {
-        this.setButtonLoading(downloadBtn, false);
-      }
-    }
-  },
-
+  // Export helper functions
   generateCSV(card) {
     const categoryNames = {
       personal: 'Personal Growth',

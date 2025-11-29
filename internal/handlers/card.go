@@ -80,6 +80,23 @@ type BulkUpdateVisibilityResponse struct {
 	UpdatedCount int `json:"updated_count"`
 }
 
+type BulkDeleteRequest struct {
+	CardIDs []string `json:"card_ids"`
+}
+
+type BulkDeleteResponse struct {
+	DeletedCount int `json:"deleted_count"`
+}
+
+type BulkUpdateArchiveRequest struct {
+	CardIDs    []string `json:"card_ids"`
+	IsArchived bool     `json:"is_archived"`
+}
+
+type BulkUpdateArchiveResponse struct {
+	UpdatedCount int `json:"updated_count"`
+}
+
 // ImportCardRequest represents a request to import an anonymous card
 type ImportCardRequest struct {
 	Year     int              `json:"year"`
@@ -910,6 +927,84 @@ func (h *CardHandler) BulkUpdateVisibility(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeJSON(w, http.StatusOK, BulkUpdateVisibilityResponse{UpdatedCount: count})
+}
+
+func (h *CardHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req BulkDeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.CardIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "At least one card ID is required")
+		return
+	}
+
+	// Parse card IDs
+	cardIDs := make([]uuid.UUID, 0, len(req.CardIDs))
+	for _, idStr := range req.CardIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid card ID: "+idStr)
+			return
+		}
+		cardIDs = append(cardIDs, id)
+	}
+
+	count, err := h.cardService.BulkDelete(r.Context(), user.ID, cardIDs)
+	if err != nil {
+		log.Printf("Error bulk deleting cards: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, BulkDeleteResponse{DeletedCount: count})
+}
+
+func (h *CardHandler) BulkUpdateArchive(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req BulkUpdateArchiveRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.CardIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "At least one card ID is required")
+		return
+	}
+
+	// Parse card IDs
+	cardIDs := make([]uuid.UUID, 0, len(req.CardIDs))
+	for _, idStr := range req.CardIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid card ID: "+idStr)
+			return
+		}
+		cardIDs = append(cardIDs, id)
+	}
+
+	count, err := h.cardService.BulkUpdateArchive(r.Context(), user.ID, cardIDs, req.IsArchived)
+	if err != nil {
+		log.Printf("Error bulk updating archive status: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, BulkUpdateArchiveResponse{UpdatedCount: count})
 }
 
 func (h *CardHandler) GetCategories(w http.ResponseWriter, r *http.Request) {

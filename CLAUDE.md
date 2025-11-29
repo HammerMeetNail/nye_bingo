@@ -140,10 +140,11 @@ Tests use only Node.js built-in modules (no npm dependencies).
 
 **App Object**: All frontend logic lives in global `App` object. Key methods:
 - `route()` - Hash-based routing, renders appropriate page
+- `renderDashboard()` - Unified dashboard showing all cards (current year and archived) with sorting, selection, and bulk actions
 - `renderFinalizedCard()` / `renderCardEditor()` - Card views (handles both authenticated and anonymous modes)
 - `showItemDetailModal()` - Modal for viewing/completing items
 - `renderFriends()` / `renderFriendCard()` - Friends list and viewing friend cards (with year selector for multiple cards)
-- `renderArchive()` / `renderArchiveCard()` - Archive views for past years
+- `renderArchiveCard()` - View for individual archived cards with stats
 - `renderProfile()` - Account settings page (email verification status, privacy settings, change password)
 - `openModal()` / `closeModal()` - Generic modal system
 - `fillEmptySpaces()` - Auto-fill empty card slots with random suggestions
@@ -162,7 +163,11 @@ Tests use only Node.js built-in modules (no npm dependencies).
 
 **Privacy Model**: Friend search is opt-in. Users must enable "searchable" in their profile to appear in friend search results. Search only matches username (not email). Registration includes a checkbox for opting into discoverability.
 
-**Card Visibility**: Cards have a `visible_to_friends` flag (default: true). Users can set individual cards as private or visible to friends. Private cards are completely hidden from friend views (no indication they exist). Visibility can be toggled on dashboard, card view, archive, and during finalization. Bulk visibility controls available on archive page.
+**Card Visibility**: Cards have a `visible_to_friends` flag (default: true). Users can set individual cards as private or visible to friends. Private cards are completely hidden from friend views (no indication they exist). Visibility can be toggled via bulk actions on the dashboard or on individual card views during finalization.
+
+**Card Archive**: Cards have an `is_archived` flag that users can toggle manually via the dashboard Actions menu. Archived cards display an "Archived" badge. This is a user action, not automatic based on year. The `#archive-card/{id}` route shows detailed stats for any card.
+
+**Card Export**: Export uses the dashboard selection. Users select cards via checkboxes, then click Actions → Export Cards to download a ZIP file containing CSV files for each selected card. The export is disabled when no cards are selected.
 
 **Card State Machine**: Cards start unfinalized (can add/remove/shuffle items), then finalize (locks layout, enables completion marking).
 
@@ -192,7 +197,7 @@ Migrations in `migrations/` directory using numeric prefix ordering.
 Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`, `POST /api/auth/password`, `PUT /api/auth/searchable`
 Email Auth: `POST /api/auth/{verify-email,resend-verification,magic-link,forgot-password,reset-password}`, `GET /api/auth/magic-link/verify`
 
-Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`, `PUT /api/cards/{id}/visibility`, `PUT /api/cards/visibility/bulk`
+Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`, `PUT /api/cards/{id}/visibility`, `PUT /api/cards/visibility/bulk`, `PUT /api/cards/archive/bulk`, `DELETE /api/cards/bulk`
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 

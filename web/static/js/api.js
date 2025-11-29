@@ -237,6 +237,19 @@ const API = {
       });
     },
 
+    async bulkDelete(cardIds) {
+      return API.request('DELETE', '/api/cards/bulk', {
+        card_ids: cardIds,
+      });
+    },
+
+    async bulkUpdateArchive(cardIds, isArchived) {
+      return API.request('PUT', '/api/cards/archive/bulk', {
+        card_ids: cardIds,
+        is_archived: isArchived,
+      });
+    },
+
     async completeItem(cardId, position, notes = null, proofUrl = null) {
       const body = {};
       if (notes) body.notes = notes;

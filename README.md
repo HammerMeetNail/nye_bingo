@@ -20,8 +20,8 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 - **Social Features**: Add friends, view their cards, and react to their achievements with emojis
 - **Privacy Controls**: Opt-in discoverability - choose whether others can find you by username
 - **Card Visibility**: Set individual cards as private or visible to friends with per-card controls
-- **Card Archive**: View past years' cards with completion statistics and bingo counts
-- **Export to CSV**: Download your cards as CSV files in a ZIP archive for backup or analysis
+- **Card Archive**: Manually archive cards and view them with completion statistics and bingo counts
+- **Export to CSV**: Select cards on the dashboard and export them as CSV files in a ZIP archive
 - **Email Authentication**: Email verification, magic link login, and password reset
 - **Profile Management**: View account settings, email verification status, privacy settings, and change password
 - **Accessible Design**: Uses OpenDyslexic font for improved readability
@@ -192,6 +192,8 @@ nye_bingo/
 - `POST /api/cards/{id}/finalize` - Lock card for play
 - `PUT /api/cards/{id}/visibility` - Update card visibility to friends
 - `PUT /api/cards/visibility/bulk` - Bulk update visibility for multiple cards
+- `PUT /api/cards/archive/bulk` - Bulk archive/unarchive multiple cards
+- `DELETE /api/cards/bulk` - Bulk delete multiple cards
 
 ### Items
 - `PUT /api/cards/{id}/items/{pos}` - Update item
