@@ -361,6 +361,13 @@ const API = {
       return API.request('GET', '/api/reactions/emojis');
     },
   },
+
+  // Support endpoint
+  support: {
+    async submit(email, category, message) {
+      return API.request('POST', '/api/support', { email, category, message });
+    },
+  },
 };
 
 class APIError extends Error {

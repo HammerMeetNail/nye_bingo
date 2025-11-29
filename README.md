@@ -24,6 +24,7 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 - **Export to CSV**: Select cards on the dashboard and export them as CSV files in a ZIP archive
 - **Email Authentication**: Email verification, magic link login, and password reset
 - **Profile Management**: View account settings, email verification status, privacy settings, and change password
+- **Contact Support**: Submit support requests via contact form with rate limiting protection
 - **Accessible Design**: Uses OpenDyslexic font for improved readability
 
 ## Tech Stack
@@ -219,6 +220,9 @@ nye_bingo/
 - `POST /api/items/{id}/react` - React to completed item
 - `DELETE /api/items/{id}/react` - Remove reaction
 - `GET /api/items/{id}/reactions` - Get item reactions
+
+### Support
+- `POST /api/support` - Submit support request (rate limited: 5/hour per IP)
 
 ## Scripts
 

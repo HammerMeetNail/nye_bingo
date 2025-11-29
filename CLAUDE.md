@@ -147,10 +147,11 @@ Tests use only Node.js built-in modules (no npm dependencies).
 - `renderArchiveCard()` - View for individual archived cards with stats
 - `renderProfile()` - Account settings page (email verification status, privacy settings, change password)
 - `renderTerms()` / `renderPrivacy()` / `renderSecurity()` - Legal pages linked from footer
+- `renderSupport()` - Contact form for support requests
 - `openModal()` / `closeModal()` - Generic modal system
 - `fillEmptySpaces()` - Auto-fill empty card slots with random suggestions
 
-**API Object**: Wraps fetch calls with CSRF handling. Namespaced: `API.auth.*`, `API.cards.*`, `API.suggestions.*`, `API.friends.*`, `API.reactions.*`
+**API Object**: Wraps fetch calls with CSRF handling. Namespaced: `API.auth.*`, `API.cards.*`, `API.suggestions.*`, `API.friends.*`, `API.reactions.*`, `API.support.*`
 
 **Adding New Features**: Add API methods to `api.js`, UI methods to `App` object in `app.js`, styles to `styles.css`
 
@@ -207,6 +208,8 @@ Suggestions: `GET /api/suggestions`, `GET /api/suggestions/categories`
 Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/request`, `PUT /api/friends/{id}/{accept,reject}`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`, `GET /api/friends/{id}/cards`
 
 Reactions: `POST/DELETE /api/items/{id}/react`, `GET /api/items/{id}/reactions`, `GET /api/reactions/emojis`
+
+Support: `POST /api/support`
 
 ## Versioning
 

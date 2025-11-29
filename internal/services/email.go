@@ -508,5 +508,72 @@ func (p *ConsoleProvider) Send(ctx context.Context, email *Email) error {
 	return nil
 }
 
+// SendSupportEmail sends a support request to the support team
+func (s *EmailService) SendSupportEmail(ctx context.Context, fromEmail, category, message string, userID string) error {
+	html, text := s.renderSupportEmail(fromEmail, category, message, userID)
+
+	return s.provider.Send(ctx, &Email{
+		To:      "support@yearofbingo.com",
+		Subject: fmt.Sprintf("[Support] %s", category),
+		HTML:    html,
+		Text:    text,
+	})
+}
+
+func (s *EmailService) renderSupportEmail(fromEmail, category, message, userID string) (html, text string) {
+	userInfo := "Not logged in"
+	if userID != "" {
+		userInfo = userID
+	}
+
+	html = fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1 style="color: #333; font-size: 24px;">Support Request</h1>
+
+  <table style="width: 100%%; border-collapse: collapse; margin: 20px 0;">
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; width: 120px;">From:</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Category:</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">User ID:</td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">%s</td>
+    </tr>
+  </table>
+
+  <h2 style="color: #333; font-size: 18px;">Message:</h2>
+  <div style="background: #f5f5f5; padding: 15px; border-radius: 6px; white-space: pre-wrap;">%s</div>
+
+  <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+  <p style="color: #999; font-size: 12px;">Year of Bingo Support System</p>
+</body>
+</html>`, fromEmail, category, userInfo, template.HTMLEscapeString(message))
+
+	text = fmt.Sprintf(`Support Request
+===============
+
+From: %s
+Category: %s
+User ID: %s
+
+Message:
+--------
+%s
+
+--
+Year of Bingo Support System`, fromEmail, category, userInfo, message)
+
+	return html, text
+}
+
 // Suppress unused import warning for template package
 var _ = template.New

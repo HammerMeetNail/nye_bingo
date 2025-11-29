@@ -88,6 +88,7 @@ func run() error {
 	suggestionHandler := handlers.NewSuggestionHandler(suggestionService)
 	friendHandler := handlers.NewFriendHandler(friendService, cardService)
 	reactionHandler := handlers.NewReactionHandler(reactionService)
+	supportHandler := handlers.NewSupportHandler(emailService, redisDB.Client)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
@@ -170,6 +171,9 @@ func run() error {
 	mux.HandleFunc("DELETE /api/items/{id}/react", reactionHandler.RemoveReaction)
 	mux.HandleFunc("GET /api/items/{id}/reactions", reactionHandler.GetReactions)
 	mux.HandleFunc("GET /api/reactions/emojis", reactionHandler.GetAllowedEmojis)
+
+	// Support endpoint
+	mux.HandleFunc("POST /api/support", supportHandler.Submit)
 
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))

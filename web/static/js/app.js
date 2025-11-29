@@ -368,6 +368,9 @@ const App = {
       case 'security':
         this.renderSecurity(container);
         break;
+      case 'support':
+        this.renderSupport(container);
+        break;
       default:
         this.renderHome(container);
     }
@@ -4177,6 +4180,101 @@ const App = {
         </div>
       </div>
     `;
+  },
+
+  renderSupport(container) {
+    const userEmail = this.user?.email || '';
+
+    container.innerHTML = `
+      <div class="auth-page">
+        <div class="card auth-card">
+          <h2>Contact Support</h2>
+          <p class="text-muted" style="margin-bottom: 1.5rem;">
+            Have a question, found a bug, or want to request a feature? We'd love to hear from you!
+          </p>
+
+          <form id="support-form">
+            <div class="form-group">
+              <label class="form-label" for="support-email">Your Email</label>
+              <input
+                type="email"
+                id="support-email"
+                class="form-input"
+                required
+                placeholder="your@email.com"
+                value="${this.escapeHtml(userEmail)}"
+              >
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="support-category">Category</label>
+              <select id="support-category" class="form-input" required>
+                <option value="">Select a category...</option>
+                <option value="Bug Report">Bug Report</option>
+                <option value="Feature Request">Feature Request</option>
+                <option value="Account Issue">Account Issue</option>
+                <option value="General Question">General Question</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="support-message">Message</label>
+              <textarea
+                id="support-message"
+                class="form-input"
+                required
+                rows="6"
+                placeholder="Please describe your issue or question in detail..."
+                minlength="10"
+                maxlength="5000"
+              ></textarea>
+              <small class="form-hint">Minimum 10 characters</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+              Send Message
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('support-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('support-email').value.trim();
+      const category = document.getElementById('support-category').value;
+      const message = document.getElementById('support-message').value.trim();
+
+      if (!email || !category || !message) {
+        App.toast('Please fill in all fields', 'error');
+        return;
+      }
+
+      if (message.length < 10) {
+        App.toast('Message must be at least 10 characters', 'error');
+        return;
+      }
+
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      const originalText = submitBtn.textContent;
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+
+      try {
+        const result = await API.support.submit(email, category, message);
+        App.toast(result.message || 'Message sent successfully!', 'success');
+
+        // Clear the form
+        document.getElementById('support-category').value = '';
+        document.getElementById('support-message').value = '';
+      } catch (error) {
+        App.toast(error.message || 'Failed to send message', 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+      }
+    });
   },
 };
 

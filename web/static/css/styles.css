@@ -278,6 +278,18 @@ a:hover {
   color: var(--color-gold);
 }
 
+.footer-support {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-decoration: none;
+  justify-self: end;
+  transition: color var(--transition-fast);
+}
+
+.footer-support:hover {
+  color: var(--color-gold);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -308,6 +320,7 @@ a:hover {
 .btn-primary:hover:not(:disabled) {
   background: linear-gradient(135deg, var(--color-gold-light), var(--color-gold));
   box-shadow: var(--shadow-glow);
+  color: var(--color-bg-primary);
 }
 
 .btn-secondary {
@@ -523,6 +536,13 @@ a:hover {
   margin-top: var(--spacing-xs);
   font-size: var(--font-size-sm);
   color: var(--color-error);
+}
+
+.form-hint {
+  display: block;
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
 }
 
 /* Cards */
