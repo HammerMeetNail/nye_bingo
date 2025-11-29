@@ -248,6 +248,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -272,6 +273,7 @@ jobs:
             cat > .env << 'ENVFILE'
           DB_PASSWORD=${DB_PASSWORD}
           REDIS_PASSWORD=${REDIS_PASSWORD}
+          RESEND_API_KEY=${RESEND_API_KEY}
           ENVFILE
             chmod 600 .env
 

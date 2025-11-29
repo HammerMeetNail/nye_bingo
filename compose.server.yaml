@@ -20,6 +20,10 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - REDIS_DB=0
+      - EMAIL_PROVIDER=resend
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - EMAIL_FROM_ADDRESS=noreply@yearofbingo.com
+      - APP_BASE_URL=https://yearofbingo.com
     depends_on:
       postgres:
         condition: service_healthy
