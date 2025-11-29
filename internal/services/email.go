@@ -473,7 +473,7 @@ func (p *SMTPProvider) Send(ctx context.Context, email *Email) error {
 
 	// Build email message
 	var buf bytes.Buffer
-	buf.WriteString(fmt.Sprintf("From: Year of Bingo <noreply@yearofbingo.com>\r\n"))
+	buf.WriteString("From: Year of Bingo <noreply@yearofbingo.com>\r\n")
 	buf.WriteString(fmt.Sprintf("To: %s\r\n", email.To))
 	buf.WriteString(fmt.Sprintf("Subject: %s\r\n", email.Subject))
 	buf.WriteString("MIME-Version: 1.0\r\n")
