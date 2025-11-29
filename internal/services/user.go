@@ -103,6 +103,17 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID uuid.UUID, newP
 	return nil
 }
 
+func (s *UserService) MarkEmailVerified(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE users SET email_verified = true, email_verified_at = NOW() WHERE id = $1 AND email_verified = false`,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("marking email verified: %w", err)
+	}
+	return nil
+}
+
 func (s *UserService) SearchByEmailOrName(ctx context.Context, query string, limit int) ([]*models.User, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT id, email, password_hash, display_name, email_verified, email_verified_at, created_at, updated_at

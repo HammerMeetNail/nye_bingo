@@ -341,6 +341,16 @@ func (h *AuthHandler) MagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Mark email as verified since they clicked a link sent to their email
+	if !user.EmailVerified {
+		if err := h.userService.MarkEmailVerified(r.Context(), user.ID); err != nil {
+			log.Printf("Error marking email verified: %v", err)
+		} else {
+			// Re-fetch user to get updated verification status
+			user, _ = h.userService.GetByID(r.Context(), user.ID)
+		}
+	}
+
 	// Create session
 	sessionToken, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
@@ -433,6 +443,11 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Invalidate all sessions
 	_ = h.authService.DeleteAllUserSessions(r.Context(), userID)
+
+	// Mark email as verified since they clicked a link sent to their email
+	if err := h.userService.MarkEmailVerified(r.Context(), userID); err != nil {
+		log.Printf("Error marking email verified: %v", err)
+	}
 
 	// Get user for response
 	user, err := h.userService.GetByID(r.Context(), userID)
