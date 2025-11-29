@@ -219,8 +219,22 @@ const API = {
       return API.request('POST', `/api/cards/${cardId}/shuffle`);
     },
 
-    async finalize(cardId) {
-      return API.request('POST', `/api/cards/${cardId}/finalize`);
+    async finalize(cardId, visibleToFriends = null) {
+      const body = visibleToFriends !== null ? { visible_to_friends: visibleToFriends } : null;
+      return API.request('POST', `/api/cards/${cardId}/finalize`, body);
+    },
+
+    async updateVisibility(cardId, visibleToFriends) {
+      return API.request('PUT', `/api/cards/${cardId}/visibility`, {
+        visible_to_friends: visibleToFriends,
+      });
+    },
+
+    async bulkUpdateVisibility(cardIds, visibleToFriends) {
+      return API.request('PUT', '/api/cards/visibility/bulk', {
+        card_ids: cardIds,
+        visible_to_friends: visibleToFriends,
+      });
     },
 
     async completeItem(cardId, position, notes = null, proofUrl = null) {

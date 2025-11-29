@@ -63,6 +63,23 @@ type UpdateNotesRequest struct {
 	ProofURL *string `json:"proof_url,omitempty"`
 }
 
+type FinalizeRequest struct {
+	VisibleToFriends *bool `json:"visible_to_friends,omitempty"`
+}
+
+type UpdateVisibilityRequest struct {
+	VisibleToFriends bool `json:"visible_to_friends"`
+}
+
+type BulkUpdateVisibilityRequest struct {
+	CardIDs          []string `json:"card_ids"`
+	VisibleToFriends bool     `json:"visible_to_friends"`
+}
+
+type BulkUpdateVisibilityResponse struct {
+	UpdatedCount int `json:"updated_count"`
+}
+
 // ImportCardRequest represents a request to import an anonymous card
 type ImportCardRequest struct {
 	Year     int              `json:"year"`
@@ -476,7 +493,20 @@ func (h *CardHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card, err := h.cardService.Finalize(r.Context(), user.ID, cardID)
+	// Parse optional request body for visibility setting
+	var req FinalizeRequest
+	var params *services.FinalizeParams
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+		params = &services.FinalizeParams{
+			VisibleToFriends: req.VisibleToFriends,
+		}
+	}
+
+	card, err := h.cardService.Finalize(r.Context(), user.ID, cardID, params)
 	if errors.Is(err, services.ErrCardNotFound) {
 		writeError(w, http.StatusNotFound, "Card not found")
 		return
@@ -774,6 +804,82 @@ func (h *CardHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, CardResponse{Card: card})
+}
+
+func (h *CardHandler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	var req UpdateVisibilityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	card, err := h.cardService.UpdateVisibility(r.Context(), user.ID, cardID, req.VisibleToFriends)
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if err != nil {
+		log.Printf("Error updating visibility: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Card: card})
+}
+
+func (h *CardHandler) BulkUpdateVisibility(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req BulkUpdateVisibilityRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(req.CardIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "At least one card ID is required")
+		return
+	}
+
+	// Parse card IDs
+	cardIDs := make([]uuid.UUID, 0, len(req.CardIDs))
+	for _, idStr := range req.CardIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid card ID: "+idStr)
+			return
+		}
+		cardIDs = append(cardIDs, id)
+	}
+
+	count, err := h.cardService.BulkUpdateVisibility(r.Context(), user.ID, cardIDs, req.VisibleToFriends)
+	if err != nil {
+		log.Printf("Error bulk updating visibility: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, BulkUpdateVisibilityResponse{UpdatedCount: count})
 }
 
 func (h *CardHandler) GetCategories(w http.ResponseWriter, r *http.Request) {

@@ -34,14 +34,14 @@ get_csrf() {
 register_user() {
     local email="$1"
     local password="$2"
-    local display_name="$3"
+    local username="$3"
     local csrf=$(get_csrf)
 
     local response=$(curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
         -X POST "$BASE_URL/api/auth/register" \
         -H "Content-Type: application/json" \
         -H "X-CSRF-Token: $csrf" \
-        -d "{\"email\":\"$email\",\"password\":\"$password\",\"display_name\":\"$display_name\"}")
+        -d "{\"email\":\"$email\",\"password\":\"$password\",\"username\":\"$username\"}")
 
     local user_id=$(echo "$response" | jq -r '.user.id // empty')
     local error=$(echo "$response" | jq -r '.error // empty')
@@ -366,13 +366,13 @@ BOB_2024_GOALS=(
 
 # Create users
 log_info "Creating users..."
-ALICE_ID=$(register_user "alice@test.com" "Password1" "Alice Anderson")
+ALICE_ID=$(register_user "alice@test.com" "Password1" "alice")
 logout_user
 
-BOB_ID=$(register_user "bob@test.com" "Password1" "Bob Builder")
+BOB_ID=$(register_user "bob@test.com" "Password1" "bob")
 logout_user
 
-CAROL_ID=$(register_user "carol@test.com" "Password1" "Carol Chen")
+CAROL_ID=$(register_user "carol@test.com" "Password1" "carol")
 logout_user
 
 echo ""

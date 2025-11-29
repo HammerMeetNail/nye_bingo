@@ -83,9 +83,9 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 	err := s.db.QueryRow(ctx,
 		`INSERT INTO bingo_cards (user_id, year, category, title)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at`,
+		 RETURNING id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at`,
 		params.UserID, params.Year, params.Category, params.Title,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating card: %w", err)
 	}
@@ -97,10 +97,10 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 		 FROM bingo_cards WHERE id = $1`,
 		cardID,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -120,10 +120,10 @@ func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.Bi
 func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, year int) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 		 FROM bingo_cards WHERE user_id = $1 AND year = $2`,
 		userID, year,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -142,7 +142,7 @@ func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, ye
 
 func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.BingoCard, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 		 FROM bingo_cards WHERE user_id = $1 ORDER BY year DESC, created_at DESC`,
 		userID,
 	)
@@ -154,7 +154,7 @@ func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)
@@ -462,7 +462,12 @@ func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*m
 	return s.GetByID(ctx, cardID)
 }
 
-func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID) (*models.BingoCard, error) {
+// FinalizeParams contains optional parameters for finalizing a card
+type FinalizeParams struct {
+	VisibleToFriends *bool // Optional; if nil, keeps current value (default true for new cards)
+}
+
+func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID, params *FinalizeParams) (*models.BingoCard, error) {
 	// Get and verify card ownership
 	card, err := s.GetByID(ctx, cardID)
 	if err != nil {
@@ -480,16 +485,65 @@ func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID) (*
 		return nil, fmt.Errorf("card needs %d items, has %d", models.ItemsRequired, len(card.Items))
 	}
 
+	// Determine visibility setting
+	visibleToFriends := card.VisibleToFriends // Keep current value by default
+	if params != nil && params.VisibleToFriends != nil {
+		visibleToFriends = *params.VisibleToFriends
+	}
+
 	_, err = s.db.Exec(ctx,
-		"UPDATE bingo_cards SET is_finalized = true WHERE id = $1",
-		cardID,
+		"UPDATE bingo_cards SET is_finalized = true, visible_to_friends = $2 WHERE id = $1",
+		cardID, visibleToFriends,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("finalizing card: %w", err)
 	}
 
 	card.IsFinalized = true
+	card.VisibleToFriends = visibleToFriends
 	return card, nil
+}
+
+// UpdateVisibility updates the visibility of a card to friends
+func (s *CardService) UpdateVisibility(ctx context.Context, userID, cardID uuid.UUID, visibleToFriends bool) (*models.BingoCard, error) {
+	// Get and verify card ownership
+	card, err := s.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if card.UserID != userID {
+		return nil, ErrNotCardOwner
+	}
+
+	_, err = s.db.Exec(ctx,
+		"UPDATE bingo_cards SET visible_to_friends = $2, updated_at = NOW() WHERE id = $1",
+		cardID, visibleToFriends,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("updating visibility: %w", err)
+	}
+
+	card.VisibleToFriends = visibleToFriends
+	return card, nil
+}
+
+// BulkUpdateVisibility updates the visibility of multiple cards owned by the user
+// Returns the count of cards updated (cards not owned by user are silently skipped)
+func (s *CardService) BulkUpdateVisibility(ctx context.Context, userID uuid.UUID, cardIDs []uuid.UUID, visibleToFriends bool) (int, error) {
+	if len(cardIDs) == 0 {
+		return 0, nil
+	}
+
+	result, err := s.db.Exec(ctx,
+		`UPDATE bingo_cards SET visible_to_friends = $1, updated_at = NOW()
+		 WHERE id = ANY($2) AND user_id = $3`,
+		visibleToFriends, cardIDs, userID,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("bulk updating visibility: %w", err)
+	}
+
+	return int(result.RowsAffected()), nil
 }
 
 func (s *CardService) CompleteItem(ctx context.Context, userID, cardID uuid.UUID, position int, params models.CompleteItemParams) (*models.BingoItem, error) {
@@ -669,7 +723,7 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	currentYear := time.Now().Year()
 
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 		 FROM bingo_cards
 		 WHERE user_id = $1 AND year < $2 AND is_finalized = true
 		 ORDER BY year DESC, created_at DESC`,
@@ -683,7 +737,7 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)
@@ -833,19 +887,19 @@ func (s *CardService) CheckForConflict(ctx context.Context, userID uuid.UUID, ye
 
 	if title != nil && *title != "" {
 		// Check for card with this specific title
-		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3`
 		args = []interface{}{userID, year, *title}
 	} else {
 		// Check for any card with null title (default card)
-		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at
+		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at
 			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title IS NULL`
 		args = []interface{}{userID, year}
 	}
 
 	err := s.db.QueryRow(ctx, query, args...).Scan(
 		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
-		&card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt,
+		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
@@ -899,14 +953,20 @@ func (s *CardService) Import(ctx context.Context, params models.ImportCardParams
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	// Determine visibility (default to true if not specified)
+	visibleToFriends := true
+	if params.VisibleToFriends != nil {
+		visibleToFriends = *params.VisibleToFriends
+	}
+
 	// Create the card
 	card := &models.BingoCard{}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO bingo_cards (user_id, year, category, title, is_finalized)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, user_id, year, category, title, is_active, is_finalized, created_at, updated_at`,
-		params.UserID, params.Year, params.Category, params.Title, params.Finalize,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.CreatedAt, &card.UpdatedAt)
+		`INSERT INTO bingo_cards (user_id, year, category, title, is_finalized, visible_to_friends)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, created_at, updated_at`,
+		params.UserID, params.Year, params.Category, params.Title, params.Finalize, visibleToFriends,
+	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.CreatedAt, &card.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("creating card: %w", err)
 	}

@@ -315,10 +315,10 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find the active/current year finalized card
+	// Find the active/current year finalized card that is visible to friends
 	var activeCard *models.BingoCard
 	for _, card := range cards {
-		if card.IsFinalized {
+		if card.IsFinalized && card.VisibleToFriends {
 			if activeCard == nil || card.Year > activeCard.Year {
 				activeCard = card
 			}
@@ -326,7 +326,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if activeCard == nil {
-		writeJSON(w, http.StatusOK, FriendCardResponse{Message: "Friend has no finalized cards"})
+		writeJSON(w, http.StatusOK, FriendCardResponse{Message: "Friend has no visible cards"})
 		return
 	}
 
@@ -393,10 +393,10 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Filter to only finalized cards, sorted by year descending
+	// Filter to only finalized cards that are visible to friends
 	var finalizedCards []*models.BingoCard
 	for _, card := range cards {
-		if card.IsFinalized {
+		if card.IsFinalized && card.VisibleToFriends {
 			finalizedCards = append(finalizedCards, card)
 		}
 	}

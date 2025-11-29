@@ -937,6 +937,8 @@ const App = {
     const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
     const displayName = this.getCardDisplayName(card);
     const categoryBadge = this.getCategoryBadge(card);
+    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
+    const visibilityTitle = card.visible_to_friends ? 'Visible to friends' : 'Private';
 
     return `
       <div class="card" style="margin-bottom: 1rem;">
@@ -954,6 +956,9 @@ const App = {
             </p>
           </a>
           <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <button class="visibility-toggle visibility-toggle--dashboard" onclick="event.stopPropagation(); event.preventDefault(); App.toggleCardVisibility('${card.id}', ${!card.visible_to_friends})" title="${visibilityTitle}" aria-label="${visibilityTitle}">
+              <i class="fas fa-${visibilityIcon}"></i>
+            </button>
             <a href="#card/${card.id}" class="btn btn-ghost btn-sm">
               ${card.is_finalized ? 'View' : 'Continue'}
             </a>
@@ -1270,7 +1275,12 @@ const App = {
           ${categoryBadge}
           <button class="btn btn-ghost btn-sm" onclick="App.${isAnon ? 'showEditAnonymousCardMetaModal' : 'showEditCardMetaModal'}()" title="Edit card name">✏️</button>
         </div>
-        <div></div>
+        ${!isAnon ? `
+          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})">
+            <i class="fas fa-${this.currentCard.visible_to_friends ? 'eye' : 'eye-slash'}"></i>
+            <span>${this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private'}</span>
+          </button>
+        ` : '<div></div>'}
       </div>
 
       <div class="progress-bar">
@@ -1438,6 +1448,9 @@ const App = {
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
 
+    const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
+    const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private';
+
     container.innerHTML = `
       <div class="finalized-card-view">
         <div class="finalized-card-header">
@@ -1446,9 +1459,14 @@ const App = {
             <h2 style="margin: 0;">${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
             ${categoryBadge}
-            <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
           </div>
-          <div></div>
+          <div class="card-header-actions">
+            <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
+              <i class="fas fa-${visibilityIcon}"></i>
+              <span>${visibilityLabel}</span>
+            </button>
+          </div>
         </div>
 
         <div class="bingo-container bingo-container--finalized">
@@ -2046,6 +2064,18 @@ const App = {
     }
   },
 
+  async toggleCardVisibility(cardId, visibleToFriends) {
+    try {
+      const response = await API.cards.updateVisibility(cardId, visibleToFriends);
+      this.currentCard = response.card;
+      this.toast(visibleToFriends ? 'Card is now visible to friends' : 'Card is now private', 'success');
+      // Re-render to update the UI
+      this.route();
+    } catch (error) {
+      this.toast(error.message || 'Failed to update visibility', 'error');
+    }
+  },
+
   async finalizeCard() {
     // For anonymous users, show the auth modal instead of finalizing directly
     if (this.isAnonymousMode) {
@@ -2053,12 +2083,39 @@ const App = {
       return;
     }
 
-    if (!confirm('Are you sure you want to finalize this card? You won\'t be able to change the items after this.')) {
-      return;
-    }
+    this.showFinalizeConfirmModal();
+  },
+
+  showFinalizeConfirmModal() {
+    this.openModal('Finalize Card', `
+      <div class="finalize-confirm-modal">
+        <p style="margin-bottom: 1.5rem;">
+          Are you sure you want to finalize this card? You won't be able to change the items after this.
+        </p>
+        <div style="margin-bottom: 1.5rem;">
+          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+            <input type="checkbox" id="finalize-visibility" checked>
+            <span>Visible to friends</span>
+          </label>
+          <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.875rem;">
+            If unchecked, friends won't be able to see this card.
+          </p>
+        </div>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="App.confirmFinalize()">Finalize Card</button>
+        </div>
+      </div>
+    `);
+  },
+
+  async confirmFinalize() {
+    const visibilityCheckbox = document.getElementById('finalize-visibility');
+    const visibleToFriends = visibilityCheckbox ? visibilityCheckbox.checked : true;
 
     try {
-      const response = await API.cards.finalize(this.currentCard.id);
+      this.closeModal();
+      const response = await API.cards.finalize(this.currentCard.id, visibleToFriends);
       this.currentCard = response.card;
       this.renderFinalizedCard(document.getElementById('main-container'));
       this.toast('Card finalized! Good luck with your goals! 🎉', 'success');
@@ -3023,7 +3080,11 @@ const App = {
   },
 
   // Archive page
+  selectedArchiveCards: [],
+
   async renderArchive(container) {
+    this.selectedArchiveCards = [];
+
     container.innerHTML = `
       <div class="archive-page">
         <div class="archive-header">
@@ -3040,6 +3101,7 @@ const App = {
     try {
       const response = await API.cards.getArchive();
       const cards = response.cards || [];
+      this.archiveCards = cards;
 
       const listEl = document.getElementById('archive-list');
       if (cards.length === 0) {
@@ -3052,7 +3114,26 @@ const App = {
           </div>
         `;
       } else {
-        listEl.innerHTML = cards.map(card => this.renderArchiveCardPreview(card)).join('');
+        listEl.innerHTML = `
+          <div class="archive-bulk-controls">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <button class="btn btn-ghost btn-sm" onclick="App.selectAllArchiveCards()">Select All</button>
+              <button class="btn btn-ghost btn-sm" onclick="App.deselectAllArchiveCards()">Deselect All</button>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span id="selected-count" class="text-muted" style="font-size: 0.875rem;">0 selected</span>
+              <button class="btn btn-secondary btn-sm" onclick="App.bulkSetVisibility(true)" title="Make visible to friends">
+                <i class="fas fa-eye"></i> Make Visible
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="App.bulkSetVisibility(false)" title="Make private">
+                <i class="fas fa-eye-slash"></i> Make Private
+              </button>
+            </div>
+          </div>
+          <div class="archive-cards-list">
+            ${cards.map(card => this.renderArchiveCardPreview(card)).join('')}
+          </div>
+        `;
       }
     } catch (error) {
       this.toast(error.message, 'error');
@@ -3064,25 +3145,80 @@ const App = {
     const progress = Math.round((completedCount / 24) * 100);
     const displayName = this.getCardDisplayName(card);
     const categoryBadge = this.getCategoryBadge(card);
+    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
+    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
 
     return `
-      <a href="#archive-card/${card.id}" class="card archive-card-preview" style="display: block; margin-bottom: 1rem; text-decoration: none;">
+      <div class="card archive-card-preview" style="margin-bottom: 1rem;">
         <div class="archive-card-preview-header">
-          <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
-              <h3 style="margin: 0;">${displayName}</h3>
-              <span class="year-badge">${card.year}</span>
-              ${categoryBadge}
-            </div>
-            <p class="text-muted" style="margin: 0;">${completedCount}/24 completed</p>
+          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+            <label class="archive-checkbox-label" onclick="event.stopPropagation();">
+              <input type="checkbox" class="archive-card-checkbox" data-card-id="${card.id}" onchange="App.updateArchiveSelection()">
+            </label>
+            <a href="#archive-card/${card.id}" style="text-decoration: none; flex: 1;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
+                <h3 style="margin: 0;">${displayName}</h3>
+                <span class="year-badge">${card.year}</span>
+                ${categoryBadge}
+              </div>
+              <p class="text-muted" style="margin: 0;">${completedCount}/24 completed</p>
+            </a>
           </div>
-          <div class="archive-badge">Archived</div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="visibility-badge visibility-badge--${card.visible_to_friends ? 'visible' : 'private'}" title="${visibilityLabel}">
+              <i class="fas fa-${visibilityIcon}"></i> ${visibilityLabel}
+            </span>
+            <div class="archive-badge">Archived</div>
+          </div>
         </div>
-        <div class="progress-bar mt-md">
-          <div class="progress-fill" style="width: ${progress}%"></div>
-        </div>
-      </a>
+        <a href="#archive-card/${card.id}" style="text-decoration: none; display: block;">
+          <div class="progress-bar mt-md">
+            <div class="progress-fill" style="width: ${progress}%"></div>
+          </div>
+        </a>
+      </div>
     `;
+  },
+
+  updateArchiveSelection() {
+    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
+    this.selectedArchiveCards = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .map(cb => cb.dataset.cardId);
+
+    const countEl = document.getElementById('selected-count');
+    if (countEl) {
+      countEl.textContent = `${this.selectedArchiveCards.length} selected`;
+    }
+  },
+
+  selectAllArchiveCards() {
+    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
+    checkboxes.forEach(cb => cb.checked = true);
+    this.updateArchiveSelection();
+  },
+
+  deselectAllArchiveCards() {
+    const checkboxes = document.querySelectorAll('.archive-card-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    this.updateArchiveSelection();
+  },
+
+  async bulkSetVisibility(visibleToFriends) {
+    if (this.selectedArchiveCards.length === 0) {
+      this.toast('No cards selected', 'warning');
+      return;
+    }
+
+    try {
+      const response = await API.cards.bulkUpdateVisibility(this.selectedArchiveCards, visibleToFriends);
+      const count = response.updated_count || this.selectedArchiveCards.length;
+      this.toast(`${count} card${count !== 1 ? 's' : ''} updated`, 'success');
+      // Refresh the archive list
+      this.renderArchive(document.getElementById('main-container'));
+    } catch (error) {
+      this.toast(error.message || 'Failed to update visibility', 'error');
+    }
   },
 
   async renderArchiveCard(container, cardId) {
@@ -3117,6 +3253,8 @@ const App = {
     const stats = this.currentStats;
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
+    const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
+    const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible' : 'Private';
 
     container.innerHTML = `
       <div class="archive-card-view">
@@ -3127,7 +3265,13 @@ const App = {
             <span class="year-badge">${this.currentCard.year}</span>
             ${categoryBadge}
           </div>
-          <div class="archive-badge">Archived</div>
+          <div class="card-header-actions">
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
+              <i class="fas fa-${visibilityIcon}"></i>
+              <span>${visibilityLabel}</span>
+            </button>
+            <div class="archive-badge">Archived</div>
+          </div>
         </div>
 
         <div class="archive-stats-grid">

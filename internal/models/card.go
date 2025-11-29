@@ -15,16 +15,17 @@ const (
 )
 
 type BingoCard struct {
-	ID          uuid.UUID   `json:"id"`
-	UserID      uuid.UUID   `json:"user_id"`
-	Year        int         `json:"year"`
-	Category    *string     `json:"category,omitempty"`
-	Title       *string     `json:"title,omitempty"`
-	IsActive    bool        `json:"is_active"`
-	IsFinalized bool        `json:"is_finalized"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	Items       []BingoItem `json:"items,omitempty"`
+	ID               uuid.UUID   `json:"id"`
+	UserID           uuid.UUID   `json:"user_id"`
+	Year             int         `json:"year"`
+	Category         *string     `json:"category,omitempty"`
+	Title            *string     `json:"title,omitempty"`
+	IsActive         bool        `json:"is_active"`
+	IsFinalized      bool        `json:"is_finalized"`
+	VisibleToFriends bool        `json:"visible_to_friends"`
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
+	Items            []BingoItem `json:"items,omitempty"`
 }
 
 // DisplayName returns a human-readable name for the card
@@ -123,12 +124,13 @@ type CardStats struct {
 
 // ImportCardParams contains parameters for importing an anonymous card
 type ImportCardParams struct {
-	UserID   uuid.UUID
-	Year     int
-	Title    *string
-	Category *string
-	Items    []ImportItem
-	Finalize bool
+	UserID           uuid.UUID
+	Year             int
+	Title            *string
+	Category         *string
+	Items            []ImportItem
+	Finalize         bool
+	VisibleToFriends *bool // Optional; defaults to true if nil
 }
 
 // ImportItem represents a single item to import

@@ -134,6 +134,8 @@ Tests use only Node.js built-in modules (no npm dependencies).
 - `web/static/js/app.js` - SPA router and all UI logic under global `App` object
 - `web/static/css/styles.css` - Design system with CSS variables, uses OpenDyslexic font for bingo cells
 
+**External Dependencies**: FontAwesome 6.5 loaded from cdnjs.cloudflare.com for icons (eye, eye-slash for visibility toggles). CSP allows cdnjs.cloudflare.com for script-src, style-src, and font-src.
+
 ### Frontend Patterns
 
 **App Object**: All frontend logic lives in global `App` object. Key methods:
@@ -159,6 +161,8 @@ Tests use only Node.js built-in modules (no npm dependencies).
 **Session Management**: Sessions stored in Redis first with PostgreSQL fallback. Token stored in HttpOnly cookie, hash stored in database.
 
 **Privacy Model**: Friend search is opt-in. Users must enable "searchable" in their profile to appear in friend search results. Search only matches username (not email). Registration includes a checkbox for opting into discoverability.
+
+**Card Visibility**: Cards have a `visible_to_friends` flag (default: true). Users can set individual cards as private or visible to friends. Private cards are completely hidden from friend views (no indication they exist). Visibility can be toggled on dashboard, card view, archive, and during finalization. Bulk visibility controls available on archive page.
 
 **Card State Machine**: Cards start unfinalized (can add/remove/shuffle items), then finalize (locks layout, enables completion marking).
 
@@ -188,7 +192,7 @@ Migrations in `migrations/` directory using numeric prefix ordering.
 Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`, `POST /api/auth/password`, `PUT /api/auth/searchable`
 Email Auth: `POST /api/auth/{verify-email,resend-verification,magic-link,forgot-password,reset-password}`, `GET /api/auth/magic-link/verify`
 
-Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`
+Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`, `PUT /api/cards/{id}/visibility`, `PUT /api/cards/visibility/bulk`
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 
@@ -227,7 +231,7 @@ Email: `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `APP_BASE_URL`
 
 ## Implementation Status
 
-Phases 1-9 complete, ongoing enhancements:
+Phases 1-10 complete, ongoing enhancements:
 - Phase 1: Foundation (Go project, PostgreSQL, Redis, migrations, Podman)
 - Phase 2: Authentication (register, login, sessions, CSRF)
 - Phase 2.5: Email Authentication (email verification, magic link login, password reset, profile page)
@@ -239,6 +243,7 @@ Phases 1-9 complete, ongoing enhancements:
 - Phase 7: Archive & History (past years cards, completion statistics, bingo counts)
 - Phase 8: Polish & Production Readiness (security headers, compression, caching, logging, error pages, accessibility)
 - Phase 9: CI/CD (GitHub Actions, container builds, security scanning)
+- Phase 10: Card Visibility (per-card privacy controls, bulk visibility management)
 
 See `plans/bingo.md` for the full implementation plan and `plans/auth.md` for email authentication details.
 
@@ -282,7 +287,7 @@ podman compose up
 
 ## Security Features (Phase 8)
 
-- **Security Headers**: CSP (includes cdnjs.cloudflare.com for JSZip), X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS (in secure mode)
+- **Security Headers**: CSP (includes cdnjs.cloudflare.com for JSZip and FontAwesome in script-src, style-src, font-src), X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy, HSTS (in secure mode)
 - **Compression**: Gzip compression for responses (with pool for efficiency)
 - **Cache Control**: Content-hashed assets in `/static/dist/` get immutable cache (1 year); non-hashed assets use short cache with revalidation
 - **Structured Logging**: JSON-formatted request logs with timing, status, and context
