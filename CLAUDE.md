@@ -350,6 +350,14 @@ Phases 1-10 complete, ongoing enhancements:
 
 See `plans/bingo.md` for the full implementation plan and `plans/auth.md` for email authentication details.
 
+## Pending Plans
+
+The following plans are ready for implementation:
+
+- **`plans/tracing.md`** - OpenTelemetry tracing with Honeycomb (free tier). Adds distributed tracing, service-level instrumentation, database query tracing, and log correlation. 5 phases, can be done incrementally.
+
+- **`plans/increase_test_coverage_via_interfaces.md`** - Interface-based dependency injection to enable comprehensive unit testing. Introduces interfaces between handlers and services, enabling mock injection. Target: 70%+ handler coverage (currently ~31%).
+
 ## Help & Legal Pages
 
 Navbar contains FAQ link (`#faq`), footer contains About and legal pages (`#about`, `#terms`, `#privacy`, `#security`):
