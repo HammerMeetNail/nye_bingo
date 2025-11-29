@@ -39,10 +39,11 @@ func (s *FriendService) SearchUsers(ctx context.Context, currentUserID uuid.UUID
 	searchPattern := "%" + strings.ToLower(query) + "%"
 
 	rows, err := s.db.Query(ctx,
-		`SELECT id, display_name, email FROM users
+		`SELECT id, username FROM users
 		 WHERE id != $1
-		   AND (LOWER(display_name) LIKE $2 OR LOWER(email) LIKE $2)
-		 ORDER BY display_name
+		   AND LOWER(username) LIKE $2
+		   AND searchable = true
+		 ORDER BY username
 		 LIMIT 20`,
 		currentUserID, searchPattern,
 	)
@@ -54,7 +55,7 @@ func (s *FriendService) SearchUsers(ctx context.Context, currentUserID uuid.UUID
 	var results []models.UserSearchResult
 	for rows.Next() {
 		var user models.UserSearchResult
-		if err := rows.Scan(&user.ID, &user.DisplayName, &user.Email); err != nil {
+		if err := rows.Scan(&user.ID, &user.Username); err != nil {
 			return nil, fmt.Errorf("scanning user: %w", err)
 		}
 		results = append(results, user)
@@ -211,13 +212,13 @@ func (s *FriendService) CancelRequest(ctx context.Context, userID, friendshipID 
 func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]models.FriendWithUser, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at,
-		        CASE WHEN f.user_id = $1 THEN u2.display_name ELSE u1.display_name END,
+		        CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END,
 		        CASE WHEN f.user_id = $1 THEN u2.email ELSE u1.email END
 		 FROM friendships f
 		 JOIN users u1 ON f.user_id = u1.id
 		 JOIN users u2 ON f.friend_id = u2.id
 		 WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
-		 ORDER BY CASE WHEN f.user_id = $1 THEN u2.display_name ELSE u1.display_name END`,
+		 ORDER BY CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END`,
 		userID,
 	)
 	if err != nil {
@@ -228,7 +229,7 @@ func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]mo
 	var friends []models.FriendWithUser
 	for rows.Next() {
 		var f models.FriendWithUser
-		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendDisplayName, &f.FriendEmail); err != nil {
+		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendUsername, &f.FriendEmail); err != nil {
 			return nil, fmt.Errorf("scanning friend: %w", err)
 		}
 		friends = append(friends, f)
@@ -243,7 +244,7 @@ func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]mo
 
 func (s *FriendService) ListPendingRequests(ctx context.Context, userID uuid.UUID) ([]models.FriendRequest, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.display_name, u.email
+		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.username, u.email
 		 FROM friendships f
 		 JOIN users u ON f.user_id = u.id
 		 WHERE f.friend_id = $1 AND f.status = 'pending'
@@ -258,7 +259,7 @@ func (s *FriendService) ListPendingRequests(ctx context.Context, userID uuid.UUI
 	var requests []models.FriendRequest
 	for rows.Next() {
 		var r models.FriendRequest
-		if err := rows.Scan(&r.ID, &r.UserID, &r.FriendID, &r.Status, &r.CreatedAt, &r.RequesterDisplayName, &r.RequesterEmail); err != nil {
+		if err := rows.Scan(&r.ID, &r.UserID, &r.FriendID, &r.Status, &r.CreatedAt, &r.RequesterUsername, &r.RequesterEmail); err != nil {
 			return nil, fmt.Errorf("scanning request: %w", err)
 		}
 		requests = append(requests, r)
@@ -273,7 +274,7 @@ func (s *FriendService) ListPendingRequests(ctx context.Context, userID uuid.UUI
 
 func (s *FriendService) ListSentRequests(ctx context.Context, userID uuid.UUID) ([]models.FriendWithUser, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.display_name, u.email
+		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.username, u.email
 		 FROM friendships f
 		 JOIN users u ON f.friend_id = u.id
 		 WHERE f.user_id = $1 AND f.status = 'pending'
@@ -288,7 +289,7 @@ func (s *FriendService) ListSentRequests(ctx context.Context, userID uuid.UUID) 
 	var requests []models.FriendWithUser
 	for rows.Next() {
 		var f models.FriendWithUser
-		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendDisplayName, &f.FriendEmail); err != nil {
+		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendUsername, &f.FriendEmail); err != nil {
 			return nil, fmt.Errorf("scanning request: %w", err)
 		}
 		requests = append(requests, f)

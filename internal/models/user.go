@@ -10,9 +10,10 @@ type User struct {
 	ID              uuid.UUID  `json:"id"`
 	Email           string     `json:"email"`
 	PasswordHash    string     `json:"-"`
-	DisplayName     string     `json:"display_name"`
+	Username        string     `json:"username"`
 	EmailVerified   bool       `json:"email_verified"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
+	Searchable      bool       `json:"searchable"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -20,5 +21,6 @@ type User struct {
 type CreateUserParams struct {
 	Email        string
 	PasswordHash string
-	DisplayName  string
+	Username     string
+	Searchable   bool
 }

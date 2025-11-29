@@ -1719,6 +1719,29 @@ a:hover {
   gap: var(--spacing-md);
 }
 
+.profile-privacy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.profile-privacy small {
+  margin-left: 1.75rem;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  cursor: pointer;
+}
+
 .badge {
   display: inline-block;
   padding: 0.25em 0.6em;

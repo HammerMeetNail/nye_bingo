@@ -52,7 +52,7 @@ type FriendCardsResponse struct {
 }
 
 type FriendOwner struct {
-	DisplayName string `json:"display_name"`
+	Username string `json:"username"`
 }
 
 func (h *FriendHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -330,7 +330,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get friend's display name from the friendship list
+	// Get friend's username from the friendship list
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("Error getting friends list: %v", err)
@@ -345,14 +345,14 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 			friendID = f.UserID
 		}
 		if friendID == friendUserID {
-			ownerName = f.FriendDisplayName
+			ownerName = f.FriendUsername
 			break
 		}
 	}
 
 	writeJSON(w, http.StatusOK, FriendCardResponse{
 		Card:  activeCard,
-		Owner: &FriendOwner{DisplayName: ownerName},
+		Owner: &FriendOwner{Username: ownerName},
 	})
 }
 
@@ -401,7 +401,7 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get friend's display name
+	// Get friend's username
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("Error getting friends list: %v", err)
@@ -416,14 +416,14 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 			friendID = f.UserID
 		}
 		if friendID == friendUserID {
-			ownerName = f.FriendDisplayName
+			ownerName = f.FriendUsername
 			break
 		}
 	}
 
 	writeJSON(w, http.StatusOK, FriendCardsResponse{
 		Cards: finalizedCards,
-		Owner: &FriendOwner{DisplayName: ownerName},
+		Owner: &FriendOwner{Username: ownerName},
 	})
 }
 

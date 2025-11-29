@@ -80,7 +80,7 @@ const App = {
         <a href="#dashboard" class="nav-link">My Cards</a>
         <a href="#archive" class="nav-link">Archive</a>
         <a href="#friends" class="nav-link">Friends</a>
-        <a href="#profile" class="nav-link">Hi, ${this.escapeHtml(this.user.display_name)}</a>
+        <a href="#profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
         <button class="btn btn-ghost" onclick="App.logout()">Logout</button>
       `;
     } else {
@@ -496,8 +496,8 @@ const App = {
           </div>
           <form id="register-form">
             <div class="form-group">
-              <label class="form-label" for="display-name">Display Name</label>
-              <input type="text" id="display-name" class="form-input" required minlength="2" maxlength="100">
+              <label class="form-label" for="username">Username</label>
+              <input type="text" id="username" class="form-input" required minlength="2" maxlength="100">
             </div>
             <div class="form-group">
               <label class="form-label" for="email">Email</label>
@@ -507,6 +507,13 @@ const App = {
               <label class="form-label" for="password">Password</label>
               <input type="password" id="password" class="form-input" required minlength="8" autocomplete="new-password">
               <small class="text-muted">At least 8 characters with uppercase, lowercase, and number</small>
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="searchable">
+                <span>Allow others to find me by username</span>
+              </label>
+              <small class="text-muted">You can change this later in your account settings</small>
             </div>
             <div id="register-error" class="form-error hidden"></div>
             <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
@@ -522,13 +529,14 @@ const App = {
 
     document.getElementById('register-form').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const displayName = document.getElementById('display-name').value;
+      const username = document.getElementById('username').value;
       const email = document.getElementById('email').value;
       const password = document.getElementById('password').value;
+      const searchable = document.getElementById('searchable').checked;
       const errorEl = document.getElementById('register-error');
 
       try {
-        const response = await API.auth.register(email, password, displayName);
+        const response = await API.auth.register(email, password, username, searchable);
         this.user = response.user;
         this.setupNavigation();
         window.location.hash = '#create';
@@ -2088,8 +2096,8 @@ const App = {
     modalBody.innerHTML = `
       <form id="finalize-register-form" onsubmit="App.handleFinalizeRegister(event)">
         <div class="form-group">
-          <label class="form-label" for="finalize-display-name">Display Name</label>
-          <input type="text" id="finalize-display-name" class="form-input" required minlength="2" maxlength="100">
+          <label class="form-label" for="finalize-username">Username</label>
+          <input type="text" id="finalize-username" class="form-input" required minlength="2" maxlength="100">
         </div>
         <div class="form-group">
           <label class="form-label" for="finalize-email">Email</label>
@@ -2099,6 +2107,13 @@ const App = {
           <label class="form-label" for="finalize-password">Password</label>
           <input type="password" id="finalize-password" class="form-input" required minlength="8" autocomplete="new-password">
           <small class="text-muted">At least 8 characters with uppercase, lowercase, and number</small>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="finalize-searchable">
+            <span>Allow others to find me by username</span>
+          </label>
+          <small class="text-muted">You can change this later in your account settings</small>
         </div>
         <div id="finalize-register-error" class="form-error hidden"></div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
@@ -2117,14 +2132,15 @@ const App = {
   async handleFinalizeRegister(event) {
     event.preventDefault();
 
-    const displayName = document.getElementById('finalize-display-name').value;
+    const username = document.getElementById('finalize-username').value;
     const email = document.getElementById('finalize-email').value;
     const password = document.getElementById('finalize-password').value;
+    const searchable = document.getElementById('finalize-searchable').checked;
     const errorEl = document.getElementById('finalize-register-error');
 
     try {
       // Register the user
-      const response = await API.auth.register(email, password, displayName);
+      const response = await API.auth.register(email, password, username, searchable);
       this.user = response.user;
       this.setupNavigation();
 
@@ -2467,8 +2483,7 @@ const App = {
         resultsEl.innerHTML = users.map(user => `
           <div class="search-result-item">
             <div>
-              <strong>${this.escapeHtml(user.display_name)}</strong>
-              <span class="text-muted">${this.escapeHtml(user.email)}</span>
+              <strong>${this.escapeHtml(user.username)}</strong>
             </div>
             <button class="btn btn-primary btn-sm" onclick="App.sendFriendRequest('${user.id}')">
               Add Friend
@@ -2506,7 +2521,7 @@ const App = {
         requestsListEl.innerHTML = requests.map(req => `
           <div class="friend-item">
             <div>
-              <strong>${this.escapeHtml(req.requester_display_name)}</strong>
+              <strong>${this.escapeHtml(req.requester_username)}</strong>
               <span class="text-muted">${this.escapeHtml(req.requester_email)}</span>
             </div>
             <div class="friend-actions">
@@ -2527,7 +2542,7 @@ const App = {
         sentListEl.innerHTML = sent.map(req => `
           <div class="friend-item">
             <div>
-              <strong>${this.escapeHtml(req.friend_display_name)}</strong>
+              <strong>${this.escapeHtml(req.friend_username)}</strong>
               <span class="text-muted">${this.escapeHtml(req.friend_email)}</span>
             </div>
             <button class="btn btn-ghost btn-sm" onclick="App.cancelRequest('${req.id}')">Cancel</button>
@@ -2543,11 +2558,11 @@ const App = {
         friendsListEl.innerHTML = friends.map(friend => `
           <div class="friend-item">
             <div>
-              <strong>${this.escapeHtml(friend.friend_display_name)}</strong>
+              <strong>${this.escapeHtml(friend.friend_username)}</strong>
             </div>
             <div class="friend-actions">
               <a href="#friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-              <button class="btn btn-ghost btn-sm" onclick="App.removeFriend('${friend.id}', '${this.escapeHtml(friend.friend_display_name)}')">Remove</button>
+              <button class="btn btn-ghost btn-sm" onclick="App.removeFriend('${friend.id}', '${this.escapeHtml(friend.friend_username)}')">Remove</button>
             </div>
           </div>
         `).join('');
@@ -2678,7 +2693,7 @@ const App = {
           <a href="#friends" class="btn btn-ghost">&larr; Friends</a>
           <div class="friend-card-title">
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-              <h2 style="margin: 0;">${this.escapeHtml(this.friendCardOwner?.display_name || 'Friend')}'s ${displayName}</h2>
+              <h2 style="margin: 0;">${this.escapeHtml(this.friendCardOwner?.username || 'Friend')}'s ${displayName}</h2>
               <span class="year-badge">${this.currentCard.year}</span>
               ${categoryBadge}
               ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
@@ -2900,8 +2915,8 @@ const App = {
             <h3>Profile Information</h3>
             <div class="profile-info-grid">
               <div class="profile-info-item">
-                <label>Display Name</label>
-                <span>${this.escapeHtml(this.user.display_name)}</span>
+                <label>Username</label>
+                <span>${this.escapeHtml(this.user.username)}</span>
               </div>
               <div class="profile-info-item">
                 <label>Email</label>
@@ -2911,6 +2926,17 @@ const App = {
                 <label>Member Since</label>
                 <span>${new Date(this.user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
+            </div>
+          </div>
+
+          <div class="card profile-section">
+            <h3>Privacy</h3>
+            <div class="profile-privacy">
+              <label class="checkbox-label">
+                <input type="checkbox" id="searchable-toggle" ${this.user.searchable ? 'checked' : ''}>
+                <span>Allow others to find me by username</span>
+              </label>
+              <small class="text-muted">When disabled, you won't appear in friend search results</small>
             </div>
           </div>
 
@@ -2951,6 +2977,19 @@ const App = {
   setupProfileEvents() {
     const form = document.getElementById('change-password-form');
     const errorEl = document.getElementById('password-error');
+
+    // Privacy toggle
+    const searchableToggle = document.getElementById('searchable-toggle');
+    searchableToggle.addEventListener('change', async (e) => {
+      try {
+        const response = await API.auth.updateSearchable(e.target.checked);
+        this.user = response.user;
+        this.toast(e.target.checked ? 'You are now searchable' : 'You are now hidden from search', 'success');
+      } catch (error) {
+        e.target.checked = !e.target.checked; // Revert on error
+        this.toast(error.message, 'error');
+      }
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

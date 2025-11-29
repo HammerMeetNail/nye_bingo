@@ -124,6 +124,7 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/magic-link/verify", authHandler.MagicLinkVerify)
 	mux.HandleFunc("POST /api/auth/forgot-password", authHandler.ForgotPassword)
 	mux.HandleFunc("POST /api/auth/reset-password", authHandler.ResetPassword)
+	mux.HandleFunc("PUT /api/auth/searchable", authHandler.UpdateSearchable)
 
 	// Card endpoints
 	mux.HandleFunc("POST /api/cards", cardHandler.Create)

@@ -58,9 +58,9 @@ func TestAuthMiddleware_RequireAuth_WithUser(t *testing.T) {
 	// Create a request with user in context
 	req := httptest.NewRequest(http.MethodGet, "/api/protected", nil)
 	ctx := handlers.SetUserInContext(req.Context(), &models.User{
-		ID:          uuid.New(),
-		Email:       "test@example.com",
-		DisplayName: "Test User",
+		ID:       uuid.New(),
+		Email:    "test@example.com",
+		Username: "Test User",
 	})
 	req = req.WithContext(ctx)
 

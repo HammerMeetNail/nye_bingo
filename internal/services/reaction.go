@@ -106,7 +106,7 @@ func (s *ReactionService) RemoveReaction(ctx context.Context, userID, itemID uui
 
 func (s *ReactionService) GetReactionsForItem(ctx context.Context, itemID uuid.UUID) ([]models.ReactionWithUser, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.display_name
+		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.username
 		 FROM reactions r
 		 JOIN users u ON r.user_id = u.id
 		 WHERE r.item_id = $1
@@ -121,7 +121,7 @@ func (s *ReactionService) GetReactionsForItem(ctx context.Context, itemID uuid.U
 	var reactions []models.ReactionWithUser
 	for rows.Next() {
 		var r models.ReactionWithUser
-		if err := rows.Scan(&r.ID, &r.ItemID, &r.UserID, &r.Emoji, &r.CreatedAt, &r.UserDisplayName); err != nil {
+		if err := rows.Scan(&r.ID, &r.ItemID, &r.UserID, &r.Emoji, &r.CreatedAt, &r.UserUsername); err != nil {
 			return nil, fmt.Errorf("scanning reaction: %w", err)
 		}
 		reactions = append(reactions, r)
@@ -166,7 +166,7 @@ func (s *ReactionService) GetReactionSummaryForItem(ctx context.Context, itemID 
 
 func (s *ReactionService) GetReactionsForCard(ctx context.Context, cardID uuid.UUID) (map[uuid.UUID][]models.ReactionWithUser, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.display_name
+		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.username
 		 FROM reactions r
 		 JOIN users u ON r.user_id = u.id
 		 JOIN bingo_items bi ON r.item_id = bi.id
@@ -182,7 +182,7 @@ func (s *ReactionService) GetReactionsForCard(ctx context.Context, cardID uuid.U
 	reactions := make(map[uuid.UUID][]models.ReactionWithUser)
 	for rows.Next() {
 		var r models.ReactionWithUser
-		if err := rows.Scan(&r.ID, &r.ItemID, &r.UserID, &r.Emoji, &r.CreatedAt, &r.UserDisplayName); err != nil {
+		if err := rows.Scan(&r.ID, &r.ItemID, &r.UserID, &r.Emoji, &r.CreatedAt, &r.UserUsername); err != nil {
 			return nil, fmt.Errorf("scanning reaction: %w", err)
 		}
 		reactions[r.ItemID] = append(reactions[r.ItemID], r)

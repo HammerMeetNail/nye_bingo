@@ -110,11 +110,12 @@ const API = {
 
   // Auth endpoints
   auth: {
-    async register(email, password, displayName) {
+    async register(email, password, username, searchable = false) {
       return API.request('POST', '/api/auth/register', {
         email,
         password,
-        display_name: displayName,
+        username,
+        searchable,
       });
     },
 
@@ -159,6 +160,10 @@ const API = {
 
     async resetPassword(token, password) {
       return API.request('POST', '/api/auth/reset-password', { token, password });
+    },
+
+    async updateSearchable(searchable) {
+      return API.request('PUT', '/api/auth/searchable', { searchable });
     },
   },
 

@@ -13,8 +13,9 @@ import (
 )
 
 var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrEmailAlreadyExists = errors.New("email already exists")
+	ErrUserNotFound          = errors.New("user not found")
+	ErrEmailAlreadyExists    = errors.New("email already exists")
+	ErrUsernameAlreadyExists = errors.New("username already taken")
 )
 
 type UserService struct {
@@ -36,13 +37,22 @@ func (s *UserService) Create(ctx context.Context, params models.CreateUserParams
 		return nil, ErrEmailAlreadyExists
 	}
 
+	// Check if username already exists (case-insensitive)
+	err = s.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1))", params.Username).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("checking username existence: %w", err)
+	}
+	if exists {
+		return nil, ErrUsernameAlreadyExists
+	}
+
 	user := &models.User{}
 	err = s.db.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, display_name, email_verified)
-		 VALUES ($1, $2, $3, false)
-		 RETURNING id, email, password_hash, display_name, email_verified, email_verified_at, created_at, updated_at`,
-		params.Email, params.PasswordHash, params.DisplayName,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.EmailVerified, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+		`INSERT INTO users (email, password_hash, username, email_verified, searchable)
+		 VALUES ($1, $2, $3, false, $4)
+		 RETURNING id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at`,
+		params.Email, params.PasswordHash, params.Username, params.Searchable,
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		return nil, fmt.Errorf("creating user: %w", err)
@@ -54,10 +64,10 @@ func (s *UserService) Create(ctx context.Context, params models.CreateUserParams
 func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, display_name, email_verified, email_verified_at, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at
 		 FROM users WHERE id = $1`,
 		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.EmailVerified, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
@@ -72,10 +82,10 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, 
 func (s *UserService) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, display_name, email_verified, email_verified_at, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at
 		 FROM users WHERE email = $1`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.EmailVerified, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
@@ -114,28 +124,18 @@ func (s *UserService) MarkEmailVerified(ctx context.Context, userID uuid.UUID) e
 	return nil
 }
 
-func (s *UserService) SearchByEmailOrName(ctx context.Context, query string, limit int) ([]*models.User, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT id, email, password_hash, display_name, email_verified, email_verified_at, created_at, updated_at
-		 FROM users
-		 WHERE (email ILIKE $1 OR display_name ILIKE $1)
-		   AND email_verified = true
-		 LIMIT $2`,
-		"%"+query+"%", limit,
+func (s *UserService) UpdateSearchable(ctx context.Context, userID uuid.UUID, searchable bool) error {
+	result, err := s.db.Exec(ctx,
+		`UPDATE users SET searchable = $1, updated_at = NOW() WHERE id = $2`,
+		searchable, userID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("searching users: %w", err)
-	}
-	defer rows.Close()
-
-	var users []*models.User
-	for rows.Next() {
-		user := &models.User{}
-		if err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.DisplayName, &user.EmailVerified, &user.EmailVerifiedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("scanning user: %w", err)
-		}
-		users = append(users, user)
+		return fmt.Errorf("updating searchable: %w", err)
 	}
 
-	return users, nil
+	if result.RowsAffected() == 0 {
+		return ErrUserNotFound
+	}
+
+	return nil
 }

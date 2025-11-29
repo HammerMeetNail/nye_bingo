@@ -18,7 +18,7 @@ type Reaction struct {
 
 type ReactionWithUser struct {
 	Reaction
-	UserDisplayName string `json:"user_display_name"`
+	UserUsername string `json:"user_username"`
 }
 
 type ReactionSummary struct {

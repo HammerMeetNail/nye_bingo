@@ -18,10 +18,11 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
 - **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo
 - **Social Features**: Add friends, view their cards, and react to their achievements with emojis
+- **Privacy Controls**: Opt-in discoverability - choose whether others can find you by username
 - **Card Archive**: View past years' cards with completion statistics and bingo counts
 - **Export to CSV**: Download your cards as CSV files in a ZIP archive for backup or analysis
 - **Email Authentication**: Email verification, magic link login, and password reset
-- **Profile Management**: View account settings, email verification status, and change password
+- **Profile Management**: View account settings, email verification status, privacy settings, and change password
 - **Accessible Design**: Uses OpenDyslexic font for improved readability
 
 ## Tech Stack
@@ -176,6 +177,7 @@ nye_bingo/
 - `GET /api/auth/magic-link/verify` - Verify magic link token
 - `POST /api/auth/forgot-password` - Request password reset email
 - `POST /api/auth/reset-password` - Reset password with token
+- `PUT /api/auth/searchable` - Update privacy settings (opt-in to friend search)
 
 ### Cards
 - `POST /api/cards` - Create new card
@@ -200,7 +202,7 @@ nye_bingo/
 
 ### Friends
 - `GET /api/friends` - List friends and requests
-- `GET /api/friends/search?q=` - Search users
+- `GET /api/friends/search?q=` - Search users by username (only shows users who opted in)
 - `POST /api/friends/request` - Send friend request
 - `PUT /api/friends/{id}/accept` - Accept request
 - `PUT /api/friends/{id}/reject` - Reject request

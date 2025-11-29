@@ -37,9 +37,10 @@ func NewAuthHandler(userService *services.UserService, authService *services.Aut
 }
 
 type RegisterRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"display_name"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Username   string `json:"username"`
+	Searchable bool   `json:"searchable"`
 }
 
 type LoginRequest struct {
@@ -76,10 +77,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate display name
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	if len(req.DisplayName) < 2 || len(req.DisplayName) > 100 {
-		writeError(w, http.StatusBadRequest, "Display name must be between 2 and 100 characters")
+	// Validate username
+	req.Username = strings.TrimSpace(req.Username)
+	if len(req.Username) < 2 || len(req.Username) > 100 {
+		writeError(w, http.StatusBadRequest, "Username must be between 2 and 100 characters")
 		return
 	}
 
@@ -95,10 +96,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	user, err := h.userService.Create(r.Context(), models.CreateUserParams{
 		Email:        req.Email,
 		PasswordHash: passwordHash,
-		DisplayName:  req.DisplayName,
+		Username:     req.Username,
+		Searchable:   req.Searchable,
 	})
 	if errors.Is(err, services.ErrEmailAlreadyExists) {
 		writeError(w, http.StatusConflict, "Email already registered")
+		return
+	}
+	if errors.Is(err, services.ErrUsernameAlreadyExists) {
+		writeError(w, http.StatusConflict, "Username already taken")
 		return
 	}
 	if err != nil {
@@ -467,6 +473,40 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	h.setSessionCookie(w, sessionToken)
 	writeJSON(w, http.StatusOK, AuthResponse{User: user, Message: "Password reset successfully"})
+}
+
+type UpdateSearchableRequest struct {
+	Searchable bool `json:"searchable"`
+}
+
+func (h *AuthHandler) UpdateSearchable(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req UpdateSearchableRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if err := h.userService.UpdateSearchable(r.Context(), user.ID, req.Searchable); err != nil {
+		log.Printf("Error updating searchable: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	// Fetch updated user
+	updatedUser, err := h.userService.GetByID(r.Context(), user.ID)
+	if err != nil {
+		log.Printf("Error getting user: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, AuthResponse{User: updatedUser, Message: "Privacy settings updated"})
 }
 
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {

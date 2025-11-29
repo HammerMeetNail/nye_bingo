@@ -11,9 +11,9 @@ import (
 
 func TestSetUserInContext(t *testing.T) {
 	user := &models.User{
-		ID:          uuid.New(),
-		Email:       "test@example.com",
-		DisplayName: "Test User",
+		ID:       uuid.New(),
+		Email:    "test@example.com",
+		Username: "Test User",
 	}
 
 	ctx := context.Background()
@@ -26,9 +26,9 @@ func TestSetUserInContext(t *testing.T) {
 
 func TestGetUserFromContext_WithUser(t *testing.T) {
 	user := &models.User{
-		ID:          uuid.New(),
-		Email:       "test@example.com",
-		DisplayName: "Test User",
+		ID:       uuid.New(),
+		Email:    "test@example.com",
+		Username: "Test User",
 	}
 
 	ctx := SetUserInContext(context.Background(), user)
@@ -43,8 +43,8 @@ func TestGetUserFromContext_WithUser(t *testing.T) {
 	if retrieved.Email != user.Email {
 		t.Errorf("expected email %q, got %q", user.Email, retrieved.Email)
 	}
-	if retrieved.DisplayName != user.DisplayName {
-		t.Errorf("expected display name %q, got %q", user.DisplayName, retrieved.DisplayName)
+	if retrieved.Username != user.Username {
+		t.Errorf("expected username %q, got %q", user.Username, retrieved.Username)
 	}
 }
 

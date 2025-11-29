@@ -24,18 +24,17 @@ type Friendship struct {
 
 type FriendWithUser struct {
 	Friendship
-	FriendDisplayName string `json:"friend_display_name"`
-	FriendEmail       string `json:"friend_email,omitempty"`
+	FriendUsername string `json:"friend_username"`
+	FriendEmail    string `json:"friend_email,omitempty"`
 }
 
 type FriendRequest struct {
 	Friendship
-	RequesterDisplayName string `json:"requester_display_name"`
-	RequesterEmail       string `json:"requester_email,omitempty"`
+	RequesterUsername string `json:"requester_username"`
+	RequesterEmail    string `json:"requester_email,omitempty"`
 }
 
 type UserSearchResult struct {
-	ID          uuid.UUID `json:"id"`
-	DisplayName string    `json:"display_name"`
-	Email       string    `json:"email"`
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
 }

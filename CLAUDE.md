@@ -142,7 +142,7 @@ Tests use only Node.js built-in modules (no npm dependencies).
 - `showItemDetailModal()` - Modal for viewing/completing items
 - `renderFriends()` / `renderFriendCard()` - Friends list and viewing friend cards (with year selector for multiple cards)
 - `renderArchive()` / `renderArchiveCard()` - Archive views for past years
-- `renderProfile()` - Account settings page (email verification status, change password)
+- `renderProfile()` - Account settings page (email verification status, privacy settings, change password)
 - `openModal()` / `closeModal()` - Generic modal system
 - `fillEmptySpaces()` - Auto-fill empty card slots with random suggestions
 
@@ -157,6 +157,8 @@ Tests use only Node.js built-in modules (no npm dependencies).
 **Rate Limiting**: Not implemented at the application level. Rate limiting should be handled by upstream infrastructure (load balancer, API gateway, CDN) in production environments.
 
 **Session Management**: Sessions stored in Redis first with PostgreSQL fallback. Token stored in HttpOnly cookie, hash stored in database.
+
+**Privacy Model**: Friend search is opt-in. Users must enable "searchable" in their profile to appear in friend search results. Search only matches username (not email). Registration includes a checkbox for opting into discoverability.
 
 **Card State Machine**: Cards start unfinalized (can add/remove/shuffle items), then finalize (locks layout, enables completion marking).
 
@@ -175,11 +177,15 @@ Core tables: `users`, `bingo_cards`, `bingo_items`, `friendships`, `reactions`, 
 
 Email verification tables: `email_verification_tokens`, `magic_link_tokens`, `password_reset_tokens`
 
+**Users table key columns:**
+- `username` - Unique (case-insensitive) user display name
+- `searchable` - Boolean, opt-in flag for appearing in friend search (default: false)
+
 Migrations in `migrations/` directory using numeric prefix ordering.
 
 ## API Routes
 
-Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`, `POST /api/auth/password`
+Auth: `POST /api/auth/{register,login,logout}`, `GET /api/auth/me`, `POST /api/auth/password`, `PUT /api/auth/searchable`
 Email Auth: `POST /api/auth/{verify-email,resend-verification,magic-link,forgot-password,reset-password}`, `GET /api/auth/magic-link/verify`
 
 Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/cards/export`, `GET /api/cards/{id}`, `GET /api/cards/{id}/stats`, `POST /api/cards/{id}/{items,shuffle,finalize}`
