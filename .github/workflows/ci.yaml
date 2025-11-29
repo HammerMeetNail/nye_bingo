@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*'  # Trigger on version tags (v1.0.0, v1.2.3, etc.)
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -159,7 +161,7 @@ jobs:
     name: Build Image (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     needs: [build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     strategy:
       matrix:
         include:
@@ -210,7 +212,10 @@ jobs:
     name: Scan, Sign & Push Multi-Arch Manifest
     runs-on: ubuntu-latest
     needs: [build-image]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    outputs:
+      digest: ${{ steps.digest.outputs.digest }}
+      tag: ${{ steps.tag.outputs.tag }}
     permissions:
       contents: read
       packages: write
@@ -241,6 +246,8 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
 
       - name: Create and push manifest
         id: manifest
@@ -255,6 +262,18 @@ jobs:
           DIGEST=$(docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest --format '{{json .Manifest.Digest}}' | tr -d '"')
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
           echo "Manifest digest: $DIGEST"
+
+      - name: Determine image tag
+        id: tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            # Strip 'v' prefix for semver tag (v1.0.5 -> 1.0.5)
+            TAG="${GITHUB_REF#refs/tags/v}"
+          else
+            TAG="latest"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Image tag: $TAG"
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
@@ -276,16 +295,42 @@ jobs:
           # Sign by digest (more secure than signing by tag)
           cosign sign --yes ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.digest.outputs.digest }}
 
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [scan-and-push]
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body: |
+            ## Container Image
+
+            ```bash
+            podman pull quay.io/yearofbingo/yearofbingo:${{ github.ref_name }}
+            ```
+
+            **Available tags:**
+            - `quay.io/yearofbingo/yearofbingo:${{ github.ref_name }}` (this release)
+            - `quay.io/yearofbingo/yearofbingo:latest` (always latest)
+
   deploy:
     name: Deploy to Production
     runs-on: ubuntu-latest
     needs: [changes, scan-and-push]
     if: |
       always() &&
-      (needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch') &&
+      (needs.changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')) &&
       (needs.scan-and-push.result == 'success' || needs.scan-and-push.result == 'skipped') &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
-      github.ref == 'refs/heads/main'
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -306,6 +351,8 @@ jobs:
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          IMAGE_DIGEST: ${{ needs.scan-and-push.outputs.digest }}
+          IMAGE_TAG: ${{ needs.scan-and-push.outputs.tag }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -319,8 +366,18 @@ jobs:
             StrictHostKeyChecking accept-new
           SSHCONFIG
 
+          # Update compose file with image digest (or fallback to :latest)
+          if [ -n "${IMAGE_DIGEST}" ]; then
+            # Use digest with tag as comment
+            sed "s|image: quay.io/yearofbingo/yearofbingo:latest|# tag: ${IMAGE_TAG}\n    image: quay.io/yearofbingo/yearofbingo@${IMAGE_DIGEST}|" \
+              compose.server.yaml > compose.server.deploy.yaml
+          else
+            # Fallback to :latest for deploy_only workflow dispatch
+            cp compose.server.yaml compose.server.deploy.yaml
+          fi
+
           # Copy compose file to server via tunnel
-          scp compose.server.yaml ssh.yearofbingo.com:/opt/yearofbingo/compose.yaml
+          scp compose.server.deploy.yaml ssh.yearofbingo.com:/opt/yearofbingo/compose.yaml
 
           # Deploy via tunnel
           ssh ssh.yearofbingo.com << EOF
@@ -349,8 +406,8 @@ jobs:
           RCLONECONF
             chmod 600 ~/.config/rclone/rclone.conf
 
-            # Pull latest image and restart
-            podman pull quay.io/yearofbingo/yearofbingo:latest
+            # Pull and restart
+            podman-compose pull
             podman-compose down || true
             podman-compose up -d
           EOF

@@ -220,7 +220,7 @@ Reactions: `POST/DELETE /api/items/{id}/react`, `GET /api/items/{id}/reactions`,
 
 Support: `POST /api/support`
 
-## Versioning
+## Versioning & Releases
 
 The application version is displayed in the footer and must be updated with each release. The version number is located in `web/templates/index.html` in the footer element.
 
@@ -229,10 +229,43 @@ The application version is displayed in the footer and must be updated with each
 - MINOR: New features, backwards compatible
 - PATCH: Bug fixes, backwards compatible
 
-**When to update**: Increment the version when committing and pushing changes:
-- Bug fixes → increment PATCH (e.g., 0.1.0 → 0.1.1)
-- New features → increment MINOR, reset PATCH (e.g., 0.1.1 → 0.2.0)
-- Breaking changes → increment MAJOR, reset MINOR and PATCH (e.g., 0.2.0 → 1.0.0)
+**Version increment rules**:
+- Bug fixes → increment PATCH (e.g., 1.0.4 → 1.0.5)
+- New features → increment MINOR, reset PATCH (e.g., 1.0.5 → 1.1.0)
+- Breaking changes → increment MAJOR, reset MINOR and PATCH (e.g., 1.1.0 → 2.0.0)
+
+### Creating a Release
+
+When ready to release, follow these steps:
+
+1. **Update the version** in `web/templates/index.html` footer
+2. **Commit the change**:
+   ```bash
+   git add web/templates/index.html
+   git commit -m "Release v1.0.5"
+   ```
+3. **Create and push a version tag**:
+   ```bash
+   git tag v1.0.5
+   git push && git push --tags
+   ```
+
+This triggers the CI pipeline which will:
+- Build and test the code
+- Build multi-arch container images
+- Tag the container with the version (e.g., `quay.io/yearofbingo/yearofbingo:1.0.5`)
+- Create a GitHub Release with auto-generated changelog
+- Deploy to production
+
+**Container tags created**:
+- `:1.0.5` - Exact version (immutable)
+- `:1.0` - Major.minor (points to latest patch)
+- `:latest` - Latest release
+- `:<commit-sha>` - Specific commit
+
+**Production deploys** use the image digest (not tag) for reproducibility. The compose.yaml on the server includes the tag as a comment above the image line for easy reference.
+
+**GitHub Releases**: Each version tag creates a GitHub Release at https://github.com/yearofbingo/yearofbingo/releases with auto-generated release notes based on commits since the last tag
 
 ## Environment Variables
 
@@ -333,6 +366,11 @@ Navbar contains FAQ link (`#faq`), footer contains About and legal pages (`#abou
 
 GitHub Actions workflow in `.github/workflows/ci.yaml`:
 
+**Pipeline triggers:**
+- Push to `main` branch - builds, tests, deploys to production
+- Version tags (`v*`) - builds, tests, creates GitHub Release, deploys to production
+- Pull requests - runs tests only (no deploy)
+
 **Pipeline stages:**
 1. **Secret Scan** - Gitleaks scans for accidentally committed secrets (runs on ALL changes)
 2. **Lint** - golangci-lint with config in `.golangci.yaml`
@@ -340,7 +378,9 @@ GitHub Actions workflow in `.github/workflows/ci.yaml`:
 4. **Test (JS)** - `node web/static/js/tests/runner.js`
 5. **Build** - Compile binary, upload as artifact
 6. **Build Image** - Parallel builds on native runners (amd64 + arm64)
-7. **Scan & Push** - Trivy security scan, then push multi-arch manifest
+7. **Scan & Push** - Trivy security scan, Cosign signing, push multi-arch manifest
+8. **Release** - Creates GitHub Release (only for version tags)
+9. **Deploy** - Deploys to production server
 
 **Path filtering:** Lint, test, build, and deploy jobs only run when code changes. Documentation-only changes (README, markdown files) skip these jobs but still run secret scanning.
 
@@ -348,6 +388,7 @@ GitHub Actions workflow in `.github/workflows/ci.yaml`:
 - Multi-arch: `linux/amd64` and `linux/arm64`
 - `:latest` - Latest main branch build
 - `:<sha>` - Specific commit builds
+- `:<version>` - Release versions (e.g., `:1.0.5`, `:1.0`)
 
 **Running production image locally:**
 ```bash
