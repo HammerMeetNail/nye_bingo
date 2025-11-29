@@ -2055,12 +2055,17 @@ const App = {
       const toPosition = parseInt(targetCell.dataset.position);
 
       try {
-        // Use swap API - handles both moving to empty cells and swapping with filled cells
-        await API.cards.swap(this.currentCard.id, fromPosition, toPosition);
-
-        // Refresh the card (no need to re-setup drag/drop - event delegation still works)
-        const response = await API.cards.get(this.currentCard.id);
-        this.currentCard = response.card;
+        if (this.isAnonymousMode) {
+          // Use localStorage for anonymous cards
+          AnonymousCard.swapItems(fromPosition, toPosition);
+          const anonCard = AnonymousCard.get();
+          this.currentCard = this.convertAnonymousCardToAppFormat(anonCard);
+        } else {
+          // Use swap API - handles both moving to empty cells and swapping with filled cells
+          await API.cards.swap(this.currentCard.id, fromPosition, toPosition);
+          const response = await API.cards.get(this.currentCard.id);
+          this.currentCard = response.card;
+        }
         document.getElementById('bingo-grid').innerHTML = this.renderGrid();
       } catch (error) {
         this.toast(error.message, 'error');
@@ -2204,12 +2209,17 @@ const App = {
       cleanupDrag();
 
       try {
-        // Use swap API - handles both moving to empty cells and swapping with filled cells
-        await API.cards.swap(this.currentCard.id, fromPosition, toPosition);
-
-        // Refresh the card (no need to re-setup drag/drop - event delegation still works)
-        const response = await API.cards.get(this.currentCard.id);
-        this.currentCard = response.card;
+        if (this.isAnonymousMode) {
+          // Use localStorage for anonymous cards
+          AnonymousCard.swapItems(fromPosition, toPosition);
+          const anonCard = AnonymousCard.get();
+          this.currentCard = this.convertAnonymousCardToAppFormat(anonCard);
+        } else {
+          // Use swap API - handles both moving to empty cells and swapping with filled cells
+          await API.cards.swap(this.currentCard.id, fromPosition, toPosition);
+          const response = await API.cards.get(this.currentCard.id);
+          this.currentCard = response.card;
+        }
         document.getElementById('bingo-grid').innerHTML = this.renderGrid();
       } catch (error) {
         this.toast(error.message, 'error');
