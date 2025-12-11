@@ -167,8 +167,8 @@ func run() error {
 	mux.Handle("PUT /api/cards/{id}/items/{pos}/notes", requireWrite(http.HandlerFunc(cardHandler.UpdateNotes)))
 
 	// Suggestion endpoints
-	mux.Handle("GET /api/suggestions", requireRead(http.HandlerFunc(suggestionHandler.GetAll)))
-	mux.Handle("GET /api/suggestions/categories", requireRead(http.HandlerFunc(suggestionHandler.GetCategories)))
+	mux.Handle("GET /api/suggestions", http.HandlerFunc(suggestionHandler.GetAll))
+	mux.Handle("GET /api/suggestions/categories", http.HandlerFunc(suggestionHandler.GetCategories))
 
 	// Friend endpoints
 	mux.Handle("GET /api/friends", requireSession(http.HandlerFunc(friendHandler.List)))

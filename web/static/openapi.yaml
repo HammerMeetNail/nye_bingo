@@ -397,12 +397,14 @@ paths:
   /suggestions:
     get:
       summary: Get random suggestions
+      security: []
       responses:
         '200':
           description: List of suggestions
   /suggestions/categories:
     get:
       summary: Get suggestion categories
+      security: []
       responses:
         '200':
           description: List of categories
