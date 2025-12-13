@@ -398,12 +398,12 @@ const API = {
 
   // AI endpoints
   ai: {
-    async generate(category, focus, difficulty, frequency, context) {
+    async generate(category, focus, difficulty, budget, context) {
       return API.request('POST', '/api/ai/generate', {
         category,
         focus,
         difficulty,
-        frequency,
+        budget,
         context
       });
     },

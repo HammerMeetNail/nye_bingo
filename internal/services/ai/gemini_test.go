@@ -43,6 +43,11 @@ func TestGenerateGoals(t *testing.T) {
 			t.Errorf("expected focus block in prompt, got %s", text)
 		}
 
+		// Regression test: ensure no conflicting hardcoded budget rules
+		if strings.Contains(text, "Goals must be budget-friendly ($20-$100) and public") {
+			t.Error("found conflicting hardcoded budget rule in prompt")
+		}
+
 		// Send mock response
 		resp := geminiResponse{
 			Candidates: []geminiCandidate{
@@ -81,7 +86,7 @@ func TestGenerateGoals(t *testing.T) {
 		Category:   "Hobbies",
 		Focus:      "Cooking",
 		Difficulty: "medium",
-		Frequency:  "weekly",
+		Budget:     "weekly",
 		Context:    "test context",
 	}
 

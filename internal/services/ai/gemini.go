@@ -41,7 +41,7 @@ type GoalPrompt struct {
 	Category   string
 	Focus      string
 	Difficulty string
-	Frequency  string
+	Budget     string
 	Context    string
 }
 
@@ -139,7 +139,7 @@ func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt Go
 		"high":   "The goals can be luxurious and expensive (no budget constraints).",
 	}
 
-	budgetInstruction, ok := budgetMap[prompt.Frequency]
+	budgetInstruction, ok := budgetMap[prompt.Budget]
 	if !ok {
 		budgetInstruction = budgetMap["free"] // Default to free/safe
 	}

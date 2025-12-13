@@ -19,7 +19,7 @@ type GenerateRequest struct {
 	Category   string `json:"category"`
 	Focus      string `json:"focus"`
 	Difficulty string `json:"difficulty"`
-	Frequency  string `json:"frequency"`
+	Budget     string `json:"budget"`
 	Context    string `json:"context"`
 }
 
@@ -45,7 +45,7 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		Category:   req.Category,
 		Focus:      req.Focus,
 		Difficulty: req.Difficulty,
-		Frequency:  req.Frequency,
+		Budget:     req.Budget,
 		Context:    req.Context,
 	}
 
