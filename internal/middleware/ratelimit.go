@@ -19,15 +19,19 @@ type RateLimiter struct {
 	window time.Duration
 	prefix string
 	keyFn  func(r *http.Request) string
+	// failOpen controls behavior when Redis errors: when true, requests are allowed through.
+	// For cost-sensitive endpoints, set to false to fail closed.
+	failOpen bool
 }
 
-func NewRateLimiter(redis *redis.Client, limit int64, window time.Duration, prefix string, keyFn func(r *http.Request) string) *RateLimiter {
+func NewRateLimiter(redis *redis.Client, limit int64, window time.Duration, prefix string, keyFn func(r *http.Request) string, failOpen bool) *RateLimiter {
 	return &RateLimiter{
-		redis:  redis,
-		limit:  limit,
-		window: window,
-		prefix: prefix,
-		keyFn:  keyFn,
+		redis:    redis,
+		limit:    limit,
+		window:   window,
+		prefix:   prefix,
+		keyFn:    keyFn,
+		failOpen: failOpen,
 	}
 }
 
@@ -60,7 +64,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		result, err := rl.redis.Eval(ctx, luaScript, []string{key}, ttlSeconds).Result()
 		if err != nil {
 			logging.Error("Rate limit Redis error", map[string]interface{}{"error": err.Error()})
-			next.ServeHTTP(w, r) // Fail open
+			if rl.failOpen {
+				next.ServeHTTP(w, r)
+				return
+			}
+			writeError(w, http.StatusServiceUnavailable, "Rate limiting temporarily unavailable")
 			return
 		}
 
@@ -73,7 +81,11 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			count = int64(v)
 		default:
 			logging.Error("Rate limit Redis script returned unexpected type", map[string]interface{}{"type": fmt.Sprintf("%T", result)})
-			next.ServeHTTP(w, r)
+			if rl.failOpen {
+				next.ServeHTTP(w, r)
+				return
+			}
+			writeError(w, http.StatusServiceUnavailable, "Rate limiting temporarily unavailable")
 			return
 		}
 

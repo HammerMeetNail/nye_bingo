@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -32,8 +33,16 @@ type GenerateRequest struct {
 
 func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	var req GenerateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Category == "" || req.Difficulty == "" || req.Budget == "" {
+		writeError(w, http.StatusBadRequest, "Missing required fields")
 		return
 	}
 
@@ -85,14 +94,14 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusInternalServerError
 		msg := "An unexpected error occurred."
 
-		switch err {
-		case ai.ErrSafetyViolation:
+		switch {
+		case errors.Is(err, ai.ErrSafetyViolation):
 			status = http.StatusBadRequest
 			msg = "We couldn't generate safe goals for that topic. Please try rephrasing."
-		case ai.ErrRateLimitExceeded:
+		case errors.Is(err, ai.ErrRateLimitExceeded):
 			status = http.StatusTooManyRequests
 			msg = "AI provider rate limit exceeded."
-		case ai.ErrAIProviderUnavailable:
+		case errors.Is(err, ai.ErrAIProviderUnavailable):
 			status = http.StatusServiceUnavailable
 			msg = "The AI service is currently down. Please try again later."
 		}

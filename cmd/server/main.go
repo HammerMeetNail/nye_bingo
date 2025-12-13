@@ -121,7 +121,7 @@ func run() error {
 			return user.ID.String()
 		}
 		return ""
-	})
+	}, false)
 
 	// Helper middlewares for API token scope enforcement
 	requireRead := authMiddleware.RequireScope(models.ScopeRead)

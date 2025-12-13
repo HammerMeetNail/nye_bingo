@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"strings"
 	"time"
 
@@ -115,6 +116,9 @@ type geminiUsage struct {
 
 func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt GoalPrompt) ([]string, UsageStats, error) {
 	start := time.Now()
+	if strings.TrimSpace(s.apiKey) == "" {
+		return nil, UsageStats{}, ErrAIProviderUnavailable
+	}
 
 	// Update system prompt to be more aligned with the new persona
 	systemPrompt := "You are an expert adventure curator and life coach."
@@ -199,10 +203,10 @@ Output exactly 24 distinct, short, achievable goals as a JSON array of strings.`
 
 	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
-		return nil, UsageStats{}, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, UsageStats{}, fmt.Errorf("%w: failed to marshal request", ErrAIProviderUnavailable)
 	}
 
-	// Log the prompt being sent
+	// Log request metadata only (avoid logging user-provided prompt/context)
 	logging.Info("Sending request to Gemini", map[string]interface{}{
 		"user_id":       userID.String(),
 		"prompt_length": len(userMessage),
@@ -218,7 +222,7 @@ Output exactly 24 distinct, short, achievable goals as a JSON array of strings.`
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logUsage(context.Background(), userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
 		return nil, UsageStats{}, fmt.Errorf("%w: %v", ErrAIProviderUnavailable, err)
 	}
 	defer func() {
@@ -228,14 +232,37 @@ Output exactly 24 distinct, short, achievable goals as a JSON array of strings.`
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		s.logUsage(context.Background(), userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			return nil, UsageStats{}, fmt.Errorf("%w: status %d", ErrRateLimitExceeded, resp.StatusCode)
+		}
+
+		// Best-effort include a small preview of the provider error for debugging.
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
+		if len(bodyBytes) > 0 {
+			logging.Error("Gemini non-200 response", map[string]interface{}{
+				"user_id": userID.String(),
+				"status":  resp.StatusCode,
+				"body":    string(bodyBytes),
+			})
+		} else {
+			if dump, dumpErr := httputil.DumpResponse(resp, false); dumpErr == nil {
+				logging.Error("Gemini non-200 response (headers only)", map[string]interface{}{
+					"user_id": userID.String(),
+					"status":  resp.StatusCode,
+					"dump":    string(dump),
+				})
+			}
+		}
+
 		return nil, UsageStats{}, fmt.Errorf("%w: status %d", ErrAIProviderUnavailable, resp.StatusCode)
 	}
 
 	var geminiResp geminiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-		s.logUsage(context.Background(), userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
-		return nil, UsageStats{}, fmt.Errorf("failed to decode response: %w", err)
+		s.logUsageWithTimeout(userID, UsageStats{Model: geminiModel, Duration: time.Since(start)}, "error")
+		return nil, UsageStats{}, fmt.Errorf("%w: failed to decode response", ErrAIProviderUnavailable)
 	}
 
 	duration := time.Since(start)
@@ -248,46 +275,57 @@ Output exactly 24 distinct, short, achievable goals as a JSON array of strings.`
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		s.logUsage(context.Background(), userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block")
 		return nil, stats, ErrSafetyViolation // Or generic empty error
 	}
 
 	candidate := geminiResp.Candidates[0]
 	if candidate.FinishReason == "SAFETY" {
-		s.logUsage(context.Background(), userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block")
 		return nil, stats, ErrSafetyViolation
 	}
 
 	// Parse the JSON array from the text
 	if len(candidate.Content.Parts) == 0 {
-		s.logUsage(context.Background(), userID, stats, "error")
-		return nil, stats, fmt.Errorf("empty content parts")
+		s.logUsageWithTimeout(userID, stats, "error")
+		return nil, stats, fmt.Errorf("%w: empty content parts", ErrAIProviderUnavailable)
 	}
 
 	responseText := candidate.Content.Parts[0].Text
 	logging.Info("Received response from Gemini", map[string]interface{}{
-		"user_id":          userID.String(),
-		"response_preview": responseText,
+		"user_id":         userID.String(),
+		"response_length": len(responseText),
 	})
 
 	// Strip markdown code block fences if present
 	cleanedResponseText := stripMarkdownCodeBlock(responseText)
 	if cleanedResponseText != responseText {
 		logging.Info("Stripped markdown code block from Gemini response", map[string]interface{}{
-			"user_id":          userID.String(),
-			"original_preview": responseText,
-			"cleaned_preview":  cleanedResponseText,
+			"user_id":         userID.String(),
+			"original_length": len(responseText),
+			"cleaned_length":  len(cleanedResponseText),
 		})
 		responseText = cleanedResponseText
 	}
 
 	var goals []string
 	if err := json.Unmarshal([]byte(responseText), &goals); err != nil {
-		s.logUsage(context.Background(), userID, stats, "error")
-		return nil, stats, fmt.Errorf("failed to unmarshal goals json: %w", err)
+		s.logUsageWithTimeout(userID, stats, "error")
+		return nil, stats, fmt.Errorf("%w: invalid JSON response", ErrAIProviderUnavailable)
 	}
 
-	s.logUsage(context.Background(), userID, stats, "success")
+	for i := range goals {
+		goals[i] = strings.TrimSpace(goals[i])
+	}
+	if len(goals) > 24 {
+		goals = goals[:24]
+	}
+	if len(goals) != 24 {
+		s.logUsageWithTimeout(userID, stats, "error")
+		return nil, stats, fmt.Errorf("%w: expected 24 goals, got %d", ErrAIProviderUnavailable, len(goals))
+	}
+
+	s.logUsageWithTimeout(userID, stats, "success")
 	return goals, stats, nil
 }
 
@@ -327,20 +365,19 @@ func (s *Service) logUsage(ctx context.Context, userID uuid.UUID, stats UsageSta
 	}
 }
 
+func (s *Service) logUsageWithTimeout(userID uuid.UUID, stats UsageStats, status string) {
+	if s.db == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	s.logUsage(ctx, userID, stats, status)
+}
+
 // sanitizeInput cleans user input to prevent basic prompt injection and enforce limits.
 func sanitizeInput(input string) string {
-	// Trim whitespace
 	input = strings.TrimSpace(input)
-
-	// Replace newlines and tabs with spaces to prevent structural injection
-	input = strings.ReplaceAll(input, "\n", " ")
-	input = strings.ReplaceAll(input, "\r", " ")
-	input = strings.ReplaceAll(input, "\t", " ")
-
-	// Collapse multiple spaces
-	for strings.Contains(input, "  ") {
-		input = strings.ReplaceAll(input, "  ", " ")
-	}
+	input = strings.Join(strings.Fields(input), " ")
 
 	// Truncate to a reasonable length (e.g., 500 characters)
 	if len(input) > 500 {

@@ -27,7 +27,8 @@ When ready to release, follow these steps:
 3. **Create and push a version tag**:
    ```bash
    git tag v1.0.5
-   git push && git push --tags
+   git push origin main
+   git push origin v1.0.5
    ```
 
 This triggers the CI pipeline which will:

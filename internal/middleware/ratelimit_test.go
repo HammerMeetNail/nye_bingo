@@ -11,7 +11,7 @@ func TestRateLimiter_Middleware_NilRedis(t *testing.T) {
 	// Test that middleware fails open (allows request) when Redis is nil
 	limiter := NewRateLimiter(nil, 10, time.Hour, "test:", func(r *http.Request) string {
 		return "test-key"
-	})
+	}, true)
 
 	handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)

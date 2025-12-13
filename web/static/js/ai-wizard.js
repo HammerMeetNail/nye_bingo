@@ -8,7 +8,6 @@ const AIWizard = {
   },
 
   open(targetCardId = null) {
-    console.log('AIWizard: open()', { step: this.state.step, mode: this.state.mode, targetCardId: targetCardId });
     this.state = { 
       step: 'input', 
       inputs: {}, 
@@ -20,7 +19,6 @@ const AIWizard = {
   },
 
   render() {
-    console.log('AIWizard: render()', { step: this.state.step });
     if (this.state.step === 'input') {
       const title = this.state.mode === 'append' ? 'AI Goal Generator 🧙' : 'AI Goal Wizard 🧙';
       App.openModal(title, this.renderInputStep());
@@ -120,14 +118,17 @@ const AIWizard = {
         <div class="spinner" style="margin-bottom: 1.5rem;"></div>
         <h3>Consulting the Oracle...</h3>
         <p class="text-muted">This usually takes about 5-10 seconds.</p>
-        <p class="text-muted" style="font-size: 0.8rem; margin-top: 1rem;">Powered by Gemini Flash ⚡</p>
+        <p class="text-muted" style="font-size: 0.8rem; margin-top: 1rem;">Powered by AI</p>
       </div>
     `;
   },
 
   async handleGenerate(event) {
     event.preventDefault();
-    console.log('AIWizard: handleGenerate() - form submitted');
+    if (!App.user) {
+      App.toast('Please log in to use AI features.', 'error');
+      return;
+    }
     
     const category = document.getElementById('ai-category').value;
     const focus = document.getElementById('ai-focus').value;
@@ -140,15 +141,12 @@ const AIWizard = {
     this.render();
 
     try {
-      console.log('AIWizard: handleGenerate() - calling API.ai.generate');
       // Passing budget as the 4th argument
       const response = await API.ai.generate(category, focus, difficulty, budget, context);
-      console.log('AIWizard: handleGenerate() - API call successful', response.goals);
       this.state.results = response.goals;
       this.state.step = 'review';
       this.render(); // Re-render to show review step
     } catch (error) {
-      console.error('AIWizard: handleGenerate() - API call failed', error);
       App.toast(error.message, 'error');
       this.state.step = 'input';
       this.render();
@@ -191,9 +189,9 @@ const AIWizard = {
   },
 
   async createCard() {
-    console.log('AIWizard: createCard()');
     const year = new Date().getFullYear();
-    const title = this.state.inputs.focus ? `${this.state.inputs.focus} Bingo` : `${year} AI Bingo`;
+    const focus = (this.state.inputs.focus || '').trim().replace(/\s+/g, ' ').slice(0, 50);
+    const title = focus ? `${focus} Bingo` : `${year} AI Bingo`;
     const category = this.state.inputs.category === 'mix' ? null : this.state.inputs.category;
 
     try {
@@ -213,7 +211,6 @@ const AIWizard = {
       App.toast('AI Card Created! 🧙‍♂️', 'success');
 
     } catch (error) {
-      console.error('AIWizard: createCard() - failed', error);
       App.toast(error.message, 'error');
       this.state.step = 'review';
       this.render();
@@ -221,7 +218,6 @@ const AIWizard = {
   },
 
   async addToCard() {
-    console.log('AIWizard: addToCard()');
     if (!this.state.targetCardId) return;
 
     try {
@@ -243,7 +239,6 @@ const AIWizard = {
       App.toast('Goals added! 🧙‍♂️', 'success');
 
     } catch (error) {
-      console.error('AIWizard: addToCard() - failed', error);
       App.toast(error.message, 'error');
       this.state.step = 'review';
       this.render();
@@ -251,7 +246,6 @@ const AIWizard = {
   },
 
   async fillCard(cardId) {
-      console.log('AIWizard: fillCard()', cardId);
       // Get current card items to determine empty spots
       let existingItems = [];
       try {
@@ -279,13 +273,27 @@ const AIWizard = {
 
       const goalsToAdd = this.state.results.slice(0, availablePositions.length);
       
-      const promises = goalsToAdd.map((goal, index) => {
-        const pos = availablePositions[index];
-        return API.cards.addItem(cardId, goal, pos);
-      });
+      const results = await Promise.allSettled(
+        goalsToAdd.map((goal, index) => {
+          const pos = availablePositions[index];
+          return API.cards.addItem(cardId, goal, pos).then(() => ({ pos, goal }));
+        })
+      );
 
-      await Promise.all(promises);
-      console.log('AIWizard: fillCard() - all items added');
+      const failures = results.filter(r => r.status === 'rejected');
+      if (failures.length === 0) {
+        return;
+      }
+
+      const successes = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value);
+
+      await Promise.allSettled(
+        successes.map(({ pos }) => API.cards.removeItem(cardId, pos))
+      );
+
+      throw new Error('Failed to add some goals. Please try again.');
   }
 };
 

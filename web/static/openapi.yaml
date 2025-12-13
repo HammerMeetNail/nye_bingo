@@ -408,3 +408,85 @@ paths:
       responses:
         '200':
           description: List of categories
+  /ai/generate:
+    post:
+      summary: Generate AI goals
+      description: |
+        Generates 24 suggested bingo goals based on user inputs.
+
+        This endpoint requires a browser session cookie (API tokens are not allowed).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - category
+                - difficulty
+                - budget
+              properties:
+                category:
+                  type: string
+                  enum: [hobbies, health, career, social, travel, mix]
+                focus:
+                  type: string
+                  maxLength: 100
+                difficulty:
+                  type: string
+                  enum: [easy, medium, hard]
+                budget:
+                  type: string
+                  enum: [free, low, medium, high]
+                context:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Generated goals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  goals:
+                    type: array
+                    items:
+                      type: string
+        '400':
+          description: Invalid input or unsafe request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string

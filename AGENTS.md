@@ -25,6 +25,8 @@ You are **REQUIRED** to read the specific documentation below if your task invol
   - **CRITICAL**: Follow the `App` object pattern for JS and Service layer pattern for Go.
 - **New Endpoints, Auth, Tokens** -> `read_file agent_docs/api.md`
   - **CRITICAL**: New endpoints must be registered in `main.go` and documented in `openapi.yaml`.
+- **AI, Gemini, LLM, Wizard, Rate Limit** -> `read_file plans/ai_goals.md`
+  - **CRITICAL**: AI API work must also update `web/static/openapi.yaml` and keep the endpoint session-only (no API tokens).
 - **Testing Strategies** -> `read_file agent_docs/testing.md`
   - **CRITICAL**: Use `./scripts/test.sh` for accurate results (runs in container).
 - **Roadmap, Status, New Features** -> `read_file agent_docs/roadmap.md`

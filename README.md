@@ -232,6 +232,9 @@ nye_bingo/
 ### Support
 - `POST /api/support` - Submit support request (rate limited: 5/hour per IP)
 
+### AI
+- `POST /api/ai/generate` - Generate AI goals (session cookie required; API tokens not allowed)
+
 ### API Access
 
 Programmatic access is available via Bearer tokens.
