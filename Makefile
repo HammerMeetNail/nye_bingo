@@ -30,7 +30,10 @@ test:
 
 # Run linter
 lint:
-	golangci-lint run
+	@chmod -R u+w .cache 2>/dev/null || true
+	rm -rf .cache
+	@mkdir -p .cache/go-build .cache/go-mod .cache/golangci-lint
+	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod GOLANGCI_LINT_CACHE=$(PWD)/.cache/golangci-lint golangci-lint run
 
 # Clean up everything including volumes
 clean:

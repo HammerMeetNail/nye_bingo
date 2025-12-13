@@ -52,6 +52,7 @@ web/static/dist/
 /tmp/
 *.tmp
 *.temp
+.cache/
 
 # Logs
 *.log

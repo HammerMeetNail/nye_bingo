@@ -8,6 +8,8 @@ info:
     Tokens can be generated in your profile settings.
     
     Example: `Authorization: Bearer yob_abc123...`
+
+    Note: Some endpoints (e.g. AI generation) require an authenticated browser session cookie and do not accept API tokens.
   version: 1.0.0
 servers:
   - url: /api
@@ -17,6 +19,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Opaque Token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
   schemas:
     BingoCard:
       type: object
@@ -95,6 +101,14 @@ components:
           type: string
         email:
           type: string
+        email_verified:
+          type: boolean
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        ai_free_generations_used:
+          type: integer
         searchable:
           type: boolean
 security:
@@ -408,3 +422,103 @@ paths:
       responses:
         '200':
           description: List of categories
+  /ai/generate:
+    post:
+      summary: Generate AI goals
+      description: |
+        Generates 24 suggested bingo goals based on user inputs.
+
+        This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - category
+                - difficulty
+                - budget
+              properties:
+                category:
+                  type: string
+                  enum: [hobbies, health, career, social, travel, mix]
+                focus:
+                  type: string
+                  maxLength: 100
+                difficulty:
+                  type: string
+                  enum: [easy, medium, hard]
+                budget:
+                  type: string
+                  enum: [free, low, medium, high]
+                context:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Generated goals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  goals:
+                    type: array
+                    items:
+                      type: string
+                  free_remaining:
+                    type: integer
+                    nullable: true
+        '400':
+          description: Invalid input or unsafe request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
+                    nullable: true
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Email verification required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string

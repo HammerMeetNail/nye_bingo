@@ -10,6 +10,7 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_SECURE=true
+      - APP_ENV=production
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=bingo
@@ -24,6 +25,7 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY}
       - EMAIL_FROM_ADDRESS=noreply@yearofbingo.com
       - APP_BASE_URL=https://yearofbingo.com
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/middleware"
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 )
 
 func main() {
@@ -82,6 +84,7 @@ func run() error {
 	friendService := services.NewFriendService(db.Pool)
 	reactionService := services.NewReactionService(db.Pool, friendService)
 	apiTokenService := services.NewApiTokenService(db.Pool)
+	aiService := ai.NewService(cfg, db.Pool)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
@@ -92,6 +95,7 @@ func run() error {
 	reactionHandler := handlers.NewReactionHandler(reactionService)
 	supportHandler := handlers.NewSupportHandler(emailService, redisDB.Client)
 	apiTokenHandler := handlers.NewApiTokenHandler(apiTokenService)
+	aiHandler := handlers.NewAIHandler(aiService)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
@@ -104,6 +108,32 @@ func run() error {
 	cacheControl := middleware.NewCacheControl()
 	compress := middleware.NewCompress()
 	requestLogger := middleware.NewRequestLogger(logger)
+
+	// AI Rate Limit configuration
+	aiRateLimit := int64(10)
+	if cfg.Server.Environment == "development" {
+		aiRateLimit = 100
+		logger.Info("Using development AI rate limit", map[string]interface{}{"limit": aiRateLimit})
+	}
+	if v, ok := os.LookupEnv("AI_RATE_LIMIT"); ok && v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
+			aiRateLimit = parsed
+			logger.Info("Using AI rate limit from env", map[string]interface{}{"limit": aiRateLimit})
+		} else {
+			logger.Warn("Invalid AI_RATE_LIMIT; using default", map[string]interface{}{
+				"value": v,
+				"limit": aiRateLimit,
+			})
+		}
+	}
+
+	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {
+		user := handlers.GetUserFromContext(r.Context())
+		if user != nil {
+			return user.ID.String()
+		}
+		return ""
+	}, false)
 
 	// Helper middlewares for API token scope enforcement
 	requireRead := authMiddleware.RequireScope(models.ScopeRead)
@@ -189,6 +219,9 @@ func run() error {
 
 	// Support endpoint
 	mux.Handle("POST /api/support", requireSession(http.HandlerFunc(supportHandler.Submit)))
+
+	// AI endpoint
+	mux.Handle("POST /api/ai/generate", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Generate))))
 
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))

@@ -12,6 +12,7 @@ services:
     environment:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
+      - APP_ENV=production
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_USER=bingo
@@ -22,6 +23,7 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=
       - REDIS_DB=0
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy

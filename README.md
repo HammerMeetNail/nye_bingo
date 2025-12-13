@@ -14,6 +14,7 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 - **Create Bingo Cards**: Build a personalized 5x5 bingo card with 24 goals (center is a free space)
 - **Drag and Drop**: Rearrange items on your card with drag and drop (desktop) or long-press and drag (mobile)
 - **Try Before Signing Up**: Create and customize a card anonymously, then sign up to save it
+- **AI Goal Wizard**: Generate 24 goals with AI (requires an account; unverified users get 5 free generations, then must verify email)
 - **Fill Empty Spaces**: Auto-fill empty card slots with random suggestions to get started quickly
 - **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
@@ -163,6 +164,8 @@ nye_bingo/
 | `REDIS_PORT` | Redis port | `6379` |
 | `REDIS_PASSWORD` | Redis password | (empty) |
 | `REDIS_DB` | Redis database number | `0` |
+| `GEMINI_API_KEY` | Gemini API key (server-side only) | (empty) |
+| `AI_RATE_LIMIT` | AI generations per hour per user | `10` (prod), `100` (dev) |
 | `EMAIL_PROVIDER` | Email provider (resend, smtp, console) | `console` |
 | `RESEND_API_KEY` | Resend API key (for production) | - |
 | `SMTP_HOST` | SMTP host (for local dev with Mailpit) | `mailpit` |
@@ -231,6 +234,9 @@ nye_bingo/
 
 ### Support
 - `POST /api/support` - Submit support request (rate limited: 5/hour per IP)
+
+### AI
+- `POST /api/ai/generate` - Generate AI goals (session cookie required; API tokens not allowed; unverified users get 5 free generations, then must verify email; rate limited: 10/hour per user in production, 100/hour per user in development)
 
 ### API Access
 

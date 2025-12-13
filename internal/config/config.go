@@ -11,12 +11,14 @@ type Config struct {
 	Database DatabaseConfig
 	Redis    RedisConfig
 	Email    EmailConfig
+	AI       AIConfig
 }
 
 type ServerConfig struct {
-	Host   string
-	Port   int
-	Secure bool // Use HTTPS-only cookies
+	Host        string
+	Port        int
+	Secure      bool   // Use HTTPS-only cookies
+	Environment string // "development", "production", "test"
 }
 
 type DatabaseConfig struct {
@@ -33,6 +35,10 @@ type RedisConfig struct {
 	Port     int
 	Password string
 	DB       int
+}
+
+type AIConfig struct {
+	GeminiAPIKey string
 }
 
 type EmailConfig struct {
@@ -60,9 +66,10 @@ func (r RedisConfig) Addr() string {
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
-			Host:   getEnv("SERVER_HOST", "0.0.0.0"),
-			Port:   getEnvInt("SERVER_PORT", 8080),
-			Secure: getEnvBool("SERVER_SECURE", false),
+			Host:        getEnv("SERVER_HOST", "0.0.0.0"),
+			Port:        getEnvInt("SERVER_PORT", 8080),
+			Secure:      getEnvBool("SERVER_SECURE", false),
+			Environment: getEnv("APP_ENV", "development"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
@@ -86,6 +93,9 @@ func Load() (*Config, error) {
 			ResendAPIKey: getEnv("RESEND_API_KEY", ""),
 			SMTPHost:     getEnv("SMTP_HOST", "localhost"),
 			SMTPPort:     getEnvInt("SMTP_PORT", 1025),
+		},
+		AI: AIConfig{
+			GeminiAPIKey: getEnv("GEMINI_API_KEY", ""),
 		},
 	}
 

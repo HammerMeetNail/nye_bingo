@@ -41,6 +41,7 @@ type PageData struct {
 	APIJSPath           string
 	AnonymousCardJSPath string
 	AppJSPath           string
+	AIWizardJSPath      string
 }
 
 func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +53,7 @@ func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 		APIJSPath:           h.manifest.GetAPIJS(),
 		AnonymousCardJSPath: h.manifest.GetAnonymousCardJS(),
 		AppJSPath:           h.manifest.GetAppJS(),
+		AIWizardJSPath:      h.manifest.GetAIWizardJS(),
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

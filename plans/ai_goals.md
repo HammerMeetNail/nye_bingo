@@ -3,12 +3,23 @@
 ## Overview
 
 **Goal:** Implement an interactive "Wizard" workflow that generates personalized Bingo cards using Generative AI.
-**Core Value:** Solves the "blank canvas" problem by converting user demographics and interests into specific, achievable, and safe goals.
+**Core Value:** Solves the "blank canvas" problem by converting user-selected category + interest into specific, achievable, and safe goals.
+
+## Implemented Scope (This Branch)
+
+- **Wizard UX**: Modal wizard to generate 24 goals, review/edit inline, then either create a new card or append goals to an existing card.
+- **Auth**: Session cookie required (browser session only; API tokens are not accepted).
+- **Email verification gating**: Users get **5 free AI generations** before email verification is required; remaining count is shown in the UI verification banner and the wizard.
+- **Rate limiting**: Redis-backed request limiter per-user (default 10/hour; higher in development; configurable via `AI_RATE_LIMIT`).
+- **Provider**: Google Gemini `gemini-2.5-flash-lite` via backend proxy (API key never exposed to the client).
+- **Output**: Exactly 24 strings in a JSON array, returned to the client as `{ "goals": [...] }`.
+- **Audit logs**: Persists model/tokens/duration/status to `ai_generation_logs` for cost monitoring (no storage of user prompt fields).
+- **Content style**: Goals are framed as "micro-adventure quests" in impersonal imperative phrasing (no "you/your/you're"), with a realism constraint toward modern US day-trip/road-trip locations.
 
 ## User Stories
 
 1.  **As a new user**, I want to describe my interests (e.g., "cooking," "hiking") so that I don't have to think of 24 unique goals from scratch.
-2.  **As a user**, I want to choose the "difficulty" and "time commitment" of my card so that the goals fit my lifestyle.
+2.  **As a user**, I want to choose the "difficulty" and "budget level" of my card so that the goals fit my lifestyle.
 3.  **As a user**, I want to review the AI-generated goals and swap out ones I don't like before creating the card.
 4.  **As a system owner**, I want to ensure generated content is safe (no NSFW/hate speech) and that the system cannot be abused to bypass LLM costs.
 
@@ -40,25 +51,30 @@ We evaluated three primary contenders for cost-effective, high-speed generation:
 
 ### 3. Data Persistence
 
-*   **User Input Data:** **Transient**. We do *not* store the specific demographic answers (Age, Gender, Specific Interests) in the database to minimize privacy risks. This data exists only in memory during the request lifecycle.
+*   **User Input Data:** **Transient**. We do *not* store wizard inputs (category, focus, difficulty, budget, context) in the database to minimize privacy risks. This data exists only in memory during the request lifecycle.
 *   **Generated Goals:** Stored only when the user clicks "Create Card" (saved as standard `CardItem` rows).
-*   **Wizard State:** Persisted in `localStorage` on the client side to allow "resuming" if the user accidentally navigates away.
+*   **Wizard State:** In-memory only (closing the modal resets the wizard; no `localStorage` persistence).
 
 ## Gemini API Integration Details
 
 ### Endpoint
-`POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`
+`POST https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent`
 
 ### Request Payload
-We use `generationConfig` to enforce a JSON array of strings as the output.
+We use `generationConfig` to enforce a JSON array of strings as the output, and send the API key via the `x-goog-api-key` request header (not a query param).
 
 ```json
 {
+  "systemInstruction": {
+    "parts": [
+      { "text": "..." }
+    ]
+  },
   "contents": [
     {
       "parts": [
         {
-          "text": "SYSTEM_PROMPT\n\nUSER_CONTEXT_JSON"
+          "text": "USER_MESSAGE"
         }
       ]
     }
@@ -106,7 +122,7 @@ We use `generationConfig` to enforce a JSON array of strings as the output.
 
 ### Authentication Strategy
 We will use the **Gemini API Key** (via Google AI Studio) for authentication.
-*   **Mechanism**: The key is passed as a query parameter `?key=${GEMINI_API_KEY}` in the HTTP request.
+*   **Mechanism**: The key is sent as the `x-goog-api-key` HTTP request header.
 *   **Security**: The key is stored as a backend environment variable (`GEMINI_API_KEY`) and is **never** exposed to the client.
 
 ### Data Privacy & Training
@@ -123,17 +139,29 @@ While we don't store user PII, we need to track usage for rate limiting and cost
 ```sql
 CREATE TABLE ai_generation_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE SET NULL, -- Nullable for anonymous try-outs (if we allow that)
-    model VARCHAR(50) NOT NULL,                           -- e.g. "gemini-1.5-flash"
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model VARCHAR(50) NOT NULL,                           -- e.g. "gemini-2.5-flash-lite"
     tokens_input INT NOT NULL,
     tokens_output INT NOT NULL,
     duration_ms INT NOT NULL,
     status VARCHAR(20) NOT NULL,                          -- 'success', 'error', 'safety_block'
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
 ```
+
+### New User Column: `users.ai_free_generations_used` (Verification Gate)
+
+To allow a limited trial of AI for unverified accounts while keeping costs bounded, we track a per-user counter:
+
+```sql
+ALTER TABLE users
+ADD COLUMN ai_free_generations_used INT NOT NULL DEFAULT 0;
+```
+
+- Unverified users can successfully generate goals up to **5 times**, after which the API returns `403` until the user verifies their email.
+- The UI displays the remaining free generations in the existing email verification banner and in the wizard itself.
 
 ## API Endpoints
 
@@ -142,16 +170,17 @@ CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
 `POST /api/ai/generate`
 
 **Auth:** Session required.
-**Rate Limit:** 10 requests / hour / user.
+**Verification:** Email verification required after **5 free generations** per user (unverified users can generate up to 5 times, then must verify).
+**Rate Limit:** Redis-backed per-user limit (default **10 requests / hour** in non-development; higher in development; override via `AI_RATE_LIMIT`).
 
 **Request Payload:**
 ```json
 {
-  "category": "hobbies",       // "health", "career", "social", "mix"
-  "focus": "cooking",          // Free text input
+  "category": "hobbies",       // "health", "career", "social", "travel", "mix"
+  "focus": "cooking",          // Optional free-text (max 100 chars)
   "difficulty": "medium",      // "easy", "medium", "hard"
-  "frequency": "weekly",       // "daily", "weekly", "monthly", "once"
-  "context": "I want to learn italian cuisine" // Optional extra context
+  "budget": "free",            // "free", "low", "medium", "high"
+  "context": "I want to learn italian cuisine" // Optional extra context (max 500 chars)
 }
 ```
 
@@ -164,7 +193,7 @@ CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
     "Identify 3 different fresh herbs",
     ... (24 items)
   ],
-  "usage_id": "uuid..." // Reference for feedback/logging
+  "free_remaining": 3
 }
 ```
 
@@ -177,23 +206,25 @@ CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
 **Interfaces:**
 ```go
 type AIProvider interface {
-    GenerateGoals(ctx context.Context, prompt GoalPrompt) ([]string, UsageStats, error)
+    GenerateGoals(ctx context.Context, userID uuid.UUID, prompt GoalPrompt) ([]string, UsageStats, error)
 }
 ```
 
 **Implementation Details:**
--   **Prompt Engineering:**
-    -   *System:* "You are an expert life coach creating a Bingo card. You must output exactly 24 distinct, short, achievable goals. Output JSON only."
-    -   *Safety:* Explicit instruction to avoid dangerous, illegal, or sexually explicit content.
-    -   *Format:* JSON Schema enforcement (Array of strings).
--   **Client:** standard `http.Client` calls to Google Generative Language API.
+-   **Request shape:** Uses `systemInstruction` + `contents` and the `x-goog-api-key` header.
+-   **Prompt engineering:** Uses an "adventure curator / micro-adventure" persona with strict formatting rules (JSON array; 24 items; each item is `Short Title: Description`; <15 words).
+-   **Injection mitigation:** Focus/context are sanitized, angle brackets are escaped, and the prompt explicitly instructs the model to treat tagged content as background only.
+-   **Parsing & validation:** Strips markdown code fences if present, trims whitespace, truncates to 24 if needed, and errors if the result is not exactly 24.
+-   **Usage logging:** Writes `model`, `tokens_input`, `tokens_output`, `duration_ms`, `status` to `ai_generation_logs` (best-effort; does not log user-provided prompt fields).
 
 ### Frontend (JS)
 
-**State Management (`App.wizardState`):**
--   `step`: 'input' | 'loading' | 'review'
--   `inputs`: { ...user selections... }
--   `results`: [ ...strings... ]
+**State Management (`window.AIWizard.state`):**
+-   `step`: `'input' | 'loading' | 'review'`
+-   `inputs`: `{ category, focus, difficulty, budget, context }`
+-   `results`: `string[]` (24)
+-   `mode`: `'create' | 'append'`
+-   `targetCardId`: `string | null`
 
 ## UI / UX Flow
 
@@ -211,8 +242,11 @@ type AIProvider interface {
 │ How intense?                                                │
 │ ( ) Chill   (●) Balanced   ( ) Hardcore                     │
 │                                                             │
-│ Any other details?                                          │
-│ [ I have a budget of $50/month...       ]                   │
+│ Budget level                                                │
+│ (●) Free   ( ) Low   ( ) Medium   ( ) High                  │
+│                                                             │
+│ Any other context?                                          │
+│ [ I live in a city, I don't drive...    ]                   │
 │                                                             │
 │                   [ Generate Goals ✨ ]                     │
 └─────────────────────────────────────────────────────────────┘
@@ -228,32 +262,35 @@ type AIProvider interface {
 │ └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
 │ ... (Grid of 24 items) ...                                  │
 │                                                             │
-│ [ Regenerate All ↻ ]   [ Click item to edit ]               │
+│ [ Start Over ]   [ Edit items inline ]                      │
 │                                                             │
-│                   [ Create Card → ]                         │
+│          [ Create Card → ]  or  [ Add to Card → ]           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Implementation Phases
+## Implementation Phases (Adjusted to Match Implementation)
 
 ### Phase 0: Configuration & Secrets
-1.  [ ] **Environment**: Update `.env.example` to include `GEMINI_API_KEY`.
-2.  [ ] **Compose Files**: Update `compose.yaml` (local), `compose.prod.yaml`, and `compose.server.yaml` to inject `GEMINI_API_KEY`.
-3.  [ ] **Config Loader**: Update `internal/config/config.go` to load the key into the `Config` struct.
-4.  [ ] **CI/CD**: Update GitHub Secrets to include `GEMINI_API_KEY`. Update `.github/workflows/ci.yaml` to inject this secret into the `.env.production` file created during deployment.
+1.  [x] **Environment**: `.env.example` includes `GEMINI_API_KEY`.
+2.  [x] **Compose Files**: `compose.yaml`, `compose.prod.yaml`, and `compose.server.yaml` pass `GEMINI_API_KEY` through to the server container.
+3.  [x] **Config Loader**: `internal/config/config.go` loads `GEMINI_API_KEY` into `cfg.AI.GeminiAPIKey`.
+4.  [x] **CI/CD**: GitHub Actions deployment writes `GEMINI_API_KEY` into the deployed `.env` on the server (expects the `GEMINI_API_KEY` secret to exist in GitHub).
 
 ### Phase 1: Infrastructure & Service
-1.  [ ] **Migration**: Create `ai_generation_logs` table.
-2.  [ ] **Service**: Implement `internal/services/ai/gemini.go`.
-    -   Define prompt templates.
-    -   Implement JSON parsing and error handling.
+1.  [x] **Migration**: `ai_generation_logs` table created (user_id required).
+2.  [x] **Service**: `internal/services/ai/gemini.go` implements Gemini calls, JSON schema enforcement, response parsing, safety handling, and usage logging.
 
 ### Phase 2: API Layer
-1.  [ ] **Handler**: Create `internal/handlers/ai.go`.
-2.  [ ] **Rate Limiting**: Add Redis-based sliding window limiter (10 req/hr).
-3.  [ ] **Route**: Register `POST /api/ai/generate`.
-4.  [ ] **Tests**: Unit tests for prompt construction and mock API responses.
-5.  [ ] **Integration Tests**: End-to-end API tests with VCR/cassette recording.
+1.  [x] **Handler**: `internal/handlers/ai.go` validates input and maps service errors to HTTP responses.
+2.  [x] **Rate Limiting**: Redis-backed fixed-window limiter (`INCR` + `EXPIRE`) per user ID; fail-closed for the AI endpoint.
+3.  [x] **Route**: `POST /api/ai/generate` registered in `cmd/server/main.go` and documented in `web/static/openapi.yaml`.
+4.  [x] **Tests**: Unit tests for handler validation/error mapping, provider request/response parsing, and injection escaping.
+
+### Phase 3: Frontend Implementation
+1.  [x] **API Client**: `API.ai.generate(...)` calls `POST /api/ai/generate`.
+2.  [x] **Wizard Logic**: `web/static/js/ai-wizard.js` implements input → loading → review, inline editing, create-card, and append-to-card flows.
+3.  [x] **Integration**: Wizard entry points added to the create-card modal and the card view.
+4.  [x] **Assets**: `ai-wizard.js` is included in the SPA template via the hashed asset manifest.
 
 ## Testing Strategy
 
@@ -262,19 +299,9 @@ Given the external dependency (AI API) and the non-deterministic nature of LLMs,
 ### 1. Unit Tests (`internal/services/ai/`)
 *   **Prompt Construction**: Verify that user inputs (category, focus, difficulty) are correctly formatted into the final prompt string.
 *   **Response Parsing**: Test the JSON parsing logic against various mock AI responses (valid JSON, malformed JSON, empty arrays).
-*   **Error Handling**: Ensure the service correctly maps API errors (429, 500, Safety Violations) to internal application errors.
+*   **Error Handling**: Ensure the service correctly maps API errors (429, decode failures, safety finish reasons) to internal application errors.
 
-### 2. Integration Tests (`tests/integration/`)
-*   **Mocked Provider**: The primary integration tests for the HTTP handler will use a `MockAIProvider` that returns pre-canned responses. This ensures the HTTP layer, Rate Limiter, and Logging middleware work without calling the real API.
-*   **"Live" Tests (with Recording)**: We will create a test that *can* hit the real API but uses a VCR-like pattern (saving the response to a file) to ensure the contract with Google Gemini remains valid.
-    *   *Note*: These will be run manually or on a schedule, not on every PR commit, to save costs and avoid flakiness.
-
-### 3. Frontend Tests (`web/static/js/tests/`)
-*   **State Management**: Unit tests for the wizard state reducer (handling user input updates).
-*   **Component Rendering**: Verify the "Wizard" form renders correct options.
-*   **API Integration**: Mock `fetch` to verify `API.ai.generate` constructs the correct request body and handles the loading state transition.
-
-### 4. QA & Safety Verification
+### 2. QA & Safety Verification
 *   **Safety Probe**: A specific manual test set where we attempt to feed "unsafe" inputs to the local dev environment to verify the safety filters trigger the correct error message.
 
 ## Error Handling Specification
@@ -300,9 +327,12 @@ The handler will catch these errors and map them to standard HTTP status codes u
 | :--- | :--- | :--- |
 | `ErrAIProviderUnavailable` | `503 Service Unavailable` | "The AI service is currently down. Please try again later." |
 | `ErrSafetyViolation` | `400 Bad Request` | "We couldn't generate safe goals for that topic. Please try rephrasing." |
-| `ErrRateLimitExceeded` | `429 Too Many Requests` | "You've reached the limit for AI generations. Please try again in an hour." |
+| `ErrRateLimitExceeded` | `429 Too Many Requests` | "AI provider rate limit exceeded." |
+| `ErrAINotConfigured` | `503 Service Unavailable` | "AI is not configured on this server. Please try again later." |
 | `ErrInvalidInput` | `400 Bad Request` | "Invalid input provided." |
 | *(Unknown Error)* | `500 Internal Server Error` | "An unexpected error occurred." |
+
+**Note:** In addition to the provider-side 429 above, the server also enforces a Redis-backed per-user request limit on this endpoint (returns `429` with `"Rate limit exceeded"` when exceeded).
 
 ### 3. JSON Response Format
 All errors will return the standard JSON structure:
@@ -322,7 +352,14 @@ All errors will return the standard JSON structure:
     -   If the API returns a safety violation, we show a generic error: "We couldn't generate safe goals for that topic. Please try rephrasing."
 3.  **Cost Denial of Service**:
     -   Strict Rate Limits (10/hr).
-    -   Max token limits on the API request (prevent AI from generating novels).
+    -   Request size limits on the handler (8KB JSON body; focus/context max lengths).
+
+## Not Implemented (Planned Enhancements)
+
+- **Wizard resume via `localStorage`**: The wizard state is currently in-memory only (closing the modal resets it).
+- **Regenerate-all / per-item regeneration**: The wizard currently supports “Start Over” (new run) and manual editing, but not server-side regeneration controls.
+- **Recorded “live” provider tests (VCR/cassette)**: Tests use mocked HTTP round-trippers instead of recorded live responses.
+- **Frontend unit tests for the wizard**: No JS tests were added for `AIWizard`.
 
 ## Cost Analysis
 
