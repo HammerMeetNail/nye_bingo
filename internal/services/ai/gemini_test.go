@@ -55,12 +55,12 @@ func TestGenerateGoals(t *testing.T) {
 				if !strings.Contains(text, "medium-difficulty hobbies goals") {
 					t.Errorf("expected category+difficulty in prompt, got %q", text)
 				}
-					if !strings.Contains(text, "<user_focus>\nCooking\n</user_focus>") {
-						t.Errorf("expected focus block in prompt, got %q", text)
-					}
-					if !strings.Contains(text, "BUDGET CONSTRAINT: The goals must be completely free or very low cost (under $20).") {
-						t.Errorf("expected budget instruction in prompt, got %q", text)
-					}
+				if !strings.Contains(text, "<user_focus>\nCooking\n</user_focus>") {
+					t.Errorf("expected focus block in prompt, got %q", text)
+				}
+				if !strings.Contains(text, "BUDGET CONSTRAINT: The goals must be completely free or very low cost (under $20).") {
+					t.Errorf("expected budget instruction in prompt, got %q", text)
+				}
 
 				resp := geminiResponse{
 					Candidates: []geminiCandidate{
