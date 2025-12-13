@@ -150,26 +150,26 @@ const AIWizard = {
         </div>
 
         <div class="form-group">
-            <label class="form-label">Budget Level</label>
-            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="budget" value="free" checked> 
-                    <span>$ (Free/Cheap)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="budget" value="low"> 
-                    <span>$$ (Moderate)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="budget" value="medium"> 
-                    <span>$$$ (Pricey)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="budget" value="high"> 
-                    <span>$$$$ (Splurge)</span>
-                </label>
-            </div>
-        </div>
+	            <label class="form-label">Budget Level</label>
+	            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+	                    <input type="radio" name="budget" value="free" checked> 
+	                    <span>$</span>
+	                </label>
+	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+	                    <input type="radio" name="budget" value="low"> 
+	                    <span>$$</span>
+	                </label>
+	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+	                    <input type="radio" name="budget" value="medium"> 
+	                    <span>$$$</span>
+	                </label>
+	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+	                    <input type="radio" name="budget" value="high"> 
+	                    <span>$$$$</span>
+	                </label>
+	            </div>
+	        </div>
 
         <div class="form-group">
             <label class="form-label">Any other context?</label>

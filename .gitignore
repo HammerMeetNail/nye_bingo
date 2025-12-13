@@ -53,6 +53,7 @@ web/static/dist/
 *.tmp
 *.temp
 .cache/
+.gocache/
 
 # Logs
 *.log

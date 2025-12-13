@@ -2444,24 +2444,110 @@ const App = {
     });
   },
 
-  showItemOptions(cell) {
-    const position = cell.dataset.position;
-    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content').textContent;
+	  showItemOptions(cell) {
+	    const position = parseInt(cell.dataset.position, 10);
+	    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content').textContent;
 
-    this.openModal('Edit Item', `
-      <div class="item-detail">
-        <p class="item-detail-content">${this.escapeHtml(content)}</p>
-      </div>
-      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <button class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
-          Cancel
-        </button>
-        <button class="btn btn-primary" style="flex: 1; background: var(--color-error);" onclick="App.removeItem(${position})">
-          Remove
-        </button>
-      </div>
-    `);
-  },
+	    this.openModal('Edit Goal', `
+	      <form onsubmit="App.saveItemEdit(event, ${position})">
+	        <div class="form-group">
+	          <label class="form-label" for="edit-item-content-${position}">Goal</label>
+	          <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
+	        </div>
+	        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+	          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+	            Cancel
+	          </button>
+	          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" onclick="App.removeItem(${position})">
+	            Remove
+	          </button>
+	          <button type="submit" class="btn btn-primary" style="flex: 1;">
+	            Save
+	          </button>
+	        </div>
+	      </form>
+	    `);
+	  },
+	
+	  updateUsedSuggestionsForContentChange(position, oldContent, newContent) {
+	    const oldKey = (oldContent || '').toLowerCase();
+	    const newKey = (newContent || '').toLowerCase();
+	    if (!oldKey || !newKey || oldKey === newKey) return;
+	
+	    const stillUsesOld = (this.currentCard.items || []).some(
+	      i => i.position !== position && (i.content || '').toLowerCase() === oldKey
+	    );
+	    if (!stillUsesOld) {
+	      this.usedSuggestions.delete(oldKey);
+	    }
+	    this.usedSuggestions.add(newKey);
+	  },
+	
+	  async saveItemEdit(event, position) {
+	    event.preventDefault();
+	
+	    const textarea = document.getElementById(`edit-item-content-${position}`);
+	    if (!textarea) return;
+	
+	    const newContent = textarea.value.trim();
+	    if (!newContent) {
+	      this.toast('Goal cannot be empty', 'error');
+	      return;
+	    }
+	    if (newContent.length > 500) {
+	      this.toast('Goal must be 500 characters or less', 'error');
+	      return;
+	    }
+	
+	    const item = this.currentCard.items?.find(i => i.position === position);
+	    if (!item) {
+	      this.toast('Item not found', 'error');
+	      return;
+	    }
+	    const oldContent = item.content || '';
+	
+	    if (newContent === oldContent) {
+	      this.closeModal();
+	      return;
+	    }
+	
+	    try {
+	      if (this.isAnonymousMode) {
+	        const ok = AnonymousCard.updateItem(position, newContent);
+	        if (!ok) throw new Error('Failed to update goal');
+	        item.content = newContent;
+	      } else {
+	        const response = await API.cards.updateItem(this.currentCard.id, position, { content: newContent });
+	        if (response?.item) {
+	          Object.assign(item, response.item);
+	        } else {
+	          item.content = newContent;
+	        }
+	      }
+	
+	      this.updateUsedSuggestionsForContentChange(position, oldContent, item.content);
+	
+	      const cell = document.querySelector(`.bingo-cell[data-position="${position}"]`);
+	      if (cell) {
+	        cell.dataset.content = item.content;
+	        cell.title = item.content;
+	        const contentEl = cell.querySelector('.bingo-cell-content');
+	        if (contentEl) {
+	          contentEl.textContent = this.truncateText(item.content, 50);
+	        }
+	      }
+	
+	      const activeTab = document.querySelector('.category-tab--active');
+	      if (activeTab) {
+	        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
+	      }
+	
+	      this.closeModal();
+	      this.toast('Goal updated', 'success');
+	    } catch (error) {
+	      this.toast(error.message, 'error');
+	    }
+	  },
 
   async addItem() {
     const input = document.getElementById('item-input');
@@ -2672,11 +2758,15 @@ const App = {
         await API.cards.removeItem(this.currentCard.id, position);
       }
 
-      // Update local state
-      this.currentCard.items = this.currentCard.items.filter(i => i.position !== position);
-      if (item) {
-        this.usedSuggestions.delete(item.content.toLowerCase());
-      }
+	      // Update local state
+	      this.currentCard.items = this.currentCard.items.filter(i => i.position !== position);
+	      if (item) {
+	        const key = (item.content || '').toLowerCase();
+	        if (key) {
+	          const stillUsed = this.currentCard.items.some(i => (i.content || '').toLowerCase() === key);
+	          if (!stillUsed) this.usedSuggestions.delete(key);
+	        }
+	      }
 
       // Update grid
       const cell = document.querySelector(`[data-position="${position}"]`);
