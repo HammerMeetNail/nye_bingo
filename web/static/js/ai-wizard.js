@@ -5,6 +5,21 @@ const AIWizard = {
     results: [],
     mode: 'create', // 'create' or 'append'
     targetCardId: null,
+    desiredCount: null,
+  },
+
+  computeOpenCellsForCard(card) {
+    const itemCount = card?.items ? card.items.length : 0;
+    return Math.max(0, 24 - itemCount);
+  },
+
+  computeOpenCellsFromDOM() {
+    const grid = document.getElementById('bingo-grid');
+    if (!grid) return null;
+    const allCells = grid.querySelectorAll('.bingo-cell[data-position]');
+    if (!allCells.length) return null;
+    const filledCells = grid.querySelectorAll('.bingo-cell[data-position][data-item-id]');
+    return Math.max(0, allCells.length - filledCells.length);
   },
 
   mapWizardCategoryToCardCategory(category) {
@@ -19,13 +34,17 @@ const AIWizard = {
     return Object.prototype.hasOwnProperty.call(map, category) ? map[category] : null;
   },
 
-  open(targetCardId = null) {
+  open(targetCardId = null, desiredCount = null) {
+    const desiredCountNumber = Number(desiredCount);
+    const desiredCountValue = Number.isFinite(desiredCountNumber) ? desiredCountNumber : null;
+
     this.state = { 
       step: 'input', 
       inputs: {}, 
       results: [],
       mode: targetCardId ? 'append' : 'create',
-      targetCardId: targetCardId
+      targetCardId: targetCardId,
+      desiredCount: desiredCountValue,
     };
     this.render();
   },
@@ -48,9 +67,12 @@ const AIWizard = {
     const showQuota = App.user && !App.user.email_verified;
     const used = showQuota && typeof App.user.ai_free_generations_used === 'number' ? App.user.ai_free_generations_used : 0;
     const remaining = showQuota ? Math.max(0, freeLimit - used) : null;
+    const desiredCount = this.getDesiredCountSync();
     return `
       <div class="text-muted mb-md">
-        Describe what you want, and we'll generate 24 custom Bingo goals for you.
+        ${this.state.mode === 'append'
+          ? `Describe what you want, and we'll generate <strong>${desiredCount}</strong> goals to fill your empty squares.`
+          : `Describe what you want, and we'll generate 24 custom Bingo goals for you.`}
       </div>
       ${showQuota ? `
         <div class="text-muted mb-md" style="font-size: 0.9rem;">
@@ -173,7 +195,8 @@ const AIWizard = {
 
     try {
       // Passing budget as the 4th argument
-      const response = await API.ai.generate(category, focus, difficulty, budget, context);
+      const count = await this.resolveDesiredCount();
+      const response = await API.ai.generate(category, focus, difficulty, budget, context, count);
       if (App.user && !App.user.email_verified && typeof response?.free_remaining === 'number') {
         App.user.ai_free_generations_used = Math.max(0, 5 - response.free_remaining);
       }
@@ -213,6 +236,37 @@ const AIWizard = {
         <button type="button" class="btn btn-primary" style="flex: 1;" onclick="${actionFunction}">${actionButtonText}</button>
       </div>
     `;
+  },
+
+  getDesiredCountSync() {
+    if (this.state.mode !== 'append') return 24;
+    const fromDom = this.computeOpenCellsFromDOM();
+    if (typeof fromDom === 'number') return Math.max(0, Math.min(24, fromDom));
+    if (typeof this.state.desiredCount === 'number' && Number.isFinite(this.state.desiredCount)) {
+      const n = Math.max(0, Math.min(24, Math.floor(this.state.desiredCount)));
+      return n;
+    }
+    if (App.currentCard && this.state.targetCardId && App.currentCard.id === this.state.targetCardId) {
+      return this.computeOpenCellsForCard(App.currentCard);
+    }
+    return 24;
+  },
+
+  async resolveDesiredCount() {
+    let count = this.getDesiredCountSync();
+    if (this.state.mode === 'append' && this.state.targetCardId && !count) {
+      try {
+        const res = await API.cards.get(this.state.targetCardId);
+        const itemCount = res.card?.items ? res.card.items.length : 0;
+        count = Math.max(0, 24 - itemCount);
+      } catch (e) {
+        // Ignore and fall back
+      }
+    }
+
+    count = Math.max(1, Math.min(24, Math.floor(count)));
+    this.state.desiredCount = count;
+    return count;
   },
 
   setupReviewEvents() {

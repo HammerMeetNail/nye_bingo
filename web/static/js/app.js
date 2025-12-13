@@ -8,6 +8,11 @@ const App = {
   allowedEmojis: ['🎉', '👏', '🔥', '❤️', '⭐'],
   isLoading: false,
   isAnonymousMode: false, // True when editing an anonymous card (localStorage)
+  currentView: null,
+  _lastHash: '',
+  _pendingNavigationHash: null,
+  _revertingHashChange: false,
+  _allowNextHashRoute: false,
 
   async init() {
     await API.init();
@@ -15,7 +20,83 @@ const App = {
     this.setupNavigation();
     this.setupModal();
     this.setupOfflineDetection();
+    this.setupNavigationGuards();
+    this._lastHash = window.location.hash || '#home';
     this.route();
+  },
+
+  setupNavigationGuards() {
+    window.addEventListener('beforeunload', (e) => {
+      if (!this.shouldWarnUnfinalizedCardNavigation()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+  },
+
+  shouldWarnUnfinalizedCardNavigation() {
+    if (!this.currentCard) return false;
+    if (this.currentCard.is_finalized) return false;
+    if (this.currentView !== 'card-editor') return false;
+    const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
+    return itemCount >= 24;
+  },
+
+  handleHashChange() {
+    const newHash = window.location.hash || '#home';
+
+    if (this._revertingHashChange) {
+      this._revertingHashChange = false;
+      this._lastHash = newHash;
+      return;
+    }
+
+    if (this._allowNextHashRoute) {
+      this._allowNextHashRoute = false;
+      this._lastHash = newHash;
+      this.route();
+      return;
+    }
+
+    const oldHash = this._lastHash || '#home';
+    if (this.shouldWarnUnfinalizedCardNavigation() && newHash !== oldHash) {
+      this._pendingNavigationHash = newHash;
+      this._revertingHashChange = true;
+      window.location.hash = oldHash;
+      this.showUnfinalizedCardNavigationModal();
+      return;
+    }
+
+    this._lastHash = newHash;
+    this.route();
+  },
+
+  showUnfinalizedCardNavigationModal() {
+    this.openModal('Card Not Finalized', `
+      <div class="finalize-confirm-modal">
+        <p style="margin-bottom: 1.5rem;">
+          Your card is full, but it hasn't been finalized yet. Finalizing locks the layout so you can start tracking completion.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Stay</button>
+          <button class="btn btn-secondary" onclick="App.proceedPendingNavigation()">Leave Anyway</button>
+          <button class="btn btn-primary" onclick="App.openFinalizeFromNavigationWarning()">Finalize Card</button>
+        </div>
+      </div>
+    `);
+  },
+
+  openFinalizeFromNavigationWarning() {
+    this.closeModal();
+    this.finalizeCard();
+  },
+
+  proceedPendingNavigation() {
+    const target = this._pendingNavigationHash;
+    this._pendingNavigationHash = null;
+    this.closeModal();
+    if (!target) return;
+    this._allowNextHashRoute = true;
+    window.location.hash = target;
   },
 
   // Loading state management
@@ -342,6 +423,7 @@ const App = {
   route() {
     this.closeMobileMenu();
     window.scrollTo(0, 0);
+    this.currentView = null;
     const hash = window.location.hash.slice(1) || 'home';
     // Parse hash with query parameters: page?param=value
     const [pagePart, queryPart] = hash.split('?');
@@ -1596,6 +1678,7 @@ const App = {
   },
 
   renderCardEditor(container) {
+    this.currentView = 'card-editor';
     const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
     const progress = Math.round((itemCount / 24) * 100);
     const displayName = this.getCardDisplayName(this.currentCard);
@@ -1652,6 +1735,9 @@ const App = {
           </div>
 
           <div class="action-bar action-bar--side editor-actions">
+            <button class="btn btn-secondary btn-danger-outline" id="clear-btn" onclick="App.confirmClearCardItems()" ${itemCount === 0 ? 'disabled' : ''}>
+              🧹 Clear
+            </button>
             <button class="btn btn-secondary" onclick="App.shuffleCard()" ${itemCount === 0 ? 'disabled' : ''}>
               🔀 Shuffle
             </button>
@@ -1669,7 +1755,7 @@ const App = {
                     🧙 AI
                   </button>
                 ` : `
-                  <button class="btn btn-secondary btn-sm" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
+                  <button class="btn btn-secondary btn-sm" id="ai-btn" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
                     🧙 AI
                   </button>
                 `}
@@ -1702,6 +1788,73 @@ const App = {
     `;
 
     this.setupEditorEvents();
+  },
+
+  confirmClearCardItems() {
+    const itemCount = this.currentCard?.items ? this.currentCard.items.length : 0;
+    if (itemCount === 0) return;
+
+    this.openModal('Clear Card', `
+      <div class="finalize-confirm-modal">
+        <p style="margin-bottom: 1.5rem;">
+          Clear all ${itemCount} items from this card? This can't be undone.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button class="btn btn-primary" style="background: var(--danger); border-color: var(--danger);" onclick="App.clearCardItems()">Clear All</button>
+        </div>
+      </div>
+    `);
+  },
+
+  async clearCardItems() {
+    const items = this.currentCard?.items ? [...this.currentCard.items] : [];
+    if (items.length === 0) {
+      this.closeModal();
+      return;
+    }
+
+    try {
+      if (this.isAnonymousMode) {
+        AnonymousCard.clearItems();
+      } else {
+        await Promise.all(items.map(item => API.cards.removeItem(this.currentCard.id, item.position)));
+      }
+
+      this.currentCard.items = [];
+      this.usedSuggestions = new Set();
+
+      document.querySelectorAll('#bingo-grid .bingo-cell').forEach((cell) => {
+        if (cell.classList.contains('bingo-cell--free')) return;
+        cell.className = 'bingo-cell bingo-cell--empty';
+        cell.removeAttribute('data-item-id');
+        cell.removeAttribute('draggable');
+        cell.innerHTML = '';
+      });
+
+      document.querySelector('.progress-fill').style.width = '0%';
+      document.querySelector('.progress-text').textContent = '0/24 items added';
+
+      document.getElementById('item-input').disabled = false;
+      document.getElementById('add-btn').disabled = false;
+      document.getElementById('fill-empty-btn').disabled = false;
+      const clearBtn = document.getElementById('clear-btn');
+      if (clearBtn) clearBtn.disabled = true;
+      const aiBtn = document.getElementById('ai-btn');
+      if (aiBtn) aiBtn.disabled = false;
+      document.querySelector('[onclick="App.shuffleCard()"]').disabled = true;
+      document.querySelector('[onclick="App.finalizeCard()"]').disabled = true;
+
+      const activeTab = document.querySelector('.category-tab--active');
+      if (activeTab) {
+        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
+      }
+
+      this.closeModal();
+      this.toast('Card cleared', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
   },
 
   // Load and render the anonymous card editor (localStorage mode)
@@ -1804,6 +1957,7 @@ const App = {
   },
 
   renderFinalizedCard(container) {
+    this.currentView = 'finalized-card';
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const progress = Math.round((completedCount / 24) * 100);
     const displayName = this.getCardDisplayName(this.currentCard);
@@ -2373,6 +2527,10 @@ const App = {
         document.getElementById('fill-empty-btn').disabled = true;
         document.querySelector('[onclick="App.finalizeCard()"]').disabled = false;
       }
+      const clearBtn = document.getElementById('clear-btn');
+      if (clearBtn) clearBtn.disabled = itemCount === 0;
+      const aiBtn = document.getElementById('ai-btn');
+      if (aiBtn) aiBtn.disabled = itemCount >= 24;
       document.querySelector('[onclick="App.shuffleCard()"]').disabled = false;
 
       // Update suggestions
@@ -2486,6 +2644,10 @@ const App = {
     document.getElementById('item-input').disabled = isFull;
     document.getElementById('add-btn').disabled = isFull;
     document.getElementById('fill-empty-btn').disabled = isFull;
+    const clearBtn = document.getElementById('clear-btn');
+    if (clearBtn) clearBtn.disabled = itemCount === 0;
+    const aiBtn = document.getElementById('ai-btn');
+    if (aiBtn) aiBtn.disabled = isFull;
     document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
     document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < 24;
 
@@ -2533,6 +2695,10 @@ const App = {
       document.getElementById('item-input').disabled = false;
       document.getElementById('add-btn').disabled = false;
       document.getElementById('fill-empty-btn').disabled = false;
+      const clearBtn = document.getElementById('clear-btn');
+      if (clearBtn) clearBtn.disabled = itemCount === 0;
+      const aiBtn = document.getElementById('ai-btn');
+      if (aiBtn) aiBtn.disabled = itemCount >= 24;
       document.querySelector('[onclick="App.finalizeCard()"]').disabled = true;
       if (itemCount === 0) {
         document.querySelector('[onclick="App.shuffleCard()"]').disabled = true;
@@ -3955,10 +4121,35 @@ const App = {
   },
 
   async logout() {
+    if (this.shouldWarnUnfinalizedCardNavigation()) {
+      this.confirmLogoutUnfinalizedCard();
+      return;
+    }
+    await this.confirmedLogout();
+  },
+
+  confirmLogoutUnfinalizedCard() {
+    this.openModal('Card Not Finalized', `
+      <div class="finalize-confirm-modal">
+        <p style="margin-bottom: 1.5rem;">
+          Your card is full, but it hasn't been finalized yet. If you log out now, you might lose track of this card.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Stay</button>
+          <button class="btn btn-secondary" onclick="App.confirmedLogout()">Log Out Anyway</button>
+          <button class="btn btn-primary" onclick="App.openFinalizeFromNavigationWarning()">Finalize Card</button>
+        </div>
+      </div>
+    `);
+  },
+
+  async confirmedLogout() {
     try {
+      this.closeModal();
       await API.auth.logout();
       this.user = null;
       this.setupNavigation();
+      this._allowNextHashRoute = true;
       window.location.hash = '#home';
       this.toast('Logged out successfully', 'success');
     } catch (error) {
@@ -4958,5 +5149,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Handle hash changes
 window.addEventListener('hashchange', () => {
-  App.route();
+  App.handleHashChange();
 });

@@ -14,8 +14,9 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 - **Create Bingo Cards**: Build a personalized 5x5 bingo card with 24 goals (center is a free space)
 - **Drag and Drop**: Rearrange items on your card with drag and drop (desktop) or long-press and drag (mobile)
 - **Try Before Signing Up**: Create and customize a card anonymously, then sign up to save it
-- **AI Goal Wizard**: Generate 24 goals with AI (requires an account; unverified users get 5 free generations, then must verify email)
+- **AI Goal Wizard**: Generate goals with AI to fill empty squares (requires an account; unverified users get 5 free generations, then must verify email)
 - **Fill Empty Spaces**: Auto-fill empty card slots with random suggestions to get started quickly
+- **Quality of Life**: Clear all cells on an unfinalized card, and get a warning prompt if you try to leave a full but unfinalized card
 - **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
 - **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo

@@ -58,6 +58,15 @@ const AnonymousCard = {
     localStorage.removeItem(this.STORAGE_KEY);
   },
 
+  // Clear all items on the anonymous card
+  clearItems() {
+    const card = this.get();
+    if (!card) return false;
+    card.items = [];
+    this.save(card);
+    return true;
+  },
+
   // Add an item to the anonymous card
   addItem(text) {
     const card = this.get();

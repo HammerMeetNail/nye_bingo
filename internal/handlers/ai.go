@@ -30,6 +30,7 @@ type GenerateRequest struct {
 	Difficulty string `json:"difficulty"`
 	Budget     string `json:"budget"`
 	Context    string `json:"context"`
+	Count      int    `json:"count"`
 }
 
 type GenerateResponse struct {
@@ -86,6 +87,14 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Count == 0 {
+		req.Count = 24
+	}
+	if req.Count < 1 || req.Count > 24 {
+		writeError(w, http.StatusBadRequest, "Count must be between 1 and 24")
+		return
+	}
+
 	user := GetUserFromContext(r.Context())
 	if user == nil {
 		writeError(w, http.StatusUnauthorized, "Authentication required")
@@ -121,6 +130,7 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		Difficulty: req.Difficulty,
 		Budget:     req.Budget,
 		Context:    req.Context,
+		Count:      req.Count,
 	}
 
 	goals, _, err := h.service.GenerateGoals(r.Context(), user.ID, prompt)

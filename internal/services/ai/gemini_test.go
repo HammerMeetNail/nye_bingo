@@ -25,11 +25,12 @@ func TestGenerateGoals(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		roundTrip  func(r *http.Request) (*http.Response, error)
-		wantGoals  int
-		wantErrIs  error
-		wantTokens int
+		name        string
+		roundTrip   func(r *http.Request) (*http.Response, error)
+		promptCount int
+		wantGoals   int
+		wantErrIs   error
+		wantTokens  int
 	}{
 		{
 			name: "success",
@@ -82,6 +83,41 @@ func TestGenerateGoals(t *testing.T) {
 			},
 			wantGoals:  24,
 			wantTokens: 100,
+		},
+		{
+			name: "success-custom-count",
+			roundTrip: func(r *http.Request) (*http.Response, error) {
+				var req geminiRequest
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					t.Errorf("failed to decode request: %v", err)
+					return nil, fmt.Errorf("failed to decode request")
+				}
+				text := req.Contents[0].Parts[0].Text
+				if !strings.Contains(text, "Generate a list of 5 distinct") {
+					t.Errorf("expected count in prompt, got %q", text)
+				}
+
+				resp := geminiResponse{
+					Candidates: []geminiCandidate{
+						{
+							Content: geminiContent{
+								Parts: []geminiPart{
+									{Text: mustJSON(t, makeGoals(5))},
+								},
+							},
+							FinishReason: "STOP",
+						},
+					},
+					Usage: geminiUsage{
+						PromptTokenCount:     5,
+						CandidatesTokenCount: 5,
+					},
+				}
+				return jsonHTTPResponse(t, http.StatusOK, resp), nil
+			},
+			promptCount: 5,
+			wantGoals:   5,
+			wantTokens:  5,
 		},
 		{
 			name: "markdown-wrapped-json",
@@ -198,6 +234,7 @@ func TestGenerateGoals(t *testing.T) {
 				Difficulty: "medium",
 				Budget:     "free",
 				Context:    "test context",
+				Count:      tt.promptCount,
 			}
 
 			goals, stats, err := service.GenerateGoals(context.Background(), uuid.New(), prompt)

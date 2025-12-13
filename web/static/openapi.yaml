@@ -10,7 +10,7 @@ info:
     Example: `Authorization: Bearer yob_abc123...`
 
     Note: Some endpoints (e.g. AI generation) require an authenticated browser session cookie and do not accept API tokens.
-  version: 1.0.0
+  version: 1.1.0
 servers:
   - url: /api
 components:
@@ -426,7 +426,7 @@ paths:
     post:
       summary: Generate AI goals
       description: |
-        Generates 24 suggested bingo goals based on user inputs.
+        Generates suggested bingo goals (1-24) based on user inputs.
 
         This endpoint requires a browser session cookie (API tokens are not allowed).
       security:
@@ -457,6 +457,11 @@ paths:
                 context:
                   type: string
                   maxLength: 500
+                count:
+                  type: integer
+                  minimum: 1
+                  maximum: 24
+                  default: 24
       responses:
         '200':
           description: Generated goals
