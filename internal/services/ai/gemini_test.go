@@ -36,8 +36,11 @@ func TestGenerateGoals(t *testing.T) {
 		}
 
 		text := req.Contents[0].Parts[0].Text
-		if !strings.Contains(text, "Hobbies goals focused on Cooking") {
-			t.Errorf("expected category/focus in prompt, got %s", text)
+		if !strings.Contains(text, "Hobbies goals") {
+			t.Errorf("expected category in prompt, got %s", text)
+		}
+		if !strings.Contains(text, "<user_focus>\nCooking\n</user_focus>") {
+			t.Errorf("expected focus block in prompt, got %s", text)
 		}
 
 		// Send mock response
