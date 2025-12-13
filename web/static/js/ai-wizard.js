@@ -289,9 +289,15 @@ const AIWizard = {
         .filter(r => r.status === 'fulfilled')
         .map(r => r.value);
 
-      await Promise.allSettled(
+      const rollbackResults = await Promise.allSettled(
         successes.map(({ pos }) => API.cards.removeItem(cardId, pos))
       );
+
+      const rollbackFailures = rollbackResults.filter(r => r.status === 'rejected');
+      if (rollbackFailures.length > 0) {
+        console.error('Rollback failed for some items:', rollbackFailures);
+        throw new Error('Failed to add some goals. Rollback was attempted but failed for some items. Please refresh the card and verify its contents.');
+      }
 
       throw new Error('Failed to add some goals. Please try again.');
   }

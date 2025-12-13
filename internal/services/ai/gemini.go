@@ -127,8 +127,8 @@ func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt Go
 	systemPrompt := "You are an expert adventure curator and life coach."
 
 	// Sanitize user inputs to prevent prompt injection and excessive token usage
-	focus := sanitizeInput(prompt.Focus)
-	contextInput := sanitizeInput(prompt.Context)
+	focus := escapeXMLTags(sanitizeInput(prompt.Focus))
+	contextInput := escapeXMLTags(sanitizeInput(prompt.Context))
 
 	// Construct the prompt with specific style rules
 	topic := prompt.Category
@@ -382,10 +382,15 @@ func sanitizeInput(input string) string {
 	input = strings.TrimSpace(input)
 	input = strings.Join(strings.Fields(input), " ")
 
-	// Truncate to a reasonable length (e.g., 500 characters)
-	if len(input) > 500 {
-		input = input[:500]
+	// Truncate to a reasonable length (e.g., 500 characters), rune-aware.
+	if len([]rune(input)) > 500 {
+		input = string([]rune(input)[:500])
 	}
 
 	return input
+}
+
+func escapeXMLTags(input string) string {
+	replacer := strings.NewReplacer("<", "＜", ">", "＞")
+	return replacer.Replace(input)
 }

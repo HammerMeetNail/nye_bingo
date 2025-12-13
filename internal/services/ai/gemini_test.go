@@ -59,7 +59,7 @@ func TestGenerateGoals(t *testing.T) {
 					t.Errorf("expected focus block in prompt, got %q", text)
 				}
 				if strings.Contains(text, "Goals must be budget-friendly ($20-$100) and public") {
-					t.Error("found conflicting hardcoded budget rule in prompt")
+					t.Error("prompt should not contain conflicting hardcoded budget rule")
 				}
 
 				resp := geminiResponse{
@@ -218,6 +218,62 @@ func TestGenerateGoals(t *testing.T) {
 				t.Fatalf("expected %d input tokens, got %d", tt.wantTokens, stats.TokensInput)
 			}
 		})
+	}
+}
+
+func TestGenerateGoals_EscapesAngleBracketsInUserInput(t *testing.T) {
+	cfg := &config.Config{AI: config.AIConfig{GeminiAPIKey: "test-key"}}
+	service := &Service{
+		apiKey: cfg.AI.GeminiAPIKey,
+		client: &http.Client{Transport: roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+			var req geminiRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				t.Fatalf("failed to decode request: %v", err)
+			}
+			text := req.Contents[0].Parts[0].Text
+
+			start := strings.Index(text, "<user_focus>")
+			end := strings.Index(text, "</user_focus>")
+			if start == -1 || end == -1 || end <= start {
+				t.Fatalf("missing user_focus block in prompt")
+			}
+			block := text[start+len("<user_focus>") : end]
+			if strings.Contains(block, "<") || strings.Contains(block, ">") {
+				t.Fatalf("expected user_focus block to have escaped angle brackets, got %q", block)
+			}
+
+			resp := geminiResponse{
+				Candidates: []geminiCandidate{
+					{
+						Content: geminiContent{
+							Parts: []geminiPart{
+								{Text: mustJSON(t, []string{
+									"Goal 1", "Goal 2", "Goal 3", "Goal 4", "Goal 5", "Goal 6",
+									"Goal 7", "Goal 8", "Goal 9", "Goal 10", "Goal 11", "Goal 12",
+									"Goal 13", "Goal 14", "Goal 15", "Goal 16", "Goal 17", "Goal 18",
+									"Goal 19", "Goal 20", "Goal 21", "Goal 22", "Goal 23", "Goal 24",
+								})},
+							},
+						},
+						FinishReason: "STOP",
+					},
+				},
+				Usage: geminiUsage{},
+			}
+			return jsonHTTPResponse(t, http.StatusOK, resp), nil
+		})},
+		db: nil,
+	}
+
+	_, _, err := service.GenerateGoals(context.Background(), uuid.New(), GoalPrompt{
+		Category:   "hobbies",
+		Focus:      "<b>Cooking</b>",
+		Difficulty: "medium",
+		Budget:     "free",
+		Context:    "test context",
+	})
+	if err != nil {
+		t.Fatalf("GenerateGoals failed: %v", err)
 	}
 }
 

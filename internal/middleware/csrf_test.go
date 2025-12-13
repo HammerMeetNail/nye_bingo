@@ -168,7 +168,6 @@ func TestCSRFMiddleware_GetToken(t *testing.T) {
 
 		if tokenCookie == nil {
 			t.Fatal("CSRF cookie not set")
-			return
 		}
 		if tokenCookie.Value == "" {
 			t.Error("CSRF cookie value is empty")
@@ -214,7 +213,6 @@ func TestCSRFMiddleware_SecureMode(t *testing.T) {
 
 	if tokenCookie == nil {
 		t.Fatal("CSRF cookie not set")
-		return
 	}
 	if !tokenCookie.Secure {
 		t.Error("CSRF cookie should have Secure flag in secure mode")

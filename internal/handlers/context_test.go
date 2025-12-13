@@ -36,7 +36,6 @@ func TestGetUserFromContext_WithUser(t *testing.T) {
 
 	if retrieved == nil {
 		t.Fatal("expected user to be retrieved from context")
-		return
 	}
 	if retrieved.ID != user.ID {
 		t.Errorf("expected ID %v, got %v", user.ID, retrieved.ID)
@@ -101,7 +100,6 @@ func TestSetUserInContext_OverwriteUser(t *testing.T) {
 	retrieved := GetUserFromContext(ctx)
 	if retrieved == nil {
 		t.Fatal("expected user in context")
-		return
 	}
 	if retrieved.Email != "user2@test.com" {
 		t.Error("expected second user to overwrite first")

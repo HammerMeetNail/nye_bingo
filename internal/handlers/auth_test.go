@@ -691,7 +691,6 @@ func TestAuthHandler_SessionCookie_SecureMode(t *testing.T) {
 
 	if sessionCookie == nil {
 		t.Fatal("expected session cookie to be set")
-		return
 	}
 
 	if !sessionCookie.Secure {
@@ -724,7 +723,6 @@ func TestAuthHandler_SessionCookie_NonSecureMode(t *testing.T) {
 
 	if sessionCookie == nil {
 		t.Fatal("expected session cookie to be set")
-		return
 	}
 
 	if sessionCookie.Secure {
