@@ -354,6 +354,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           IMAGE_DIGEST: ${{ needs.scan-and-push.outputs.digest }}
           IMAGE_TAG: ${{ needs.scan-and-push.outputs.tag }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -389,6 +390,7 @@ jobs:
           DB_PASSWORD=${DB_PASSWORD}
           REDIS_PASSWORD=${REDIS_PASSWORD}
           RESEND_API_KEY=${RESEND_API_KEY}
+          GEMINI_API_KEY=${GEMINI_API_KEY}
           BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
           ENVFILE
             chmod 600 .env
