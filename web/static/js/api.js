@@ -72,12 +72,13 @@ const API = {
           throw new APIError('Session expired. Please log in again.', response.status, data);
         }
         if (response.status === 403) {
+          const isCSRFError = typeof data?.error === 'string' && data.error.toLowerCase().includes('csrf token');
           // CSRF token might be invalid - refresh and retry once
-          if (!options.retried) {
+          if (isCSRFError && !options.retried) {
             await this.fetchCSRFToken();
             return this.request(method, path, body, { ...options, retried: true });
           }
-          throw new APIError('Access denied. Please refresh the page.', response.status, data);
+          throw new APIError(data?.error || 'Access denied.', response.status, data);
         }
         if (response.status === 409) {
           // Conflict - return the data so caller can handle it

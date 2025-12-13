@@ -22,6 +22,33 @@ const AIWizard = {
     return Math.max(0, allCells.length - filledCells.length);
   },
 
+  isVerificationRequiredForAI() {
+    if (!App.user) return false;
+    if (App.user.email_verified) return false;
+    const used = typeof App.user.ai_free_generations_used === 'number' ? App.user.ai_free_generations_used : 0;
+    return used >= 5;
+  },
+
+  showVerificationRequiredModal() {
+    const email = App.user?.email ? App.escapeHtml(App.user.email) : 'your email';
+    App.openModal('Verify Email Required', `
+      <div class="finalize-confirm-modal">
+        <p style="margin-bottom: 1rem;">
+          You've used your 5 free AI generations. Verify your email to keep using the AI Goal Wizard.
+        </p>
+        <p class="text-muted" style="margin-bottom: 1.5rem;">
+          Verification email is sent to <strong>${email}</strong>.
+        </p>
+        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
+          <button class="btn btn-ghost" onclick="App.closeModal()">Close</button>
+          <button class="btn btn-primary" onclick="App.resendVerification(); window.location.hash = '#check-email?type=verification&email=${encodeURIComponent(App.user?.email || '')}'">
+            Resend Verification Email
+          </button>
+        </div>
+      </div>
+    `);
+  },
+
   mapWizardCategoryToCardCategory(category) {
     const map = {
       hobbies: 'hobbies',
@@ -35,6 +62,11 @@ const AIWizard = {
   },
 
   open(targetCardId = null, desiredCount = null) {
+    if (this.isVerificationRequiredForAI()) {
+      this.showVerificationRequiredModal();
+      return;
+    }
+
     const desiredCountNumber = Number(desiredCount);
     const desiredCountValue = Number.isFinite(desiredCountNumber) ? desiredCountNumber : null;
 
@@ -172,6 +204,11 @@ const AIWizard = {
       App.toast('Please log in to use AI features.', 'error');
       return;
     }
+
+    if (this.isVerificationRequiredForAI()) {
+      this.showVerificationRequiredModal();
+      return;
+    }
     
     const category = document.getElementById('ai-category').value;
     const focus = document.getElementById('ai-focus').value;
@@ -206,6 +243,12 @@ const AIWizard = {
     } catch (error) {
       if (App.user && !App.user.email_verified && typeof error?.data?.free_remaining === 'number') {
         App.user.ai_free_generations_used = Math.max(0, 5 - error.data.free_remaining);
+      }
+      if (error?.status === 403 && App.user && !App.user.email_verified) {
+        if (this.isVerificationRequiredForAI() || error?.data?.free_remaining === 0) {
+          this.showVerificationRequiredModal();
+          return;
+        }
       }
       App.toast(error.message, 'error');
       this.state.step = 'input';
