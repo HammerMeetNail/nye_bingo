@@ -46,15 +46,34 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		key := fmt.Sprintf("%s%s", rl.prefix, keySuffix)
 		ctx := r.Context()
 
-		count, err := rl.redis.Incr(ctx, key).Result()
+		// Use a Lua script to atomically INCR and set EXPIRE if new
+		luaScript := `
+			local current
+			current = redis.call("INCR", KEYS[1])
+			if current == 1 then
+				redis.call("EXPIRE", KEYS[1], ARGV[1])
+			end
+			return current
+		`
+		ttlSeconds := int64(rl.window.Seconds())
+		result, err := rl.redis.Eval(ctx, luaScript, []string{key}, ttlSeconds).Result()
 		if err != nil {
 			logging.Error("Rate limit Redis error", map[string]interface{}{"error": err.Error()})
 			next.ServeHTTP(w, r) // Fail open
 			return
 		}
 
-		if count == 1 {
-			rl.redis.Expire(ctx, key, rl.window)
+		var count int64
+		// Redis may return int64 or float64 depending on the client/driver details for Lua, handle both
+		switch v := result.(type) {
+		case int64:
+			count = v
+		case float64:
+			count = int64(v)
+		default:
+			logging.Error("Rate limit Redis script returned unexpected type", map[string]interface{}{"type": fmt.Sprintf("%T", result)})
+			next.ServeHTTP(w, r)
+			return
 		}
 
 		if count > rl.limit {

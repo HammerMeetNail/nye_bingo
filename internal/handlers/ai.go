@@ -1,17 +1,24 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+
+	"github.com/google/uuid"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 )
 
-type AIHandler struct {
-	service *ai.Service
+type AIService interface {
+	GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
 }
 
-func NewAIHandler(service *ai.Service) *AIHandler {
+type AIHandler struct {
+	service AIService
+}
+
+func NewAIHandler(service AIService) *AIHandler {
 	return &AIHandler{service: service}
 }
 
@@ -30,8 +37,32 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Category == "" {
-		writeError(w, http.StatusBadRequest, "Category is required")
+	// Input Validation
+	validCategories := map[string]bool{"hobbies": true, "health": true, "career": true, "social": true, "travel": true, "mix": true}
+	if !validCategories[req.Category] {
+		writeError(w, http.StatusBadRequest, "Invalid category")
+		return
+	}
+
+	validDifficulties := map[string]bool{"easy": true, "medium": true, "hard": true}
+	if !validDifficulties[req.Difficulty] {
+		writeError(w, http.StatusBadRequest, "Invalid difficulty")
+		return
+	}
+
+	validBudgets := map[string]bool{"free": true, "low": true, "medium": true, "high": true}
+	if !validBudgets[req.Budget] {
+		writeError(w, http.StatusBadRequest, "Invalid budget")
+		return
+	}
+
+	if len(req.Focus) > 100 {
+		writeError(w, http.StatusBadRequest, "Focus is too long (max 100 chars)")
+		return
+	}
+
+	if len(req.Context) > 500 {
+		writeError(w, http.StatusBadRequest, "Context is too long (max 500 chars)")
 		return
 	}
 

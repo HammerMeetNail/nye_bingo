@@ -1630,7 +1630,7 @@ const App = {
             <div class="suggestions-header">
               <h3 class="suggestions-title">Suggestions</h3>
               <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-secondary btn-sm" onclick="AIWizard.open('${this.currentCard.id}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
+                <button class="btn btn-secondary btn-sm" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
                   🧙 AI
                 </button>
                 <button class="btn btn-secondary btn-sm" id="fill-empty-btn" onclick="App.fillEmptySpaces()" ${itemCount >= 24 ? 'disabled' : ''}>

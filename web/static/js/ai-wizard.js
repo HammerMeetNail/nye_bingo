@@ -141,7 +141,7 @@ const AIWizard = {
 
     try {
       console.log('AIWizard: handleGenerate() - calling API.ai.generate');
-      // Passing budget as the 4th argument (previously frequency)
+      // Passing budget as the 4th argument
       const response = await API.ai.generate(category, focus, difficulty, budget, context);
       console.log('AIWizard: handleGenerate() - API call successful', response.goals);
       this.state.results = response.goals;
@@ -174,7 +174,7 @@ const AIWizard = {
       </div>
 
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" onclick="AIWizard.open('${this.state.targetCardId || ''}')">Start Over</button>
+        <button type="button" class="btn btn-secondary" onclick="AIWizard.open('${App.escapeHtml(this.state.targetCardId || '')}')">Start Over</button>
         <button type="button" class="btn btn-primary" style="flex: 1;" onclick="${actionFunction}">${actionButtonText}</button>
       </div>
     `;
