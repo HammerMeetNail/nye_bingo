@@ -197,11 +197,11 @@ const AIWizard = {
     const category = this.state.inputs.category === 'mix' ? null : this.state.inputs.category;
 
     try {
-      App.showLoading(document.querySelector('.modal-body'), 'Creating card...');
-      
       if (!App.user) {
          throw new Error("Please log in to use AI features.");
       }
+
+      App.showLoading(document.querySelector('.modal-body'), 'Creating card...');
 
       const response = await API.cards.create(year, title, category);
       const cardId = response.card.id;
@@ -225,11 +225,11 @@ const AIWizard = {
     if (!this.state.targetCardId) return;
 
     try {
-      App.showLoading(document.querySelector('.modal-body'), 'Adding goals...');
-      
       if (!App.user) {
          throw new Error("Please log in to use AI features.");
       }
+
+      App.showLoading(document.querySelector('.modal-body'), 'Adding goals...');
 
       await this.fillCard(this.state.targetCardId);
 

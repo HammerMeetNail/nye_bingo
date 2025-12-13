@@ -204,16 +204,17 @@ Output exactly 24 distinct, short, achievable goals as a JSON array of strings.`
 
 	// Log the prompt being sent
 	logging.Info("Sending request to Gemini", map[string]interface{}{
-		"user_id": userID.String(),
-		"prompt":  userMessage,
+		"user_id":       userID.String(),
+		"prompt_length": len(userMessage),
 	})
 
-	url := fmt.Sprintf("%s/%s:generateContent?key=%s", geminiBaseURL, geminiModel, s.apiKey)
+	url := fmt.Sprintf("%s/%s:generateContent", geminiBaseURL, geminiModel)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, UsageStats{}, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-goog-api-key", s.apiKey)
 
 	resp, err := s.client.Do(req)
 	if err != nil {

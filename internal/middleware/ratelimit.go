@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -77,14 +78,18 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		}
 
 		if count > rl.limit {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"error": "Rate limit exceeded"}`))
+			writeError(w, http.StatusTooManyRequests, "Rate limit exceeded")
 			return
 		}
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func writeError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
 
 // GetClientIP extracts the client IP from the request, respecting X-Forwarded-For
