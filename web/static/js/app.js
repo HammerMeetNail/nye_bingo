@@ -66,6 +66,9 @@ const App = {
     try {
       const response = await API.auth.me();
       this.user = response.user;
+      if (this.user) {
+        this.isAnonymousMode = false;
+      }
     } catch (error) {
       this.user = null;
     }
@@ -914,11 +917,17 @@ const App = {
   // Email verification banner for dashboard
   renderEmailVerificationBanner() {
     if (!this.user || this.user.email_verified) return '';
+    const freeLimit = 5;
+    const used = typeof this.user.ai_free_generations_used === 'number' ? this.user.ai_free_generations_used : 0;
+    const remaining = Math.max(0, freeLimit - used);
     return `
       <div class="verification-banner" style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
         <div style="color: #fff;">
           <strong style="color: #ffd700;">Please verify your email</strong>
           <span style="color: #b0b0c0;"> to enable all features.</span>
+          <div class="text-muted" style="margin-top: 0.35rem; font-size: 0.9rem;">
+            AI Goal Wizard: <strong>${remaining}</strong> free generations left before verification is required.
+          </div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="App.resendVerification()">
           Resend verification email
@@ -1345,6 +1354,23 @@ const App = {
           <h2 class="card-title">Create Your Bingo Card</h2>
           <p class="card-subtitle">Set up your bingo card - no account needed to start!</p>
         </div>
+
+        <div class="card" style="margin: 0 0 1rem 0; padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color);">
+          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
+            <div style="font-size: 1.25rem; line-height: 1;">🧙</div>
+            <div>
+              <div style="font-weight: 600; margin-bottom: 0.25rem;">Want AI-generated goals?</div>
+              <div class="text-muted" style="font-size: 0.95rem; margin-bottom: 0.75rem;">
+                The AI Goal Wizard is available after you create an account.
+              </div>
+              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <a href="#register" class="btn btn-primary btn-sm">Create Account</a>
+                <a href="#login" class="btn btn-secondary btn-sm">Login</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <form id="create-card-form" onsubmit="App.handleAnonymousCreateCard(event)">
           <div class="form-group">
             <label for="card-year">Year</label>
@@ -1539,6 +1565,9 @@ const App = {
     `;
 
     try {
+      // Ensure we don't keep rendering server cards in anonymous mode due to stale state.
+      this.isAnonymousMode = false;
+
       const [cardResponse, suggestionsResponse] = await Promise.all([
         API.cards.get(cardId),
         API.suggestions.getGrouped(),
@@ -1574,11 +1603,16 @@ const App = {
     const isAnon = this.isAnonymousMode;
 
     container.innerHTML = `
-      ${isAnon ? `
+      ${this.user && !this.user.email_verified
+        ? this.renderEmailVerificationBanner()
+        : isAnon ? `
         <div class="anonymous-card-banner">
           <div class="anonymous-card-banner-content">
             <span class="anonymous-card-banner-icon">💾</span>
-            <span>This card is saved locally in your browser. <a href="#register" class="anonymous-card-banner-link">Create an account</a> to save it permanently.</span>
+            <span>
+              This card is saved locally in your browser.
+              <a href="#register" class="anonymous-card-banner-link">Create an account</a> to save it permanently and unlock the AI Goal Wizard.
+            </span>
           </div>
         </div>
       ` : ''}
@@ -1630,9 +1664,15 @@ const App = {
             <div class="suggestions-header">
               <h3 class="suggestions-title">Suggestions</h3>
               <div style="display: flex; gap: 0.5rem;">
-                <button class="btn btn-secondary btn-sm" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
-                  🧙 AI
-                </button>
+                ${isAnon ? `
+                  <button class="btn btn-secondary btn-sm" onclick="App.showAIAuthModal()" title="Create an account to use AI features">
+                    🧙 AI
+                  </button>
+                ` : `
+                  <button class="btn btn-secondary btn-sm" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
+                    🧙 AI
+                  </button>
+                `}
                 <button class="btn btn-secondary btn-sm" id="fill-empty-btn" onclick="App.fillEmptySpaces()" ${itemCount >= 24 ? 'disabled' : ''}>
                   ✨ Fill
                 </button>
@@ -2615,6 +2655,28 @@ const App = {
           <button class="btn btn-secondary btn-lg" onclick="App.showFinalizeLoginForm()">
             I Already Have an Account
           </button>
+          <button class="btn btn-ghost" onclick="App.closeModal()">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `);
+  },
+
+  showAIAuthModal() {
+    this.openModal('Use the AI Goal Wizard', `
+      <div class="finalize-auth-modal">
+        <p style="margin-bottom: 1.5rem;">
+          AI-generated goals are available after you create an account.
+          This helps prevent abuse and keeps AI costs under control.
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 1rem;">
+          <a class="btn btn-primary btn-lg" href="#register" onclick="App.closeModal()">
+            Create Account
+          </a>
+          <a class="btn btn-secondary btn-lg" href="#login" onclick="App.closeModal()">
+            I Already Have an Account
+          </a>
           <button class="btn btn-ghost" onclick="App.closeModal()">
             Cancel
           </button>

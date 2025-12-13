@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/config"
@@ -19,7 +21,8 @@ import (
 )
 
 const (
-	geminiModel = "gemini-2.5-flash-lite"
+	geminiModel                       = "gemini-2.5-flash-lite"
+	freeGenerationsBeforeVerification = 5
 )
 
 var geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -36,6 +39,40 @@ func NewService(cfg *config.Config, db *pgxpool.Pool) *Service {
 		client: &http.Client{Timeout: 30 * time.Second},
 		db:     db,
 	}
+}
+
+// ConsumeUnverifiedFreeGeneration increments the caller's free-generation counter (max 5) and returns remaining free generations.
+// This is used to allow a small trial for unverified users while keeping costs bounded.
+func (s *Service) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error) {
+	if s.db == nil {
+		return 0, ErrAIUsageTrackingUnavailable
+	}
+
+	var used int
+	err := s.db.QueryRow(ctx, `
+		UPDATE users
+		SET ai_free_generations_used = ai_free_generations_used + 1
+		WHERE id = $1
+		  AND email_verified = false
+		  AND ai_free_generations_used < $2
+		RETURNING ai_free_generations_used
+	`, userID, freeGenerationsBeforeVerification).Scan(&used)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrEmailVerificationRequired
+	}
+	if err != nil {
+		logging.Error("Failed to increment AI free generation counter", map[string]interface{}{
+			"error":   err.Error(),
+			"user_id": userID.String(),
+		})
+		return 0, ErrAIUsageTrackingUnavailable
+	}
+
+	remaining := freeGenerationsBeforeVerification - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	return remaining, nil
 }
 
 type GoalPrompt struct {

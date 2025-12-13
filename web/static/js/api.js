@@ -69,7 +69,7 @@ const API = {
         // Handle specific status codes
         if (response.status === 401) {
           // Session expired - could trigger re-auth
-          throw new APIError('Session expired. Please log in again.', response.status);
+          throw new APIError('Session expired. Please log in again.', response.status, data);
         }
         if (response.status === 403) {
           // CSRF token might be invalid - refresh and retry once
@@ -77,7 +77,7 @@ const API = {
             await this.fetchCSRFToken();
             return this.request(method, path, body, { ...options, retried: true });
           }
-          throw new APIError('Access denied. Please refresh the page.', response.status);
+          throw new APIError('Access denied. Please refresh the page.', response.status, data);
         }
         if (response.status === 409) {
           // Conflict - return the data so caller can handle it
@@ -85,9 +85,9 @@ const API = {
           return data;
         }
         if (response.status >= 500) {
-          throw new APIError(data?.error || 'Server error. Please try again later.', response.status);
+          throw new APIError(data?.error || 'Server error. Please try again later.', response.status, data);
         }
-        throw new APIError(data?.error || 'Request failed', response.status);
+        throw new APIError(data?.error || 'Request failed', response.status, data);
       }
 
       return data;
@@ -411,10 +411,11 @@ const API = {
 };
 
 class APIError extends Error {
-  constructor(message, status) {
+  constructor(message, status, data = null) {
     super(message);
     this.name = 'APIError';
     this.status = status;
+    this.data = data;
   }
 }
 

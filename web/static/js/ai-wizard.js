@@ -7,6 +7,18 @@ const AIWizard = {
     targetCardId: null,
   },
 
+  mapWizardCategoryToCardCategory(category) {
+    const map = {
+      hobbies: 'hobbies',
+      health: 'health',
+      career: 'professional',
+      social: 'social',
+      travel: 'travel',
+      mix: null,
+    };
+    return Object.prototype.hasOwnProperty.call(map, category) ? map[category] : null;
+  },
+
   open(targetCardId = null) {
     this.state = { 
       step: 'input', 
@@ -32,10 +44,19 @@ const AIWizard = {
   },
 
   renderInputStep() {
+    const freeLimit = 5;
+    const showQuota = App.user && !App.user.email_verified;
+    const used = showQuota && typeof App.user.ai_free_generations_used === 'number' ? App.user.ai_free_generations_used : 0;
+    const remaining = showQuota ? Math.max(0, freeLimit - used) : null;
     return `
       <div class="text-muted mb-md">
         Describe what you want, and we'll generate 24 custom Bingo goals for you.
       </div>
+      ${showQuota ? `
+        <div class="text-muted mb-md" style="font-size: 0.9rem;">
+          Free AI generations left before verification is required: <strong>${remaining}</strong>
+        </div>
+      ` : ''}
       <form id="ai-wizard-form" onsubmit="AIWizard.handleGenerate(event)">
         <div class="form-group">
             <label class="form-label">What area of life is this for?</label>
@@ -153,10 +174,16 @@ const AIWizard = {
     try {
       // Passing budget as the 4th argument
       const response = await API.ai.generate(category, focus, difficulty, budget, context);
+      if (App.user && !App.user.email_verified && typeof response?.free_remaining === 'number') {
+        App.user.ai_free_generations_used = Math.max(0, 5 - response.free_remaining);
+      }
       this.state.results = response.goals;
       this.state.step = 'review';
       this.render(); // Re-render to show review step
     } catch (error) {
+      if (App.user && !App.user.email_verified && typeof error?.data?.free_remaining === 'number') {
+        App.user.ai_free_generations_used = Math.max(0, 5 - error.data.free_remaining);
+      }
       App.toast(error.message, 'error');
       this.state.step = 'input';
       this.render();
@@ -202,7 +229,7 @@ const AIWizard = {
     const year = new Date().getFullYear();
     const focus = (this.state.inputs.focus || '').trim().replace(/\s+/g, ' ').slice(0, 50);
     const title = focus ? `${focus} Bingo` : `${year} AI Bingo`;
-    const category = this.state.inputs.category === 'mix' ? null : this.state.inputs.category;
+    const category = this.mapWizardCategoryToCardCategory(this.state.inputs.category);
 
     try {
       if (!App.user) {

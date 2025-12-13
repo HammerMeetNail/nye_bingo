@@ -9,6 +9,7 @@
 
 - **Wizard UX**: Modal wizard to generate 24 goals, review/edit inline, then either create a new card or append goals to an existing card.
 - **Auth**: Session cookie required (browser session only; API tokens are not accepted).
+- **Email verification gating**: Users get **5 free AI generations** before email verification is required; remaining count is shown in the UI verification banner and the wizard.
 - **Rate limiting**: Redis-backed request limiter per-user (default 10/hour; higher in development; configurable via `AI_RATE_LIMIT`).
 - **Provider**: Google Gemini `gemini-2.5-flash-lite` via backend proxy (API key never exposed to the client).
 - **Output**: Exactly 24 strings in a JSON array, returned to the client as `{ "goals": [...] }`.
@@ -150,6 +151,18 @@ CREATE TABLE ai_generation_logs (
 CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
 ```
 
+### New User Column: `users.ai_free_generations_used` (Verification Gate)
+
+To allow a limited trial of AI for unverified accounts while keeping costs bounded, we track a per-user counter:
+
+```sql
+ALTER TABLE users
+ADD COLUMN ai_free_generations_used INT NOT NULL DEFAULT 0;
+```
+
+- Unverified users can successfully generate goals up to **5 times**, after which the API returns `403` until the user verifies their email.
+- The UI displays the remaining free generations in the existing email verification banner and in the wizard itself.
+
 ## API Endpoints
 
 ### 1. Generate Goals
@@ -157,6 +170,7 @@ CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
 `POST /api/ai/generate`
 
 **Auth:** Session required.
+**Verification:** Email verification required after **5 free generations** per user (unverified users can generate up to 5 times, then must verify).
 **Rate Limit:** Redis-backed per-user limit (default **10 requests / hour** in non-development; higher in development; override via `AI_RATE_LIMIT`).
 
 **Request Payload:**
@@ -178,7 +192,8 @@ CREATE INDEX idx_ai_logs_user_date ON ai_generation_logs(user_id, created_at);
     "Make homemade pizza dough",
     "Identify 3 different fresh herbs",
     ... (24 items)
-  ]
+  ],
+  "free_remaining": 3
 }
 ```
 

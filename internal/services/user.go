@@ -50,9 +50,9 @@ func (s *UserService) Create(ctx context.Context, params models.CreateUserParams
 	err = s.db.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, username, email_verified, searchable)
 		 VALUES ($1, $2, $3, false, $4)
-		 RETURNING id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at`,
+		 RETURNING id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at`,
 		params.Email, params.PasswordHash, params.Username, params.Searchable,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if err != nil {
 		return nil, fmt.Errorf("creating user: %w", err)
@@ -64,10 +64,10 @@ func (s *UserService) Create(ctx context.Context, params models.CreateUserParams
 func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
 		 FROM users WHERE id = $1`,
 		id,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
@@ -82,10 +82,10 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, 
 func (s *UserService) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, email, password_hash, username, email_verified, email_verified_at, searchable, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
 		 FROM users WHERE email = $1`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound

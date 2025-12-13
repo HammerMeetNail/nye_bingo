@@ -13,6 +13,7 @@ import (
 
 type AIService interface {
 	GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
+	ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
 type AIHandler struct {
@@ -29,6 +30,16 @@ type GenerateRequest struct {
 	Difficulty string `json:"difficulty"`
 	Budget     string `json:"budget"`
 	Context    string `json:"context"`
+}
+
+type GenerateResponse struct {
+	Goals         []string `json:"goals"`
+	FreeRemaining *int     `json:"free_remaining,omitempty"`
+}
+
+type GenerateErrorResponse struct {
+	Error         string `json:"error"`
+	FreeRemaining *int   `json:"free_remaining,omitempty"`
 }
 
 func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -81,6 +92,29 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var freeRemaining *int
+	if !user.EmailVerified {
+		remaining, err := h.service.ConsumeUnverifiedFreeGeneration(r.Context(), user.ID)
+		if err != nil {
+			switch {
+			case errors.Is(err, ai.ErrEmailVerificationRequired):
+				zero := 0
+				writeJSON(w, http.StatusForbidden, GenerateErrorResponse{
+					Error:         "You've used your 5 free AI generations. Verify your email to keep using AI.",
+					FreeRemaining: &zero,
+				})
+				return
+			case errors.Is(err, ai.ErrAIUsageTrackingUnavailable):
+				writeError(w, http.StatusServiceUnavailable, "AI usage tracking is temporarily unavailable. Please try again later.")
+				return
+			default:
+				writeError(w, http.StatusServiceUnavailable, "AI usage tracking is temporarily unavailable. Please try again later.")
+				return
+			}
+		}
+		freeRemaining = &remaining
+	}
+
 	prompt := ai.GoalPrompt{
 		Category:   req.Category,
 		Focus:      req.Focus,
@@ -109,14 +143,15 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			msg = "The AI service is currently down. Please try again later."
 		}
 
-		writeError(w, status, msg)
+		writeJSON(w, status, GenerateErrorResponse{
+			Error:         msg,
+			FreeRemaining: freeRemaining,
+		})
 		return
 	}
 
-	response := map[string]interface{}{
-		"goals": goals,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	writeJSON(w, http.StatusOK, GenerateResponse{
+		Goals:         goals,
+		FreeRemaining: freeRemaining,
+	})
 }

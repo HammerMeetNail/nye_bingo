@@ -101,6 +101,14 @@ components:
           type: string
         email:
           type: string
+        email_verified:
+          type: boolean
+        email_verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        ai_free_generations_used:
+          type: integer
         searchable:
           type: boolean
 security:
@@ -461,6 +469,9 @@ paths:
                     type: array
                     items:
                       type: string
+                  free_remaining:
+                    type: integer
+                    nullable: true
         '400':
           description: Invalid input or unsafe request
           content:
@@ -470,6 +481,9 @@ paths:
                 properties:
                   error:
                     type: string
+                  free_remaining:
+                    type: integer
+                    nullable: true
         '401':
           description: Authentication required
           content:
@@ -479,6 +493,17 @@ paths:
                 properties:
                   error:
                     type: string
+        '403':
+          description: Email verification required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
         '429':
           description: Rate limited
           content:

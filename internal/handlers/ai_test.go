@@ -18,10 +18,18 @@ import (
 // MockAIService implements AIService interface
 type MockAIService struct {
 	GenerateGoalsFunc func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
+	ConsumeFunc       func(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
 func (m *MockAIService) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
 	return m.GenerateGoalsFunc(ctx, userID, prompt)
+}
+
+func (m *MockAIService) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error) {
+	if m.ConsumeFunc == nil {
+		return 0, nil
+	}
+	return m.ConsumeFunc(ctx, userID)
 }
 
 func TestGenerate(t *testing.T) {
@@ -44,7 +52,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Success",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -53,6 +61,39 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "Success (Unverified consumes quota)",
+			requestBody: validBody,
+			user:        &models.User{ID: uuid.New(), EmailVerified: false},
+			mockSetup: func() *MockAIService {
+				return &MockAIService{
+					ConsumeFunc: func(ctx context.Context, userID uuid.UUID) (int, error) {
+						return 4, nil
+					},
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						return []string{"Goal 1", "Goal 2"}, ai.UsageStats{}, nil
+					},
+				}
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:        "Unverified blocked when quota exhausted",
+			requestBody: validBody,
+			user:        &models.User{ID: uuid.New(), EmailVerified: false},
+			mockSetup: func() *MockAIService {
+				return &MockAIService{
+					ConsumeFunc: func(ctx context.Context, userID uuid.UUID) (int, error) {
+						return 0, ai.ErrEmailVerificationRequired
+					},
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when quota is exhausted")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
+			},
+			expectedStatus: http.StatusForbidden,
 		},
 		{
 			name:        "Unauthorized",
@@ -70,7 +111,7 @@ func TestGenerate(t *testing.T) {
 				"difficulty": "medium",
 				"budget":     "low",
 			},
-			user: &models.User{ID: uuid.New()},
+			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{}
 			},
@@ -82,7 +123,7 @@ func TestGenerate(t *testing.T) {
 				"category": "hobbies",
 				"budget":   "low",
 			},
-			user: &models.User{ID: uuid.New()},
+			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{}
 			},
@@ -91,7 +132,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Service Error - Safety",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -104,7 +145,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Service Error - Rate Limit",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -117,7 +158,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Service Error - Unavailable",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -130,7 +171,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Service Error - Not Configured",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -143,7 +184,7 @@ func TestGenerate(t *testing.T) {
 		{
 			name:        "Service Error - Generic",
 			requestBody: validBody,
-			user:        &models.User{ID: uuid.New()},
+			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
 				return &MockAIService{
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
