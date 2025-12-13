@@ -37,7 +37,7 @@ const AIWizard = {
           You've used your 5 free AI generations. Verify your email to keep using the AI Goal Wizard.
         </p>
         <p class="text-muted" style="margin-bottom: 1.5rem;">
-          Verification email is sent to <strong>${email}</strong>.
+          A verification email was sent to <strong>${email}</strong>.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
           <button class="btn btn-ghost" onclick="App.closeModal()">Close</button>
