@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -113,6 +114,17 @@ func run() error {
 	if cfg.Server.Environment == "development" {
 		aiRateLimit = 100
 		logger.Info("Using development AI rate limit", map[string]interface{}{"limit": aiRateLimit})
+	}
+	if v, ok := os.LookupEnv("AI_RATE_LIMIT"); ok && v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
+			aiRateLimit = parsed
+			logger.Info("Using AI rate limit from env", map[string]interface{}{"limit": aiRateLimit})
+		} else {
+			logger.Warn("Invalid AI_RATE_LIMIT; using default", map[string]interface{}{
+				"value": v,
+				"limit": aiRateLimit,
+			})
+		}
 	}
 
 	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {

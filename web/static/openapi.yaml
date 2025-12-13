@@ -8,6 +8,8 @@ info:
     Tokens can be generated in your profile settings.
     
     Example: `Authorization: Bearer yob_abc123...`
+
+    Note: Some endpoints (e.g. AI generation) require an authenticated browser session cookie and do not accept API tokens.
   version: 1.0.0
 servers:
   - url: /api
@@ -17,6 +19,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: Opaque Token
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session_token
   schemas:
     BingoCard:
       type: object
@@ -415,7 +421,8 @@ paths:
         Generates 24 suggested bingo goals based on user inputs.
 
         This endpoint requires a browser session cookie (API tokens are not allowed).
-      security: []
+      security:
+        - cookieAuth: []
       requestBody:
         required: true
         content:
