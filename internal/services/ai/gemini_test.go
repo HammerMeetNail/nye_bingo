@@ -221,6 +221,20 @@ func TestGenerateGoals(t *testing.T) {
 	}
 }
 
+func TestGenerateGoals_NotConfigured(t *testing.T) {
+	service := &Service{apiKey: ""}
+	_, _, err := service.GenerateGoals(context.Background(), uuid.New(), GoalPrompt{
+		Category:   "hobbies",
+		Focus:      "Cooking",
+		Difficulty: "medium",
+		Budget:     "free",
+		Context:    "test context",
+	})
+	if err == nil || !errors.Is(err, ErrAINotConfigured) {
+		t.Fatalf("expected error %v, got %v", ErrAINotConfigured, err)
+	}
+}
+
 type roundTripperFunc func(r *http.Request) (*http.Response, error)
 
 func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) {

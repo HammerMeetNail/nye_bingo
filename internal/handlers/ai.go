@@ -101,6 +101,9 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ai.ErrRateLimitExceeded):
 			status = http.StatusTooManyRequests
 			msg = "AI provider rate limit exceeded."
+		case errors.Is(err, ai.ErrAINotConfigured):
+			status = http.StatusServiceUnavailable
+			msg = "AI is not configured on this server. Please try again later."
 		case errors.Is(err, ai.ErrAIProviderUnavailable):
 			status = http.StatusServiceUnavailable
 			msg = "The AI service is currently down. Please try again later."

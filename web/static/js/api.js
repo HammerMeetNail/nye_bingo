@@ -85,7 +85,7 @@ const API = {
           return data;
         }
         if (response.status >= 500) {
-          throw new APIError('Server error. Please try again later.', response.status);
+          throw new APIError(data?.error || 'Server error. Please try again later.', response.status);
         }
         throw new APIError(data?.error || 'Request failed', response.status);
       }

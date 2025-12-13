@@ -117,7 +117,10 @@ type geminiUsage struct {
 func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt GoalPrompt) ([]string, UsageStats, error) {
 	start := time.Now()
 	if strings.TrimSpace(s.apiKey) == "" {
-		return nil, UsageStats{}, ErrAIProviderUnavailable
+		logging.Warn("Gemini API key missing; AI generation unavailable", map[string]interface{}{
+			"user_id": userID.String(),
+		})
+		return nil, UsageStats{}, ErrAINotConfigured
 	}
 
 	// Update system prompt to be more aligned with the new persona

@@ -128,6 +128,19 @@ func TestGenerate(t *testing.T) {
 			expectedStatus: http.StatusServiceUnavailable,
 		},
 		{
+			name:        "Service Error - Not Configured",
+			requestBody: validBody,
+			user:        &models.User{ID: uuid.New()},
+			mockSetup: func() *MockAIService {
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						return nil, ai.UsageStats{}, ai.ErrAINotConfigured
+					},
+				}
+			},
+			expectedStatus: http.StatusServiceUnavailable,
+		},
+		{
 			name:        "Service Error - Generic",
 			requestBody: validBody,
 			user:        &models.User{ID: uuid.New()},
