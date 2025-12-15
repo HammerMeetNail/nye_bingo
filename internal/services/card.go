@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -20,13 +22,16 @@ var (
 	ErrCardTitleExists   = errors.New("you already have a card with this title for this year")
 	ErrCardFinalized     = errors.New("card is finalized and cannot be modified")
 	ErrCardNotFinalized  = errors.New("card must be finalized first")
-	ErrCardFull          = errors.New("card already has 24 items")
+	ErrCardFull          = errors.New("card is full")
 	ErrItemNotFound      = errors.New("item not found")
 	ErrPositionOccupied  = errors.New("position is already occupied")
 	ErrInvalidPosition   = errors.New("invalid position")
 	ErrNotCardOwner      = errors.New("you do not own this card")
 	ErrInvalidCategory   = errors.New("invalid category")
 	ErrTitleTooLong      = errors.New("title must be 100 characters or less")
+	ErrInvalidGridSize   = errors.New("invalid grid size")
+	ErrInvalidHeaderText = errors.New("invalid header text")
+	ErrNoSpaceForFree    = errors.New("no space available for free space")
 )
 
 type CardService struct {
@@ -48,6 +53,26 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 	// Validate title length if provided
 	if params.Title != nil && len(*params.Title) > 100 {
 		return nil, ErrTitleTooLong
+	}
+
+	if params.GridSize == 0 {
+		params.GridSize = models.MaxGridSize
+	}
+	if !models.IsValidGridSize(params.GridSize) {
+		return nil, ErrInvalidGridSize
+	}
+	if params.Header == "" {
+		params.Header = models.DefaultHeaderText(params.GridSize)
+	}
+	params.Header = models.NormalizeHeaderText(params.Header)
+	if err := models.ValidateHeaderText(params.Header, params.GridSize); err != nil {
+		return nil, ErrInvalidHeaderText
+	}
+
+	freePos := (*int)(nil)
+	if params.HasFree {
+		pos := models.BingoCard{GridSize: params.GridSize}.DefaultFreeSpacePosition()
+		freePos = &pos
 	}
 
 	// Check for duplicate: same user, year, and title
@@ -81,11 +106,15 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`INSERT INTO bingo_cards (user_id, year, category, title)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
-		params.UserID, params.Year, params.Category, params.Title,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt)
+		`INSERT INTO bingo_cards (user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
+		params.UserID, params.Year, params.Category, params.Title, params.GridSize, params.Header, params.HasFree, freePos,
+	).Scan(
+		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating card: %w", err)
 	}
@@ -97,10 +126,15 @@ func (s *CardService) Create(ctx context.Context, params models.CreateCardParams
 func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		`SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		        is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 		 FROM bingo_cards WHERE id = $1`,
 		cardID,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(
+		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -120,10 +154,15 @@ func (s *CardService) GetByID(ctx context.Context, cardID uuid.UUID) (*models.Bi
 func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, year int) (*models.BingoCard, error) {
 	card := &models.BingoCard{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		`SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		        is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 		 FROM bingo_cards WHERE user_id = $1 AND year = $2`,
 		userID, year,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt)
+	).Scan(
+		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCardNotFound
 	}
@@ -142,7 +181,8 @@ func (s *CardService) GetByUserAndYear(ctx context.Context, userID uuid.UUID, ye
 
 func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*models.BingoCard, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		`SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		        is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 		 FROM bingo_cards WHERE user_id = $1 ORDER BY year DESC, created_at DESC`,
 		userID,
 	)
@@ -154,7 +194,11 @@ func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+			&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+			&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)
@@ -173,7 +217,95 @@ func (s *CardService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*mode
 }
 
 func (s *CardService) AddItem(ctx context.Context, userID uuid.UUID, params models.AddItemParams) (*models.BingoItem, error) {
-	// Get and verify card ownership
+	if params.Position == nil {
+		// Choose a random available position atomically (important for small grids + concurrent adds).
+		tx, err := s.db.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("starting transaction: %w", err)
+		}
+		defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op after commit
+
+		card := &models.BingoCard{}
+		err = tx.QueryRow(ctx,
+			`SELECT id, user_id, grid_size, header_text, has_free_space, free_space_position, is_finalized
+			 FROM bingo_cards
+			 WHERE id = $1
+			 FOR UPDATE`,
+			params.CardID,
+		).Scan(&card.ID, &card.UserID, &card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos, &card.IsFinalized)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrCardNotFound
+		}
+		if err != nil {
+			return nil, fmt.Errorf("locking card: %w", err)
+		}
+		if card.UserID != userID {
+			return nil, ErrNotCardOwner
+		}
+		if card.IsFinalized {
+			return nil, ErrCardFinalized
+		}
+
+		rows, err := tx.Query(ctx, "SELECT position FROM bingo_items WHERE card_id = $1", params.CardID)
+		if err != nil {
+			return nil, fmt.Errorf("getting occupied positions: %w", err)
+		}
+		defer rows.Close()
+
+		occupied := make(map[int]bool)
+		itemCount := 0
+		for rows.Next() {
+			var pos int
+			if err := rows.Scan(&pos); err != nil {
+				return nil, fmt.Errorf("scanning occupied position: %w", err)
+			}
+			occupied[pos] = true
+			itemCount++
+		}
+		if err := rows.Err(); err != nil {
+			return nil, fmt.Errorf("iterating occupied positions: %w", err)
+		}
+
+		if itemCount >= card.Capacity() {
+			return nil, ErrCardFull
+		}
+
+		available := make([]int, 0, card.Capacity()-itemCount)
+		for i := 0; i < card.TotalSquares(); i++ {
+			if card.IsFreeSpacePosition(i) {
+				continue
+			}
+			if !occupied[i] {
+				available = append(available, i)
+			}
+		}
+		if len(available) == 0 {
+			return nil, ErrCardFull
+		}
+		position := available[rand.Intn(len(available))]
+
+		item := &models.BingoItem{}
+		err = tx.QueryRow(ctx,
+			`INSERT INTO bingo_items (card_id, position, content)
+			 VALUES ($1, $2, $3)
+			 RETURNING id, card_id, position, content, is_completed, completed_at, notes, proof_url, created_at`,
+			params.CardID, position, params.Content,
+		).Scan(&item.ID, &item.CardID, &item.Position, &item.Content, &item.IsCompleted, &item.CompletedAt, &item.Notes, &item.ProofURL, &item.CreatedAt)
+		if err != nil {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+				return nil, ErrPositionOccupied
+			}
+			return nil, fmt.Errorf("adding item: %w", err)
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("committing transaction: %w", err)
+		}
+		return item, nil
+	}
+
+	// Explicit position (drag/drop or manual assignment)
 	card, err := s.GetByID(ctx, params.CardID)
 	if err != nil {
 		return nil, err
@@ -184,30 +316,17 @@ func (s *CardService) AddItem(ctx context.Context, userID uuid.UUID, params mode
 	if card.IsFinalized {
 		return nil, ErrCardFinalized
 	}
-
-	// Check item count
-	if len(card.Items) >= models.ItemsRequired {
+	if len(card.Items) >= card.Capacity() {
 		return nil, ErrCardFull
 	}
 
-	// Determine position
-	var position int
-	if params.Position != nil {
-		position = *params.Position
-		if position < 0 || position >= models.TotalSquares || position == models.FreeSpacePos {
-			return nil, ErrInvalidPosition
-		}
-		// Check if position is occupied
-		for _, item := range card.Items {
-			if item.Position == position {
-				return nil, ErrPositionOccupied
-			}
-		}
-	} else {
-		// Find random available position
-		position, err = s.findRandomPosition(card.Items)
-		if err != nil {
-			return nil, err
+	position := *params.Position
+	if !card.IsValidItemPosition(position) {
+		return nil, ErrInvalidPosition
+	}
+	for _, existing := range card.Items {
+		if existing.Position == position {
+			return nil, ErrPositionOccupied
 		}
 	}
 
@@ -219,6 +338,10 @@ func (s *CardService) AddItem(ctx context.Context, userID uuid.UUID, params mode
 		params.CardID, position, params.Content,
 	).Scan(&item.ID, &item.CardID, &item.Position, &item.Content, &item.IsCompleted, &item.CompletedAt, &item.Notes, &item.ProofURL, &item.CreatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, ErrPositionOccupied
+		}
 		return nil, fmt.Errorf("adding item: %w", err)
 	}
 
@@ -265,7 +388,7 @@ func (s *CardService) UpdateItem(ctx context.Context, userID, cardID uuid.UUID, 
 	// Update position if provided
 	if params.Position != nil {
 		newPos := *params.Position
-		if newPos < 0 || newPos >= models.TotalSquares || newPos == models.FreeSpacePos {
+		if !card.IsValidItemPosition(newPos) {
 			return nil, ErrInvalidPosition
 		}
 		// Check if new position is occupied
@@ -288,14 +411,6 @@ func (s *CardService) UpdateItem(ctx context.Context, userID, cardID uuid.UUID, 
 }
 
 func (s *CardService) SwapItems(ctx context.Context, userID, cardID uuid.UUID, pos1, pos2 int) error {
-	// Validate positions
-	if !models.IsValidPosition(pos1) || !models.IsValidPosition(pos2) {
-		return ErrInvalidPosition
-	}
-	if pos1 == pos2 {
-		return nil // No-op
-	}
-
 	// Get and verify card ownership
 	card, err := s.GetByID(ctx, cardID)
 	if err != nil {
@@ -306,6 +421,22 @@ func (s *CardService) SwapItems(ctx context.Context, userID, cardID uuid.UUID, p
 	}
 	if card.IsFinalized {
 		return ErrCardFinalized
+	}
+
+	// Validate positions
+	if pos1 == pos2 {
+		return nil // No-op
+	}
+	if !card.IsPositionInRange(pos1) || !card.IsPositionInRange(pos2) {
+		return ErrInvalidPosition
+	}
+
+	// If this swap involves the FREE cell, move FREE (draft-only).
+	if card.HasFreePositionSet() && (pos1 == *card.FreeSpacePos || pos2 == *card.FreeSpacePos) {
+		return s.moveFreeSpace(ctx, card, pos1, pos2)
+	}
+	if !card.IsValidItemPosition(pos1) || !card.IsValidItemPosition(pos2) {
+		return ErrInvalidPosition
 	}
 
 	// Find items at both positions
@@ -369,6 +500,79 @@ func (s *CardService) SwapItems(ctx context.Context, userID, cardID uuid.UUID, p
 		return fmt.Errorf("committing transaction: %w", err)
 	}
 
+	return nil
+}
+
+func (s *CardService) moveFreeSpace(ctx context.Context, card *models.BingoCard, pos1, pos2 int) error {
+	if !card.HasFreePositionSet() {
+		return ErrInvalidPosition
+	}
+
+	oldFree := *card.FreeSpacePos
+	newFree := pos1
+	if pos1 == oldFree {
+		newFree = pos2
+	}
+	if !card.IsPositionInRange(newFree) {
+		return ErrInvalidPosition
+	}
+	if newFree == oldFree {
+		return nil
+	}
+
+	// Find if an item is being displaced.
+	var displaced *models.BingoItem
+	for _, it := range card.Items {
+		if it.Position == newFree {
+			itemCopy := it
+			displaced = &itemCopy
+			break
+		}
+	}
+
+	// Determine empty positions after FREE moves (old FREE becomes available).
+	occupied := make(map[int]bool, len(card.Items))
+	for _, it := range card.Items {
+		occupied[it.Position] = true
+	}
+	occupied[newFree] = false // displaced item will move
+
+	candidates := make([]int, 0, card.TotalSquares())
+	for p := 0; p < card.TotalSquares(); p++ {
+		if p == newFree {
+			continue
+		}
+		if occupied[p] {
+			continue
+		}
+		candidates = append(candidates, p)
+	}
+	if displaced != nil && len(candidates) == 0 {
+		return ErrNoSpaceForFree
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op after commit
+
+	_, err = tx.Exec(ctx, "UPDATE bingo_cards SET free_space_position = $1 WHERE id = $2", newFree, card.ID)
+	if err != nil {
+		return fmt.Errorf("updating free space: %w", err)
+	}
+
+	if displaced != nil {
+		newPos := candidates[rand.Intn(len(candidates))]
+		_, err = tx.Exec(ctx, "UPDATE bingo_items SET position = $1 WHERE id = $2", newPos, displaced.ID)
+		if err != nil {
+			return fmt.Errorf("relocating displaced item: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("committing transaction: %w", err)
+	}
 	return nil
 }
 
@@ -497,10 +701,10 @@ func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*m
 		return card, nil
 	}
 
-	// Get all available positions (excluding free space)
-	availablePositions := make([]int, 0, models.ItemsRequired)
-	for i := 0; i < models.TotalSquares; i++ {
-		if i != models.FreeSpacePos {
+	// Get all available positions (excluding FREE if enabled)
+	availablePositions := make([]int, 0, card.TotalSquares())
+	for i := 0; i < card.TotalSquares(); i++ {
+		if !card.IsFreeSpacePosition(i) {
 			availablePositions = append(availablePositions, i)
 		}
 	}
@@ -565,9 +769,9 @@ func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID, pa
 		return card, nil // Already finalized
 	}
 
-	// Ensure card has all 24 items
-	if len(card.Items) < models.ItemsRequired {
-		return nil, fmt.Errorf("card needs %d items, has %d", models.ItemsRequired, len(card.Items))
+	// Ensure card has all items for the configured grid
+	if len(card.Items) < card.Capacity() {
+		return nil, fmt.Errorf("card needs %d items, has %d", card.Capacity(), len(card.Items))
 	}
 
 	// Determine visibility setting
@@ -831,15 +1035,17 @@ func (s *CardService) getCardItems(ctx context.Context, cardID uuid.UUID) ([]mod
 	return items, nil
 }
 
-func (s *CardService) findRandomPosition(existingItems []models.BingoItem) (int, error) {
-	occupied := make(map[int]bool)
-	occupied[models.FreeSpacePos] = true
-	for _, item := range existingItems {
+func (s *CardService) findRandomPosition(card *models.BingoCard) (int, error) {
+	occupied := make(map[int]bool, len(card.Items)+1)
+	for _, item := range card.Items {
 		occupied[item.Position] = true
 	}
+	if card.HasFreePositionSet() {
+		occupied[*card.FreeSpacePos] = true
+	}
 
-	available := make([]int, 0)
-	for i := 0; i < models.TotalSquares; i++ {
+	available := make([]int, 0, card.Capacity()-len(card.Items))
+	for i := 0; i < card.TotalSquares(); i++ {
 		if !occupied[i] {
 			available = append(available, i)
 		}
@@ -857,7 +1063,8 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	currentYear := time.Now().Year()
 
 	rows, err := s.db.Query(ctx,
-		`SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		`SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		        is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 		 FROM bingo_cards
 		 WHERE user_id = $1 AND year < $2 AND is_finalized = true
 		 ORDER BY year DESC, created_at DESC`,
@@ -871,7 +1078,11 @@ func (s *CardService) GetArchive(ctx context.Context, userID uuid.UUID) ([]*mode
 	var cards []*models.BingoCard
 	for rows.Next() {
 		card := &models.BingoCard{}
-		if err := rows.Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt); err != nil {
+		if err := rows.Scan(
+			&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+			&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+			&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+		); err != nil {
 			return nil, fmt.Errorf("scanning card: %w", err)
 		}
 		cards = append(cards, card)
@@ -903,7 +1114,7 @@ func (s *CardService) GetStats(ctx context.Context, userID, cardID uuid.UUID) (*
 	stats := &models.CardStats{
 		CardID:     card.ID,
 		Year:       card.Year,
-		TotalItems: len(card.Items),
+		TotalItems: card.Capacity(),
 	}
 
 	// Count completed items and find first/last completion
@@ -931,18 +1142,27 @@ func (s *CardService) GetStats(ctx context.Context, userID, cardID uuid.UUID) (*
 	}
 
 	// Count bingos achieved
-	stats.BingosAchieved = s.countBingos(card.Items)
+	stats.BingosAchieved = s.countBingos(card.Items, card.GridSize, func() *int {
+		if card.HasFreeSpace {
+			return card.FreeSpacePos
+		}
+		return nil
+	}())
 
 	return stats, nil
 }
 
 // countBingos counts how many bingos (rows, columns, diagonals) are complete
-func (s *CardService) countBingos(items []models.BingoItem) int {
-	// Create a 5x5 grid of completion status
-	grid := make([]bool, models.TotalSquares)
+func (s *CardService) countBingos(items []models.BingoItem, gridSize int, freePos *int) int {
+	if !models.IsValidGridSize(gridSize) {
+		gridSize = models.MaxGridSize
+	}
+	total := gridSize * gridSize
+	grid := make([]bool, total)
 
-	// Mark free space as completed
-	grid[models.FreeSpacePos] = true
+	if freePos != nil && *freePos >= 0 && *freePos < total {
+		grid[*freePos] = true
+	}
 
 	// Mark completed items
 	for _, item := range items {
@@ -954,10 +1174,10 @@ func (s *CardService) countBingos(items []models.BingoItem) int {
 	bingos := 0
 
 	// Check rows
-	for row := 0; row < 5; row++ {
+	for row := 0; row < gridSize; row++ {
 		complete := true
-		for col := 0; col < 5; col++ {
-			if !grid[row*5+col] {
+		for col := 0; col < gridSize; col++ {
+			if !grid[row*gridSize+col] {
 				complete = false
 				break
 			}
@@ -968,10 +1188,10 @@ func (s *CardService) countBingos(items []models.BingoItem) int {
 	}
 
 	// Check columns
-	for col := 0; col < 5; col++ {
+	for col := 0; col < gridSize; col++ {
 		complete := true
-		for row := 0; row < 5; row++ {
-			if !grid[row*5+col] {
+		for row := 0; row < gridSize; row++ {
+			if !grid[row*gridSize+col] {
 				complete = false
 				break
 			}
@@ -982,11 +1202,9 @@ func (s *CardService) countBingos(items []models.BingoItem) int {
 	}
 
 	// Check diagonals
-	// Top-left to bottom-right: 0, 6, 12, 18, 24
-	diagonal1 := []int{0, 6, 12, 18, 24}
 	complete := true
-	for _, pos := range diagonal1 {
-		if !grid[pos] {
+	for i := 0; i < gridSize; i++ {
+		if !grid[i*gridSize+i] {
 			complete = false
 			break
 		}
@@ -995,11 +1213,9 @@ func (s *CardService) countBingos(items []models.BingoItem) int {
 		bingos++
 	}
 
-	// Top-right to bottom-left: 4, 8, 12, 16, 20
-	diagonal2 := []int{4, 8, 12, 16, 20}
 	complete = true
-	for _, pos := range diagonal2 {
-		if !grid[pos] {
+	for i := 0; i < gridSize; i++ {
+		if !grid[i*gridSize+(gridSize-1-i)] {
 			complete = false
 			break
 		}
@@ -1021,18 +1237,21 @@ func (s *CardService) CheckForConflict(ctx context.Context, userID uuid.UUID, ye
 
 	if title != nil && *title != "" {
 		// Check for card with this specific title
-		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		query = `SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		                is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3`
 		args = []interface{}{userID, year, *title}
 	} else {
 		// Check for any card with null title (default card)
-		query = `SELECT id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
+		query = `SELECT id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		                is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at
 			FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title IS NULL`
 		args = []interface{}{userID, year}
 	}
 
 	err := s.db.QueryRow(ctx, query, args...).Scan(
 		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
 		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1066,18 +1285,70 @@ func (s *CardService) Import(ctx context.Context, params models.ImportCardParams
 		return nil, ErrTitleTooLong
 	}
 
+	if params.GridSize == 0 {
+		params.GridSize = models.MaxGridSize
+	}
+	if !models.IsValidGridSize(params.GridSize) {
+		return nil, ErrInvalidGridSize
+	}
+	if params.HeaderText == "" {
+		params.HeaderText = models.DefaultHeaderText(params.GridSize)
+	}
+	params.HeaderText = models.NormalizeHeaderText(params.HeaderText)
+	if err := models.ValidateHeaderText(params.HeaderText, params.GridSize); err != nil {
+		return nil, ErrInvalidHeaderText
+	}
+
+	if params.HasFreeSpace && params.FreeSpacePos == nil {
+		total := params.GridSize * params.GridSize
+		if params.GridSize%2 == 1 {
+			pos := total / 2
+			params.FreeSpacePos = &pos
+		} else {
+			occupied := make(map[int]bool, len(params.Items))
+			for _, it := range params.Items {
+				occupied[it.Position] = true
+			}
+			empties := make([]int, 0, total-len(params.Items))
+			for p := 0; p < total; p++ {
+				if !occupied[p] {
+					empties = append(empties, p)
+				}
+			}
+			if len(empties) == 0 {
+				return nil, ErrNoSpaceForFree
+			}
+			pos := empties[rand.Intn(len(empties))]
+			params.FreeSpacePos = &pos
+		}
+	}
+	if !params.HasFreeSpace {
+		params.FreeSpacePos = nil
+	}
+
 	// Validate item positions
+	totalSquares := params.GridSize * params.GridSize
+	capacity := totalSquares
+	if params.HasFreeSpace {
+		capacity = totalSquares - 1
+	}
+
 	positions := make(map[int]bool)
 	for _, item := range params.Items {
-		// Position must be 0-24 excluding 12 (free space)
-		if item.Position < 0 || item.Position > 24 || item.Position == models.FreeSpacePos {
+		if item.Position < 0 || item.Position >= totalSquares {
 			return nil, ErrInvalidPosition
 		}
-		// Check for duplicate positions
+		if params.FreeSpacePos != nil && item.Position == *params.FreeSpacePos {
+			return nil, ErrInvalidPosition
+		}
 		if positions[item.Position] {
 			return nil, ErrPositionOccupied
 		}
 		positions[item.Position] = true
+	}
+
+	if params.Finalize && len(params.Items) != capacity {
+		return nil, fmt.Errorf("card needs %d items, has %d", capacity, len(params.Items))
 	}
 
 	// Start a transaction
@@ -1096,11 +1367,16 @@ func (s *CardService) Import(ctx context.Context, params models.ImportCardParams
 	// Create the card
 	card := &models.BingoCard{}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO bingo_cards (user_id, year, category, title, is_finalized, visible_to_friends)
-		 VALUES ($1, $2, $3, $4, $5, $6)
-		 RETURNING id, user_id, year, category, title, is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
-		params.UserID, params.Year, params.Category, params.Title, params.Finalize, visibleToFriends,
-	).Scan(&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title, &card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt)
+		`INSERT INTO bingo_cards (user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position, is_finalized, visible_to_friends)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		 RETURNING id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		           is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
+		params.UserID, params.Year, params.Category, params.Title, params.GridSize, params.HeaderText, params.HasFreeSpace, params.FreeSpacePos, params.Finalize, visibleToFriends,
+	).Scan(
+		&card.ID, &card.UserID, &card.Year, &card.Category, &card.Title,
+		&card.GridSize, &card.HeaderText, &card.HasFreeSpace, &card.FreeSpacePos,
+		&card.IsActive, &card.IsFinalized, &card.VisibleToFriends, &card.IsArchived, &card.CreatedAt, &card.UpdatedAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating card: %w", err)
 	}
@@ -1127,4 +1403,243 @@ func (s *CardService) Import(ctx context.Context, params models.ImportCardParams
 	}
 
 	return card, nil
+}
+
+func (s *CardService) UpdateConfig(ctx context.Context, userID, cardID uuid.UUID, params models.UpdateCardConfigParams) (*models.BingoCard, error) {
+	card, err := s.GetByID(ctx, cardID)
+	if err != nil {
+		return nil, err
+	}
+	if card.UserID != userID {
+		return nil, ErrNotCardOwner
+	}
+	if card.IsFinalized {
+		return nil, ErrCardFinalized
+	}
+
+	headerText := (*string)(nil)
+	if params.HeaderText != nil {
+		normalized := models.NormalizeHeaderText(*params.HeaderText)
+		if err := models.ValidateHeaderText(normalized, card.GridSize); err != nil {
+			return nil, ErrInvalidHeaderText
+		}
+		headerText = &normalized
+	}
+
+	hasFree := card.HasFreeSpace
+	freePos := card.FreeSpacePos
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op after commit
+
+	if params.HasFreeSpace != nil && *params.HasFreeSpace != card.HasFreeSpace {
+		if *params.HasFreeSpace {
+			total := card.GridSize * card.GridSize
+			occupied := make(map[int]bool, len(card.Items))
+			for _, it := range card.Items {
+				occupied[it.Position] = true
+			}
+
+			desired := -1
+			if card.GridSize%2 == 1 {
+				desired = total / 2
+			} else {
+				empties := make([]int, 0, total-len(card.Items))
+				for p := 0; p < total; p++ {
+					if !occupied[p] {
+						empties = append(empties, p)
+					}
+				}
+				if len(empties) == 0 {
+					return nil, ErrNoSpaceForFree
+				}
+				desired = empties[rand.Intn(len(empties))]
+			}
+
+			if occupied[desired] {
+				empties := make([]int, 0, total-len(card.Items))
+				for p := 0; p < total; p++ {
+					if p == desired {
+						continue
+					}
+					if !occupied[p] {
+						empties = append(empties, p)
+					}
+				}
+				if len(empties) == 0 {
+					return nil, ErrNoSpaceForFree
+				}
+				newPos := empties[rand.Intn(len(empties))]
+				_, err := tx.Exec(ctx,
+					"UPDATE bingo_items SET position = $1 WHERE card_id = $2 AND position = $3",
+					newPos, card.ID, desired,
+				)
+				if err != nil {
+					return nil, fmt.Errorf("relocating item for free space: %w", err)
+				}
+			}
+
+			hasFree = true
+			freePos = &desired
+		} else {
+			hasFree = false
+			freePos = nil
+		}
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE bingo_cards
+		 SET header_text = COALESCE($1, header_text),
+		     has_free_space = $2,
+		     free_space_position = $3
+		 WHERE id = $4`,
+		headerText, hasFree, freePos, card.ID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("updating card config: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	return s.GetByID(ctx, card.ID)
+}
+
+type CloneParams struct {
+	Year         *int
+	Title        *string
+	Category     *string
+	GridSize     int
+	HeaderText   string
+	HasFreeSpace bool
+}
+
+type CloneResult struct {
+	Card               *models.BingoCard
+	TruncatedItemCount int
+}
+
+func (s *CardService) Clone(ctx context.Context, userID, sourceCardID uuid.UUID, params CloneParams) (*CloneResult, error) {
+	source, err := s.GetByID(ctx, sourceCardID)
+	if err != nil {
+		return nil, err
+	}
+	if source.UserID != userID {
+		return nil, ErrNotCardOwner
+	}
+
+	if params.GridSize == 0 {
+		params.GridSize = source.GridSize
+	}
+	if !models.IsValidGridSize(params.GridSize) {
+		return nil, ErrInvalidGridSize
+	}
+
+	if params.HeaderText == "" {
+		params.HeaderText = models.DefaultHeaderText(params.GridSize)
+	}
+	params.HeaderText = models.NormalizeHeaderText(params.HeaderText)
+	if err := models.ValidateHeaderText(params.HeaderText, params.GridSize); err != nil {
+		return nil, ErrInvalidHeaderText
+	}
+
+	year := source.Year
+	if params.Year != nil && *params.Year != 0 {
+		year = *params.Year
+	}
+
+	title := (*string)(nil)
+	if params.Title != nil {
+		trimmed := strings.TrimSpace(*params.Title)
+		title = &trimmed
+	}
+	if title == nil || *title == "" {
+		fallback := source.DisplayName() + " (Copy)"
+		title = &fallback
+	}
+
+	category := source.Category
+	if params.Category != nil {
+		category = params.Category
+	}
+
+	freePos := (*int)(nil)
+	if params.HasFreeSpace {
+		pos := models.BingoCard{GridSize: params.GridSize}.DefaultFreeSpacePosition()
+		freePos = &pos
+	}
+
+	totalSquares := params.GridSize * params.GridSize
+	capacity := totalSquares
+	if params.HasFreeSpace {
+		capacity = totalSquares - 1
+	}
+
+	itemsToCopy := make([]models.BingoItem, 0, len(source.Items))
+	itemsToCopy = append(itemsToCopy, source.Items...)
+	truncated := 0
+	if len(itemsToCopy) > capacity {
+		truncated = len(itemsToCopy) - capacity
+		itemsToCopy = itemsToCopy[:capacity]
+	}
+
+	availablePositions := make([]int, 0, capacity)
+	for p := 0; p < totalSquares; p++ {
+		if freePos != nil && p == *freePos {
+			continue
+		}
+		availablePositions = append(availablePositions, p)
+	}
+	rand.Shuffle(len(availablePositions), func(i, j int) {
+		availablePositions[i], availablePositions[j] = availablePositions[j], availablePositions[i]
+	})
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op after commit
+
+	newCard := &models.BingoCard{}
+	err = tx.QueryRow(ctx,
+		`INSERT INTO bingo_cards (user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 RETURNING id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
+		           is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
+		userID, year, category, title, params.GridSize, params.HeaderText, params.HasFreeSpace, freePos,
+	).Scan(
+		&newCard.ID, &newCard.UserID, &newCard.Year, &newCard.Category, &newCard.Title,
+		&newCard.GridSize, &newCard.HeaderText, &newCard.HasFreeSpace, &newCard.FreeSpacePos,
+		&newCard.IsActive, &newCard.IsFinalized, &newCard.VisibleToFriends, &newCard.IsArchived, &newCard.CreatedAt, &newCard.UpdatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating cloned card: %w", err)
+	}
+
+	for i, it := range itemsToCopy {
+		pos := availablePositions[i]
+		_, err := tx.Exec(ctx,
+			`INSERT INTO bingo_items (card_id, position, content)
+			 VALUES ($1, $2, $3)`,
+			newCard.ID, pos, it.Content,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("copying item: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("committing transaction: %w", err)
+	}
+
+	created, err := s.GetByID(ctx, newCard.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &CloneResult{Card: created, TruncatedItemCount: truncated}, nil
 }

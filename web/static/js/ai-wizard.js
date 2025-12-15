@@ -8,18 +8,40 @@ const AIWizard = {
     desiredCount: null,
   },
 
+  computeCreateGoalCountFromGridSize(gridSize) {
+    const n = Number(gridSize);
+    const size = Number.isFinite(n) && n >= 2 && n <= 5 ? n : 5;
+    // Create flow defaults to FREE = ON.
+    return size * size - 1;
+  },
+
+  computeCapacityFromConfig(config) {
+    const n = Number(config?.grid_size);
+    const size = Number.isFinite(n) && n >= 2 && n <= 5 ? n : 5;
+    const hasFree = config?.has_free_space !== false;
+    return size * size - (hasFree ? 1 : 0);
+  },
+
+  computeCardCapacity(card) {
+    const n = Number(card?.grid_size);
+    const size = Number.isFinite(n) && n >= 2 && n <= 5 ? n : 5;
+    const hasFree = card?.has_free_space !== false;
+    return size * size - (hasFree ? 1 : 0);
+  },
+
   computeOpenCellsForCard(card) {
     const itemCount = card?.items ? card.items.length : 0;
-    return Math.max(0, 24 - itemCount);
+    const capacity = this.computeCardCapacity(card);
+    return Math.max(0, Math.min(24, capacity - itemCount));
   },
 
   computeOpenCellsFromDOM() {
     const grid = document.getElementById('bingo-grid');
     if (!grid) return null;
-    const allCells = grid.querySelectorAll('.bingo-cell[data-position]');
+    const allCells = grid.querySelectorAll('.bingo-cell[data-position]:not(.bingo-cell--free)');
     if (!allCells.length) return null;
-    const filledCells = grid.querySelectorAll('.bingo-cell[data-position][data-item-id]');
-    return Math.max(0, allCells.length - filledCells.length);
+    const filledCells = grid.querySelectorAll('.bingo-cell[data-position][data-item-id]:not(.bingo-cell--free)');
+    return Math.max(0, Math.min(24, allCells.length - filledCells.length));
   },
 
   isVerificationRequiredForAI() {
@@ -70,9 +92,11 @@ const AIWizard = {
     const desiredCountNumber = Number(desiredCount);
     const desiredCountValue = Number.isFinite(desiredCountNumber) ? desiredCountNumber : null;
 
-    this.state = { 
-      step: 'input', 
-      inputs: {}, 
+    this.state = {
+      step: 'input',
+      inputs: targetCardId
+        ? {}
+        : { grid_size: 5 },
       results: [],
       mode: targetCardId ? 'append' : 'create',
       targetCardId: targetCardId,
@@ -101,11 +125,13 @@ const AIWizard = {
     const remaining = showQuota ? Math.max(0, freeLimit - used) : null;
     const desiredCount = this.getDesiredCountSync();
     const goalWord = desiredCount === 1 ? 'goal' : 'goals';
+    const createGridSize = Number(this.state.inputs.grid_size) || 5;
+    const createCapacity = this.computeCreateGoalCountFromGridSize(createGridSize);
     return `
       <div class="text-muted mb-md">
         ${this.state.mode === 'append'
           ? `Describe what you want, and we'll generate <strong>${desiredCount}</strong> ${goalWord} to fill your empty squares.`
-          : `Describe what you want, and we'll generate 24 custom Bingo goals for you.`}
+          : `Describe what you want, and we'll generate <strong><span id="ai-create-capacity">${createCapacity}</span></strong> custom Bingo goals for your <strong><span id="ai-create-grid">${createGridSize}x${createGridSize}</span></strong> card.`}
       </div>
       ${showQuota ? `
         <div class="text-muted mb-md" style="font-size: 0.9rem;">
@@ -130,6 +156,19 @@ const AIWizard = {
             <input type="text" id="ai-focus" class="form-input" placeholder="e.g. Italian Cooking, Hiking, Python Programming">
             <small class="text-muted">Narrow down the goals to a specific topic.</small>
         </div>
+
+        ${this.state.mode === 'create' ? `
+          <div class="form-group">
+            <label class="form-label">Grid Size</label>
+            <select id="ai-grid-size" class="form-input">
+              <option value="2" ${createGridSize === 2 ? 'selected' : ''}>2x2</option>
+              <option value="3" ${createGridSize === 3 ? 'selected' : ''}>3x3</option>
+              <option value="4" ${createGridSize === 4 ? 'selected' : ''}>4x4</option>
+              <option value="5" ${createGridSize === 5 ? 'selected' : ''}>5x5</option>
+            </select>
+            <small class="text-muted">FREE space is included by default.</small>
+          </div>
+        ` : ''}
 
         <div class="form-group">
             <label class="form-label">Difficulty Level</label>
@@ -185,7 +224,28 @@ const AIWizard = {
   },
 
   setupInputEvents() {
-    // No special events needed for now
+    if (this.state.mode !== 'create') return;
+
+    const gridEl = document.getElementById('ai-grid-size');
+    if (!gridEl) return;
+
+    const apply = () => {
+      const n = parseInt(gridEl.value, 10) || 5;
+      this.state.inputs.grid_size = n;
+
+      const capacityEl = document.getElementById('ai-create-capacity');
+      if (capacityEl) {
+        capacityEl.textContent = String(this.computeCreateGoalCountFromGridSize(n));
+      }
+
+      const gridLabelEl = document.getElementById('ai-create-grid');
+      if (gridLabelEl) {
+        gridLabelEl.textContent = `${n}x${n}`;
+      }
+    };
+
+    gridEl.addEventListener('change', apply);
+    apply();
   },
 
   renderLoadingStep() {
@@ -227,13 +287,19 @@ const AIWizard = {
     const budget = budgetRadio.value;
     const context = document.getElementById('ai-context').value;
 
-    this.state.inputs = { category, focus, difficulty, budget, context };
+    const nextInputs = { category, focus, difficulty, budget, context };
+    if (this.state.mode === 'create') {
+      const gridSizeEl = document.getElementById('ai-grid-size');
+      nextInputs.grid_size = parseInt(gridSizeEl?.value || '5', 10) || 5;
+    }
+    this.state.inputs = nextInputs;
     this.state.step = 'loading';
     this.render();
 
     try {
-      // Passing budget as the 4th argument
-      const count = await this.resolveDesiredCount();
+      const count = this.state.mode === 'create'
+        ? this.computeCreateGoalCountFromGridSize(this.state.inputs.grid_size)
+        : await this.resolveDesiredCount();
       const response = await API.ai.generate(category, focus, difficulty, budget, context, count);
       if (App.user && !App.user.email_verified && typeof response?.free_remaining === 'number') {
         App.user.ai_free_generations_used = Math.max(0, 5 - response.free_remaining);
@@ -301,8 +367,7 @@ const AIWizard = {
     if (this.state.mode === 'append' && this.state.targetCardId && !count) {
       try {
         const res = await API.cards.get(this.state.targetCardId);
-        const itemCount = res.card?.items ? res.card.items.length : 0;
-        count = Math.max(0, 24 - itemCount);
+        count = this.computeOpenCellsForCard(res.card);
       } catch (e) {
         // Ignore and fall back
       }
@@ -328,6 +393,7 @@ const AIWizard = {
     const focus = (this.state.inputs.focus || '').trim().replace(/\s+/g, ' ').slice(0, 50);
     const title = focus ? `${focus} Bingo` : `${year} AI Bingo`;
     const category = this.mapWizardCategoryToCardCategory(this.state.inputs.category);
+    const gridSize = parseInt(this.state.inputs.grid_size || '5', 10) || 5;
 
     try {
       if (!App.user) {
@@ -336,7 +402,9 @@ const AIWizard = {
 
       App.showLoading(document.querySelector('.modal-body'), 'Creating card...');
 
-      const response = await API.cards.create(year, title, category);
+      const response = await API.cards.create(year, title, category, {
+        gridSize,
+      });
       const cardId = response.card.id;
 
       await this.fillCard(cardId);
@@ -381,77 +449,45 @@ const AIWizard = {
   },
 
   async fillCard(cardId) {
-      // Get current card items to determine empty spots
-      let existingItems = [];
       try {
           // If we are appending, we need to know what spots are taken.
           // Since we might be in the 'create' flow, we know it's empty.
           // If 'append', we should fetch the card or use App.currentCard if it matches.
           if (this.state.mode === 'append' && App.currentCard && App.currentCard.id === cardId) {
-              existingItems = App.currentCard.items || [];
+              // no-op
           } else if (this.state.mode === 'append') {
-               const res = await API.cards.get(cardId);
-               existingItems = res.card.items || [];
+               await API.cards.get(cardId);
           }
       } catch (e) {
           // Ignore, assume empty
       }
 
-      const takenPositions = new Set(existingItems.map(i => i.position));
-      const availablePositions = [];
-      for (let i = 0; i < 25; i++) {
-          if (i === 12) continue; // Free space
-          if (!takenPositions.has(i)) {
-              availablePositions.push(i);
+      const desiredCount = this.state.mode === 'append'
+        ? await this.resolveDesiredCount()
+        : (this.state.results?.length || 0);
+      const goalsToAdd = (this.state.results || []).slice(0, desiredCount);
+
+      const addedPositions = [];
+      for (let i = 0; i < goalsToAdd.length; i++) {
+        const goal = goalsToAdd[i];
+        try {
+          const res = await API.cards.addItem(cardId, goal);
+          addedPositions.push(res.item.position);
+        } catch (error) {
+          console.error('Failed to add goal', { index: i, goal, reason: error });
+          const rollbackResults = await Promise.allSettled(
+            addedPositions.map(pos => API.cards.removeItem(cardId, pos))
+          );
+          const rollbackFailures = rollbackResults
+            .map((r, idx) => ({ status: r.status, reason: r.reason, pos: addedPositions[idx] }))
+            .filter(r => r.status === 'rejected');
+          if (rollbackFailures.length > 0) {
+            console.error('Rollback failed for some items:', rollbackFailures);
+            throw new Error('Failed to add some goals. Rollback was attempted but failed for some items. Please refresh the card and verify its contents.');
           }
+          throw error;
+        }
       }
-
-      const goalsToAdd = this.state.results.slice(0, availablePositions.length);
-      
-      const results = await Promise.allSettled(
-        goalsToAdd.map((goal, index) => {
-          const pos = availablePositions[index];
-          return API.cards.addItem(cardId, goal, pos).then(() => ({ pos, goal }));
-        })
-      );
-
-      const failures = results
-        .map((r, i) => ({ index: i, status: r.status, reason: r.reason, goal: goalsToAdd[i] }))
-        .filter(r => r.status === 'rejected');
-      if (failures.length === 0) {
-	        return;
-      }
-
-      console.error('Failed to add the following goals:', failures.map(f => ({
-        index: f.index,
-        goal: f.goal,
-        reason: f.reason
-      })));
-
-      const successes = results
-        .map((r, i) => ({ r, i }))
-        .filter(({ r }) => r.status === 'fulfilled')
-        .map(({ r, i }) => ({ ...r.value, index: i, goal: goalsToAdd[i] }));
-
-      const rollbackResults = await Promise.allSettled(
-        successes.map(({ pos }) => API.cards.removeItem(cardId, pos))
-      );
-
-      const rollbackFailures = rollbackResults
-        .map((r, i) => ({ status: r.status, reason: r.reason, pos: successes[i].pos, goal: successes[i].goal }))
-        .filter(r => r.status === 'rejected');
-      if (rollbackFailures.length > 0) {
-        console.error('Rollback failed for some items:', rollbackFailures);
-        throw new Error('Failed to add some goals. Rollback was attempted but failed for some items. Please refresh the card and verify its contents.');
-      }
-
-      const maxToShow = 3;
-      const failedPreview = failures
-        .slice(0, maxToShow)
-        .map(f => `"${f.goal}"`)
-        .join(', ');
-      const suffix = failures.length > maxToShow ? ` (and ${failures.length - maxToShow} more)` : '';
-      throw new Error(`Failed to add some goals: ${failedPreview}${suffix}. Please try again.`);
   }
 };
 

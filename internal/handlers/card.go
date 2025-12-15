@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -24,9 +25,12 @@ func NewCardHandler(cardService *services.CardService) *CardHandler {
 }
 
 type CreateCardRequest struct {
-	Year     int     `json:"year"`
-	Category *string `json:"category,omitempty"`
-	Title    *string `json:"title,omitempty"`
+	Year         int     `json:"year"`
+	Category     *string `json:"category,omitempty"`
+	Title        *string `json:"title,omitempty"`
+	GridSize     *int    `json:"grid_size,omitempty"`
+	HeaderText   *string `json:"header_text,omitempty"`
+	HasFreeSpace *bool   `json:"has_free_space,omitempty"`
 }
 
 type UpdateCardMetaRequest struct {
@@ -99,11 +103,15 @@ type BulkUpdateArchiveResponse struct {
 
 // ImportCardRequest represents a request to import an anonymous card
 type ImportCardRequest struct {
-	Year     int              `json:"year"`
-	Title    *string          `json:"title,omitempty"`
-	Category *string          `json:"category,omitempty"`
-	Items    []ImportCardItem `json:"items"`
-	Finalize bool             `json:"finalize"`
+	Year              int              `json:"year"`
+	Title             *string          `json:"title,omitempty"`
+	Category          *string          `json:"category,omitempty"`
+	GridSize          int              `json:"grid_size,omitempty"`
+	HeaderText        string           `json:"header_text,omitempty"`
+	HasFreeSpace      *bool            `json:"has_free_space,omitempty"`
+	FreeSpacePosition *int             `json:"free_space_position,omitempty"`
+	Items             []ImportCardItem `json:"items"`
+	Finalize          bool             `json:"finalize"`
 }
 
 type ImportCardItem struct {
@@ -160,6 +168,30 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gridSize := models.MaxGridSize
+	if req.GridSize != nil {
+		gridSize = *req.GridSize
+	}
+	if !models.IsValidGridSize(gridSize) {
+		writeError(w, http.StatusBadRequest, "Grid size must be 2, 3, 4, or 5")
+		return
+	}
+
+	hasFreeSpace := true
+	if req.HasFreeSpace != nil {
+		hasFreeSpace = *req.HasFreeSpace
+	}
+
+	headerText := models.DefaultHeaderText(gridSize)
+	if req.HeaderText != nil {
+		headerText = *req.HeaderText
+	}
+	headerText = models.NormalizeHeaderText(headerText)
+	if err := models.ValidateHeaderText(headerText, gridSize); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// Check for existing card for this year/title before attempting create
 	existingCard, err := h.cardService.CheckForConflict(r.Context(), user.ID, req.Year, req.Title)
 	if err != nil && !errors.Is(err, services.ErrCardNotFound) {
@@ -194,6 +226,9 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Year:     req.Year,
 		Category: req.Category,
 		Title:    req.Title,
+		GridSize: gridSize,
+		Header:   headerText,
+		HasFree:  hasFreeSpace,
 	})
 	// These errors shouldn't happen since we checked above, but handle gracefully
 	if errors.Is(err, services.ErrCardAlreadyExists) {
@@ -210,6 +245,14 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, services.ErrTitleTooLong) {
 		writeError(w, http.StatusBadRequest, "Title must be 100 characters or less")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidGridSize) {
+		writeError(w, http.StatusBadRequest, "Grid size must be 2, 3, 4, or 5")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidHeaderText) {
+		writeError(w, http.StatusBadRequest, "Invalid header text")
 		return
 	}
 	if err != nil {
@@ -353,7 +396,7 @@ func (h *CardHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if errors.Is(err, services.ErrCardFull) {
-		writeError(w, http.StatusBadRequest, "Card already has 24 items")
+		writeError(w, http.StatusBadRequest, "Card is full")
 		return
 	}
 	if errors.Is(err, services.ErrPositionOccupied) {
@@ -371,6 +414,161 @@ func (h *CardHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, CardResponse{Item: item})
+}
+
+type UpdateCardConfigRequest struct {
+	HeaderText   *string `json:"header_text,omitempty"`
+	HasFreeSpace *bool   `json:"has_free_space,omitempty"`
+}
+
+func (h *CardHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	var req UpdateCardConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.HeaderText != nil {
+		trimmed := strings.TrimSpace(*req.HeaderText)
+		req.HeaderText = &trimmed
+	}
+
+	card, err := h.cardService.UpdateConfig(r.Context(), user.ID, cardID, models.UpdateCardConfigParams{
+		HeaderText:   req.HeaderText,
+		HasFreeSpace: req.HasFreeSpace,
+	})
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if errors.Is(err, services.ErrCardFinalized) {
+		writeError(w, http.StatusBadRequest, "Card is finalized and cannot be modified")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidHeaderText) {
+		writeError(w, http.StatusBadRequest, "Invalid header text")
+		return
+	}
+	if errors.Is(err, services.ErrNoSpaceForFree) {
+		writeError(w, http.StatusBadRequest, "Your card is full. Remove an item to add or move the FREE space.")
+		return
+	}
+	if err != nil {
+		log.Printf("Error updating card config: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, CardResponse{Card: card})
+}
+
+type CloneCardRequest struct {
+	Year         *int    `json:"year,omitempty"`
+	Title        *string `json:"title,omitempty"`
+	Category     *string `json:"category,omitempty"`
+	GridSize     int     `json:"grid_size,omitempty"`
+	HeaderText   *string `json:"header_text,omitempty"`
+	HasFreeSpace *bool   `json:"has_free_space,omitempty"`
+}
+
+func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	var req CloneCardRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
+
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		req.Title = &trimmed
+	}
+	if req.HeaderText != nil {
+		trimmed := strings.TrimSpace(*req.HeaderText)
+		req.HeaderText = &trimmed
+	}
+
+	hasFree := true
+	if req.HasFreeSpace != nil {
+		hasFree = *req.HasFreeSpace
+	}
+	header := ""
+	if req.HeaderText != nil {
+		header = *req.HeaderText
+	}
+
+	result, err := h.cardService.Clone(r.Context(), user.ID, cardID, services.CloneParams{
+		Year:         req.Year,
+		Title:        req.Title,
+		Category:     req.Category,
+		GridSize:     req.GridSize,
+		HeaderText:   header,
+		HasFreeSpace: hasFree,
+	})
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidGridSize) {
+		writeError(w, http.StatusBadRequest, "Grid size must be 2, 3, 4, or 5")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidHeaderText) {
+		writeError(w, http.StatusBadRequest, "Invalid header text")
+		return
+	}
+	if errors.Is(err, services.ErrCardTitleExists) {
+		writeError(w, http.StatusConflict, "You already have a card with this title for this year")
+		return
+	}
+	if errors.Is(err, services.ErrCardAlreadyExists) {
+		writeError(w, http.StatusConflict, "You already have a card for this year. Give your new card a unique title.")
+		return
+	}
+	if err != nil {
+		log.Printf("Error cloning card: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	message := "Card cloned"
+	if result.TruncatedItemCount > 0 {
+		message = "Card cloned (some items were not copied because the new grid is smaller)"
+	}
+	writeJSON(w, http.StatusCreated, CardResponse{Card: result.Card, Message: message})
 }
 
 func (h *CardHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
@@ -570,6 +768,10 @@ func (h *CardHandler) SwapItems(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, services.ErrInvalidPosition) {
 		writeError(w, http.StatusBadRequest, "Invalid position")
+		return
+	}
+	if errors.Is(err, services.ErrNoSpaceForFree) {
+		writeError(w, http.StatusBadRequest, "Your card is full. Remove an item to move the FREE space.")
 		return
 	}
 	if err != nil {
@@ -1128,19 +1330,49 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	gridSize := req.GridSize
+	if gridSize == 0 {
+		gridSize = models.MaxGridSize
+	}
+	if !models.IsValidGridSize(gridSize) {
+		writeError(w, http.StatusBadRequest, "Grid size must be 2, 3, 4, or 5")
+		return
+	}
+
+	hasFreeSpace := true
+	if req.HasFreeSpace != nil {
+		hasFreeSpace = *req.HasFreeSpace
+	}
+
+	headerText := req.HeaderText
+	if headerText == "" {
+		headerText = models.DefaultHeaderText(gridSize)
+	}
+	headerText = models.NormalizeHeaderText(headerText)
+	if err := models.ValidateHeaderText(headerText, gridSize); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	// Validate items count
 	if len(req.Items) == 0 {
 		writeError(w, http.StatusBadRequest, "At least one item is required")
 		return
 	}
-	if len(req.Items) > 24 {
-		writeError(w, http.StatusBadRequest, "Cannot import more than 24 items")
+
+	totalSquares := gridSize * gridSize
+	maxItems := totalSquares
+	if hasFreeSpace {
+		maxItems = totalSquares - 1
+	}
+
+	if len(req.Items) > maxItems {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Cannot import more than %d items for a %dx%d card", maxItems, gridSize, gridSize))
 		return
 	}
 
-	// If finalizing, must have exactly 24 items
-	if req.Finalize && len(req.Items) != 24 {
-		writeError(w, http.StatusBadRequest, "Card must have exactly 24 items to finalize")
+	if req.Finalize && len(req.Items) != maxItems {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Card must have exactly %d items to finalize", maxItems))
 		return
 	}
 
@@ -1184,12 +1416,16 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 
 	// Import the card
 	card, err := h.cardService.Import(r.Context(), models.ImportCardParams{
-		UserID:   user.ID,
-		Year:     req.Year,
-		Title:    req.Title,
-		Category: req.Category,
-		Items:    items,
-		Finalize: req.Finalize,
+		UserID:       user.ID,
+		Year:         req.Year,
+		Title:        req.Title,
+		Category:     req.Category,
+		Items:        items,
+		Finalize:     req.Finalize,
+		GridSize:     gridSize,
+		HeaderText:   headerText,
+		HasFreeSpace: hasFreeSpace,
+		FreeSpacePos: req.FreeSpacePosition,
 	})
 	if errors.Is(err, services.ErrInvalidCategory) {
 		writeError(w, http.StatusBadRequest, "Invalid category")
@@ -1201,6 +1437,14 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 	}
 	if errors.Is(err, services.ErrInvalidPosition) {
 		writeError(w, http.StatusBadRequest, "Invalid item position")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidGridSize) {
+		writeError(w, http.StatusBadRequest, "Grid size must be 2, 3, 4, or 5")
+		return
+	}
+	if errors.Is(err, services.ErrInvalidHeaderText) {
+		writeError(w, http.StatusBadRequest, "Invalid header text")
 		return
 	}
 	if err != nil {

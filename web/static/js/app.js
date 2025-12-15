@@ -306,12 +306,53 @@ const App = {
           </select>
         </div>
 
+        <div class="form-group">
+          <label for="modal-card-grid-size">Grid Size</label>
+          <select id="modal-card-grid-size" class="form-input">
+            <option value="2">2x2</option>
+            <option value="3">3x3</option>
+            <option value="4">4x4</option>
+            <option value="5" selected>5x5</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="modal-card-free-space" checked>
+            <span>Include FREE space</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="modal-card-header">Header</label>
+          <input type="text" id="modal-card-header" class="form-input" maxlength="5" value="BINGO" required>
+          <small class="text-muted" id="modal-card-header-help">1-5 characters.</small>
+        </div>
+
         <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
           <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">Create Card</button>
         </div>
       </form>
     `);
+
+    const gridSizeEl = document.getElementById('modal-card-grid-size');
+    const headerEl = document.getElementById('modal-card-header');
+    const headerHelpEl = document.getElementById('modal-card-header-help');
+    if (gridSizeEl && headerEl) {
+      const apply = () => {
+        const n = parseInt(gridSizeEl.value, 10) || 5;
+        headerEl.maxLength = n;
+        if (headerHelpEl) headerHelpEl.textContent = `1-${n} characters.`;
+        if (headerEl.value.length > n) headerEl.value = Array.from(headerEl.value).slice(0, n).join('');
+        if (!headerEl.dataset.touched) headerEl.value = Array.from('BINGO').slice(0, n).join('');
+      };
+      headerEl.addEventListener('input', () => {
+        headerEl.dataset.touched = 'true';
+      });
+      gridSizeEl.addEventListener('change', apply);
+      apply();
+    }
   },
 
   async handleCreateCardModal(event) {
@@ -320,9 +361,16 @@ const App = {
     const year = parseInt(document.getElementById('modal-card-year').value, 10);
     const title = document.getElementById('modal-card-title').value.trim() || null;
     const category = document.getElementById('modal-card-category').value || null;
+    const gridSize = parseInt(document.getElementById('modal-card-grid-size')?.value || '5', 10);
+    const hasFreeSpace = !!document.getElementById('modal-card-free-space')?.checked;
+    const headerText = document.getElementById('modal-card-header')?.value?.trim() || '';
 
     try {
-      const response = await API.cards.create(year, title, category);
+      const response = await API.cards.create(year, title, category, {
+        gridSize,
+        hasFreeSpace,
+        headerText,
+      });
 
       // Check for conflict
       if (response.error === 'card_exists') {
@@ -1128,7 +1176,8 @@ const App = {
   renderDashboardCardPreview(card) {
     const itemCount = card.items ? card.items.length : 0;
     const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
-    const progress = card.is_finalized ? Math.round((completedCount / 24) * 100) : Math.round((itemCount / 24) * 100);
+    const capacity = this.getCardCapacity(card);
+    const progress = capacity ? (card.is_finalized ? Math.round((completedCount / capacity) * 100) : Math.round((itemCount / capacity) * 100)) : 0;
     const displayName = this.getCardDisplayName(card);
     const categoryBadge = this.getCategoryBadge(card);
     const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
@@ -1151,8 +1200,8 @@ const App = {
               </div>
               <p class="text-muted" style="margin: 0;">
                 ${card.is_finalized
-                  ? `${completedCount}/24 completed`
-                  : `${itemCount}/24 items added`}
+                  ? `${completedCount}/${capacity} completed`
+                  : `${itemCount}/${capacity} items added`}
               </p>
             </a>
           </div>
@@ -1182,12 +1231,14 @@ const App = {
     };
 
     const getProgress = (card) => {
+      const capacity = this.getCardCapacity(card);
+      if (!capacity) return 0;
       if (!card.is_finalized) {
         const itemCount = card.items ? card.items.length : 0;
-        return itemCount / 24;
+        return itemCount / capacity;
       }
       const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
-      return completedCount / 24;
+      return completedCount / capacity;
     };
 
     switch (key) {
@@ -1482,6 +1533,29 @@ const App = {
             </select>
           </div>
 
+          <div class="form-group">
+            <label for="card-grid-size">Grid Size</label>
+            <select id="card-grid-size" class="form-input">
+              <option value="2">2x2</option>
+              <option value="3">3x3</option>
+              <option value="4">4x4</option>
+              <option value="5" selected>5x5</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+              <input type="checkbox" id="card-free-space" checked>
+              <span>Include FREE space</span>
+            </label>
+          </div>
+
+          <div class="form-group">
+            <label for="card-header">Header</label>
+            <input type="text" id="card-header" class="form-input" maxlength="5" value="BINGO" required>
+            <small class="text-muted" id="card-header-help">1-5 characters.</small>
+          </div>
+
           <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
             <a href="#home" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
             <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
@@ -1489,6 +1563,24 @@ const App = {
         </form>
       </div>
     `;
+
+    const gridSizeEl = document.getElementById('card-grid-size');
+    const headerEl = document.getElementById('card-header');
+    const headerHelpEl = document.getElementById('card-header-help');
+    if (gridSizeEl && headerEl) {
+      const apply = () => {
+        const n = parseInt(gridSizeEl.value, 10) || 5;
+        headerEl.maxLength = n;
+        if (headerHelpEl) headerHelpEl.textContent = `1-${n} characters.`;
+        if (headerEl.value.length > n) headerEl.value = Array.from(headerEl.value).slice(0, n).join('');
+        if (!headerEl.dataset.touched) headerEl.value = Array.from('BINGO').slice(0, n).join('');
+      };
+      headerEl.addEventListener('input', () => {
+        headerEl.dataset.touched = 'true';
+      });
+      gridSizeEl.addEventListener('change', apply);
+      apply();
+    }
   },
 
   // Get fallback categories when API fails
@@ -1512,9 +1604,12 @@ const App = {
     const year = parseInt(document.getElementById('card-year').value, 10);
     const title = document.getElementById('card-title').value.trim() || null;
     const category = document.getElementById('card-category').value || null;
+    const gridSize = parseInt(document.getElementById('card-grid-size')?.value || '5', 10);
+    const hasFreeSpace = !!document.getElementById('card-free-space')?.checked;
+    const headerText = document.getElementById('card-header')?.value?.trim() || '';
 
     // Create anonymous card in localStorage
-    const card = AnonymousCard.create(year, title, category);
+    const card = AnonymousCard.create(year, title, category, gridSize, headerText, hasFreeSpace);
     this.isAnonymousMode = true;
     this.currentCard = this.convertAnonymousCardToAppFormat(card);
 
@@ -1526,11 +1621,21 @@ const App = {
 
   // Convert anonymous card format to the format used by the app
   convertAnonymousCardToAppFormat(anonCard) {
+    const gridSize = anonCard.grid_size || 5;
+    const totalSquares = gridSize * gridSize;
+    const hasFreeSpace = typeof anonCard.has_free_space === 'boolean' ? anonCard.has_free_space : true;
+    const defaultFreePos = gridSize % 2 === 1 ? Math.floor(totalSquares / 2) : 0;
     return {
       id: 'anonymous',
       year: anonCard.year,
       title: anonCard.title,
       category: anonCard.category,
+      grid_size: gridSize,
+      header_text: anonCard.header_text || 'BINGO',
+      has_free_space: hasFreeSpace,
+      free_space_position: hasFreeSpace
+        ? (typeof anonCard.free_space_position === 'number' ? anonCard.free_space_position : defaultFreePos)
+        : null,
       is_finalized: false,
       items: anonCard.items.map(item => ({
         id: `anon-${item.position}`,
@@ -1680,7 +1785,9 @@ const App = {
   renderCardEditor(container) {
     this.currentView = 'card-editor';
     const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
-    const progress = Math.round((itemCount / 24) * 100);
+    const gridSize = this.getGridSize(this.currentCard);
+    const capacity = this.getCardCapacity(this.currentCard);
+    const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
     const isAnon = this.isAnonymousMode;
@@ -1719,19 +1826,31 @@ const App = {
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${progress}%"></div>
       </div>
-      <p class="progress-text mb-lg">${itemCount}/24 items added</p>
+      <p class="progress-text mb-lg">${itemCount}/${capacity} items added</p>
 
       <div class="card-editor-layout">
         <div class="bingo-container editor-grid">
-          <div class="bingo-grid" id="bingo-grid">
+          <div class="bingo-grid" id="bingo-grid" style="--grid-size: ${gridSize};">
             ${this.renderGrid()}
           </div>
         </div>
 
         <div class="editor-sidebar">
           <div class="input-area editor-input">
-            <input type="text" id="item-input" class="form-input" placeholder="Type your goal..." maxlength="500" ${itemCount >= 24 ? 'disabled' : ''}>
-            <button class="btn btn-primary" id="add-btn" ${itemCount >= 24 ? 'disabled' : ''}>Add</button>
+            <input type="text" id="item-input" class="form-input" placeholder="Type your goal..." maxlength="500" ${itemCount >= capacity ? 'disabled' : ''}>
+            <button class="btn btn-primary" id="add-btn" ${itemCount >= capacity ? 'disabled' : ''}>Add</button>
+          </div>
+
+          <div class="card-config-panel" style="margin-top: 0.75rem;">
+            <div class="form-group" style="margin-bottom: 0.75rem;">
+              <label class="form-label">Header</label>
+              <input type="text" id="card-header-input" class="form-input" maxlength="${gridSize}" value="${this.escapeHtml(this.getHeaderText(this.currentCard))}">
+              <small class="text-muted">1-${gridSize} characters.</small>
+            </div>
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+              <input type="checkbox" id="card-free-toggle" ${this.getHasFreeSpace(this.currentCard) ? 'checked' : ''}>
+              <span>Include FREE space</span>
+            </label>
           </div>
 
           <div class="action-bar action-bar--side editor-actions">
@@ -1741,7 +1860,12 @@ const App = {
             <button class="btn btn-secondary" onclick="App.shuffleCard()" ${itemCount === 0 ? 'disabled' : ''}>
               🔀 Shuffle
             </button>
-            <button class="btn btn-primary" onclick="App.finalizeCard()" ${itemCount < 24 ? 'disabled' : ''}>
+            ${!isAnon ? `
+              <button class="btn btn-secondary" onclick="App.showCloneCardModal()">
+                📄 Clone
+              </button>
+            ` : ''}
+            <button class="btn btn-primary" onclick="App.finalizeCard()" ${itemCount < capacity ? 'disabled' : ''}>
               ✓ Finalize Card
             </button>
           </div>
@@ -1755,11 +1879,11 @@ const App = {
                     🧙 AI
                   </button>
                 ` : `
-                  <button class="btn btn-secondary btn-sm" id="ai-btn" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}')" title="Generate goals with AI" ${itemCount >= 24 ? 'disabled' : ''}>
+                  <button class="btn btn-secondary btn-sm" id="ai-btn" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}', ${capacity - itemCount})" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
                     🧙 AI
                   </button>
                 `}
-                <button class="btn btn-secondary btn-sm" id="fill-empty-btn" onclick="App.fillEmptySpaces()" ${itemCount >= 24 ? 'disabled' : ''}>
+                <button class="btn btn-secondary btn-sm" id="fill-empty-btn" onclick="App.fillEmptySpaces()" ${itemCount >= capacity ? 'disabled' : ''}>
                   ✨ Fill
                 </button>
               </div>
@@ -1959,7 +2083,9 @@ const App = {
   renderFinalizedCard(container) {
     this.currentView = 'finalized-card';
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const progress = Math.round((completedCount / 24) * 100);
+    const gridSize = this.getGridSize(this.currentCard);
+    const capacity = this.getCardCapacity(this.currentCard);
+    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
 
@@ -1977,6 +2103,7 @@ const App = {
           </div>
           <div class="card-header-actions">
             <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
+            <button class="btn btn-ghost btn-sm" onclick="App.showCloneCardModal()" title="Clone card">📄</button>
             <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
@@ -1985,7 +2112,7 @@ const App = {
         </div>
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid">
+          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid" style="--grid-size: ${gridSize};">
             ${this.renderGrid(true)}
           </div>
         </div>
@@ -1994,7 +2121,7 @@ const App = {
           <div class="progress-bar">
             <div class="progress-fill" style="width: ${progress}%"></div>
           </div>
-          <p class="progress-text">${completedCount}/24 completed</p>
+          <p class="progress-text">${completedCount}/${capacity} completed</p>
         </div>
       </div>
     `;
@@ -2002,11 +2129,47 @@ const App = {
     this.setupFinalizedCardEvents();
   },
 
+  getGridSize(card = this.currentCard) {
+    const n = Number(card?.grid_size);
+    return Number.isFinite(n) && n >= 2 && n <= 5 ? n : 5;
+  },
+
+  getHasFreeSpace(card = this.currentCard) {
+    return card?.has_free_space !== false;
+  },
+
+  getFreeSpacePosition(card = this.currentCard) {
+    if (!this.getHasFreeSpace(card)) return null;
+    const n = this.getGridSize(card);
+    const total = n * n;
+    const pos = Number(card?.free_space_position);
+    if (Number.isFinite(pos) && pos >= 0 && pos < total) return pos;
+    return n % 2 === 1 ? Math.floor(total / 2) : 0;
+  },
+
+  getCardCapacity(card = this.currentCard) {
+    const n = this.getGridSize(card);
+    const total = n * n;
+    return this.getHasFreeSpace(card) ? total - 1 : total;
+  },
+
+  getHeaderText(card = this.currentCard) {
+    const n = this.getGridSize(card);
+    const raw = (card?.header_text || 'BINGO').toString().trim().toUpperCase();
+    const letters = Array.from(raw);
+    const sliced = letters.slice(0, n).join('');
+    if (sliced) return sliced;
+    return Array.from('BINGO').slice(0, n).join('');
+  },
+
   renderGrid(finalized = false) {
-    // B-I-N-G-O header row
-    const headers = ['B', 'I', 'N', 'G', 'O'];
-    const headerRow = headers.map(letter => `
-      <div class="bingo-header">${letter}</div>
+    const gridSize = this.getGridSize(this.currentCard);
+    const hasFreeSpace = this.getHasFreeSpace(this.currentCard);
+    const freePos = this.getFreeSpacePosition(this.currentCard);
+
+    const headerLetters = Array.from(this.getHeaderText(this.currentCard));
+    const headerRow = Array.from({ length: gridSize }).map((_, i) => `
+      <div class="bingo-header">${this.escapeHtml(headerLetters[i] || '')}</div>
     `).join('');
 
     const cells = [];
@@ -2018,11 +2181,11 @@ const App = {
       });
     }
 
-    for (let i = 0; i < 25; i++) {
-      if (i === 12) {
-        // Free space
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      if (hasFreeSpace && i === freePos) {
+        const draggable = !finalized ? 'draggable="true"' : '';
         cells.push(`
-          <div class="bingo-cell bingo-cell--free">
+          <div class="bingo-cell bingo-cell--free" data-position="${i}" ${draggable}>
             <span class="bingo-cell-content">FREE</span>
           </div>
         `);
@@ -2097,6 +2260,20 @@ const App = {
         document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(e.target.dataset.category);
       }
     });
+
+    // Draft-only card config (header/FREE)
+    const headerInput = document.getElementById('card-header-input');
+    if (headerInput) {
+      headerInput.addEventListener('change', async () => {
+        await this.updateDraftConfig({ headerText: headerInput.value });
+      });
+    }
+    const freeToggle = document.getElementById('card-free-toggle');
+    if (freeToggle) {
+      freeToggle.addEventListener('change', async () => {
+        await this.updateDraftConfig({ hasFreeSpace: freeToggle.checked });
+      });
+    }
 
     // Drag and drop
     this.setupDragAndDrop();
@@ -2182,9 +2359,10 @@ const App = {
 
       // Update progress
       const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
-      const progress = Math.round((completedCount / 24) * 100);
+      const capacity = this.getCardCapacity(this.currentCard);
+      const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
       document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${completedCount}/24 completed`;
+      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
 
       // Update local state
       const item = this.currentCard.items?.find(i => i.position === position);
@@ -2213,9 +2391,10 @@ const App = {
 
       // Update progress
       const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
-      const progress = Math.round((completedCount / 24) * 100);
+      const capacity = this.getCardCapacity(this.currentCard);
+      const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
       document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${completedCount}/24 completed`;
+      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -2227,7 +2406,7 @@ const App = {
 
     grid.addEventListener('dragstart', (e) => {
       const cell = e.target.closest('.bingo-cell');
-      if (!cell || cell.classList.contains('bingo-cell--empty') || cell.classList.contains('bingo-cell--free')) {
+      if (!cell || cell.classList.contains('bingo-cell--empty')) {
         e.preventDefault();
         return;
       }
@@ -2347,7 +2526,7 @@ const App = {
 
     grid.addEventListener('touchstart', (e) => {
       const cell = e.target.closest('.bingo-cell');
-      if (!cell || cell.classList.contains('bingo-cell--empty') || cell.classList.contains('bingo-cell--free')) {
+      if (!cell || cell.classList.contains('bingo-cell--empty')) {
         return;
       }
       if (!cell.hasAttribute('draggable')) return;
@@ -2602,12 +2781,13 @@ const App = {
 
       // Update progress
       const itemCount = this.currentCard.items.length;
-      const progress = Math.round((itemCount / 24) * 100);
+      const capacity = this.getCardCapacity(this.currentCard);
+      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
       document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${itemCount}/24 items added`;
+      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
       // Update buttons
-      if (itemCount >= 24) {
+      if (itemCount >= capacity) {
         input.disabled = true;
         document.getElementById('add-btn').disabled = true;
         document.getElementById('fill-empty-btn').disabled = true;
@@ -2616,7 +2796,7 @@ const App = {
       const clearBtn = document.getElementById('clear-btn');
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
-      if (aiBtn) aiBtn.disabled = itemCount >= 24;
+      if (aiBtn) aiBtn.disabled = itemCount >= capacity;
       document.querySelector('[onclick="App.shuffleCard()"]').disabled = false;
 
       // Update suggestions
@@ -2639,7 +2819,8 @@ const App = {
 
   async fillEmptySpaces() {
     const currentItemCount = this.currentCard.items ? this.currentCard.items.length : 0;
-    const emptyCount = 24 - currentItemCount;
+    const capacity = this.getCardCapacity(this.currentCard);
+    const emptyCount = capacity - currentItemCount;
 
     if (emptyCount === 0) {
       this.toast('Card is already full', 'info');
@@ -2721,12 +2902,12 @@ const App = {
 
     // Update progress
     const itemCount = this.currentCard.items.length;
-    const progress = Math.round((itemCount / 24) * 100);
+    const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
     document.querySelector('.progress-fill').style.width = `${progress}%`;
-    document.querySelector('.progress-text').textContent = `${itemCount}/24 items added`;
+    document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
     // Update buttons
-    const isFull = itemCount >= 24;
+    const isFull = itemCount >= capacity;
     document.getElementById('item-input').disabled = isFull;
     document.getElementById('add-btn').disabled = isFull;
     document.getElementById('fill-empty-btn').disabled = isFull;
@@ -2735,7 +2916,7 @@ const App = {
     const aiBtn = document.getElementById('ai-btn');
     if (aiBtn) aiBtn.disabled = isFull;
     document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
-    document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < 24;
+    document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
 
     // Update suggestions panel
     const activeTab = document.querySelector('.category-tab--active');
@@ -2777,9 +2958,10 @@ const App = {
 
       // Update progress
       const itemCount = this.currentCard.items.length;
-      const progress = Math.round((itemCount / 24) * 100);
+      const capacity = this.getCardCapacity(this.currentCard);
+      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
       document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${itemCount}/24 items added`;
+      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
       // Update buttons
       document.getElementById('item-input').disabled = false;
@@ -2788,8 +2970,8 @@ const App = {
       const clearBtn = document.getElementById('clear-btn');
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
-      if (aiBtn) aiBtn.disabled = itemCount >= 24;
-      document.querySelector('[onclick="App.finalizeCard()"]').disabled = true;
+      if (aiBtn) aiBtn.disabled = itemCount >= capacity;
+      document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
       if (itemCount === 0) {
         document.querySelector('[onclick="App.shuffleCard()"]').disabled = true;
       }
@@ -2831,6 +3013,178 @@ const App = {
       }, 300);
 
       this.toast('Items shuffled!', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async updateDraftConfig({ headerText = null, hasFreeSpace = null } = {}) {
+    if (!this.currentCard || this.currentCard.is_finalized) return;
+
+    const normalizedHeader = headerText !== null ? headerText.trim() : null;
+    if (normalizedHeader !== null && normalizedHeader.length === 0) {
+      this.toast('Header cannot be empty', 'error');
+      const container = document.getElementById('main-container');
+      if (container) this.renderCardEditor(container);
+      return;
+    }
+
+    try {
+      if (this.isAnonymousMode) {
+        const updated = AnonymousCard.updateConfig({
+          headerText: normalizedHeader,
+          hasFreeSpace: typeof hasFreeSpace === 'boolean' ? hasFreeSpace : null,
+        });
+        if (!updated) {
+          throw new Error('Unable to update card layout. Remove an item and try again.');
+        }
+        this.currentCard = this.convertAnonymousCardToAppFormat(updated);
+      } else {
+        const response = await API.cards.updateConfig(
+          this.currentCard.id,
+          normalizedHeader,
+          typeof hasFreeSpace === 'boolean' ? hasFreeSpace : null
+        );
+        this.currentCard = response.card;
+      }
+
+      const container = document.getElementById('main-container');
+      if (container) this.renderCardEditor(container);
+    } catch (error) {
+      this.toast(error.message, 'error');
+      const container = document.getElementById('main-container');
+      if (container) this.renderCardEditor(container);
+    }
+  },
+
+  async showCloneCardModal() {
+    if (!this.currentCard || this.isAnonymousMode) return;
+
+    // Fetch categories
+    let categories = [];
+    try {
+      const response = await API.cards.getCategories();
+      categories = response.categories || [];
+    } catch (error) {
+      categories = this.getFallbackCategories();
+    }
+
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+
+    const currentTitle = this.currentCard.title || '';
+    const defaultTitle = currentTitle ? `${currentTitle} (Copy)` : `${this.currentCard.year} Bingo Card (Copy)`;
+    const currentCategory = this.currentCard.category || '';
+
+    const categoryOptions = categories.map(c => {
+      const selected = c.id === currentCategory ? 'selected' : '';
+      return `<option value="${this.escapeHtml(c.id)}" ${selected}>${this.escapeHtml(c.name)}</option>`;
+    }).join('');
+
+    const gridSize = this.getGridSize(this.currentCard);
+    const headerText = this.getHeaderText(this.currentCard);
+    const hasFree = this.getHasFreeSpace(this.currentCard);
+
+    this.openModal('Clone Card', `
+      <form onsubmit="App.handleCloneCard(event)">
+        <div class="form-group">
+          <label for="clone-card-year">Year</label>
+          <select id="clone-card-year" class="form-input" required>
+            <option value="${currentYear}" ${this.currentCard.year === currentYear ? 'selected' : ''}>${currentYear}</option>
+            <option value="${nextYear}" ${this.currentCard.year === nextYear ? 'selected' : ''}>${nextYear}</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="clone-card-title">
+            Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+          </label>
+          <input type="text" id="clone-card-title" class="form-input"
+                 value="${this.escapeHtml(defaultTitle)}"
+                 maxlength="100">
+        </div>
+
+        <div class="form-group">
+          <label for="clone-card-category">
+            Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+          </label>
+          <select id="clone-card-category" class="form-input">
+            <option value="" ${!currentCategory ? 'selected' : ''}>None</option>
+            ${categoryOptions}
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="clone-card-grid-size">Grid Size</label>
+          <select id="clone-card-grid-size" class="form-input">
+            <option value="2" ${gridSize === 2 ? 'selected' : ''}>2x2</option>
+            <option value="3" ${gridSize === 3 ? 'selected' : ''}>3x3</option>
+            <option value="4" ${gridSize === 4 ? 'selected' : ''}>4x4</option>
+            <option value="5" ${gridSize === 5 ? 'selected' : ''}>5x5</option>
+          </select>
+          <small class="text-muted">To change grid size, clone into a new card.</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="clone-card-free-space" ${hasFree ? 'checked' : ''}>
+            <span>Include FREE space</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label for="clone-card-header">Header</label>
+          <input type="text" id="clone-card-header" class="form-input" maxlength="${gridSize}" value="${this.escapeHtml(headerText)}" required>
+          <small class="text-muted" id="clone-card-header-help">1-${gridSize} characters.</small>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Clone</button>
+        </div>
+      </form>
+    `);
+
+    const gridSizeEl = document.getElementById('clone-card-grid-size');
+    const headerEl = document.getElementById('clone-card-header');
+    const headerHelpEl = document.getElementById('clone-card-header-help');
+    if (gridSizeEl && headerEl) {
+      const apply = () => {
+        const n = parseInt(gridSizeEl.value, 10) || 5;
+        headerEl.maxLength = n;
+        if (headerHelpEl) headerHelpEl.textContent = `1-${n} characters.`;
+        if (headerEl.value.length > n) headerEl.value = Array.from(headerEl.value).slice(0, n).join('');
+      };
+      gridSizeEl.addEventListener('change', apply);
+      apply();
+    }
+  },
+
+  async handleCloneCard(event) {
+    event.preventDefault();
+    if (!this.currentCard) return;
+
+    const year = parseInt(document.getElementById('clone-card-year').value, 10);
+    const title = document.getElementById('clone-card-title').value.trim() || null;
+    const category = document.getElementById('clone-card-category').value || null;
+    const gridSize = parseInt(document.getElementById('clone-card-grid-size').value, 10);
+    const hasFreeSpace = !!document.getElementById('clone-card-free-space').checked;
+    const headerText = document.getElementById('clone-card-header').value.trim();
+
+    try {
+      const response = await API.cards.clone(this.currentCard.id, {
+        year,
+        title,
+        category,
+        grid_size: gridSize,
+        has_free_space: hasFreeSpace,
+        header_text: headerText,
+      });
+
+      this.closeModal();
+      this.currentCard = response.card;
+      window.location.hash = `#card/${response.card.id}`;
+      if (response.message) this.toast(response.message, 'success');
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -3363,13 +3717,15 @@ const App = {
   checkForBingo() {
     const cells = document.querySelectorAll('.bingo-cell');
     const grid = [];
-    cells.forEach((cell, i) => {
+    cells.forEach((cell) => {
       grid.push(cell.classList.contains('bingo-cell--completed') || cell.classList.contains('bingo-cell--free'));
     });
 
+    const size = this.getGridSize(this.currentCard);
+
     // Check rows
-    for (let row = 0; row < 5; row++) {
-      if (grid.slice(row * 5, row * 5 + 5).every(Boolean)) {
+    for (let row = 0; row < size; row++) {
+      if (grid.slice(row * size, row * size + size).every(Boolean)) {
         this.toast('BINGO! Row complete! 🎉🎉🎉', 'success');
         this.confetti(100);
         return;
@@ -3377,8 +3733,8 @@ const App = {
     }
 
     // Check columns
-    for (let col = 0; col < 5; col++) {
-      if ([0, 1, 2, 3, 4].map(row => grid[row * 5 + col]).every(Boolean)) {
+    for (let col = 0; col < size; col++) {
+      if (Array.from({ length: size }).map((_, row) => grid[row * size + col]).every(Boolean)) {
         this.toast('BINGO! Column complete! 🎉🎉🎉', 'success');
         this.confetti(100);
         return;
@@ -3386,12 +3742,12 @@ const App = {
     }
 
     // Check diagonals
-    if ([0, 6, 12, 18, 24].map(i => grid[i]).every(Boolean)) {
+    if (Array.from({ length: size }).map((_, i) => grid[i * size + i]).every(Boolean)) {
       this.toast('BINGO! Diagonal complete! 🎉🎉🎉', 'success');
       this.confetti(100);
       return;
     }
-    if ([4, 8, 12, 16, 20].map(i => grid[i]).every(Boolean)) {
+    if (Array.from({ length: size }).map((_, i) => grid[i * size + (size - 1 - i)]).every(Boolean)) {
       this.toast('BINGO! Diagonal complete! 🎉🎉🎉', 'success');
       this.confetti(100);
       return;
@@ -3659,7 +4015,9 @@ const App = {
 
   renderFriendCardView(container) {
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const progress = Math.round((completedCount / 24) * 100);
+    const gridSize = this.getGridSize(this.currentCard);
+    const capacity = this.getCardCapacity(this.currentCard);
+    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
     const currentYear = new Date().getFullYear();
     const isArchived = this.currentCard.year < currentYear;
     const displayName = this.getCardDisplayName(this.currentCard);
@@ -3697,8 +4055,8 @@ const App = {
         </div>
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized ${isArchived ? 'bingo-grid--archive' : ''}" id="bingo-grid">
-            ${this.renderFriendGrid()}
+          <div class="bingo-grid bingo-grid--finalized ${isArchived ? 'bingo-grid--archive' : ''}" id="bingo-grid" style="--grid-size: ${gridSize};">
+            ${this.renderGrid(true)}
           </div>
         </div>
 
@@ -3706,7 +4064,7 @@ const App = {
           <div class="progress-bar">
             <div class="progress-fill" style="width: ${progress}%"></div>
           </div>
-          <p class="progress-text">${completedCount}/24 completed</p>
+          <p class="progress-text">${completedCount}/${capacity} completed</p>
         </div>
       </div>
     `;
@@ -3735,50 +4093,7 @@ const App = {
   },
 
   renderFriendGrid() {
-    const headers = ['B', 'I', 'N', 'G', 'O'];
-    const headerRow = headers.map(letter => `
-      <div class="bingo-header">${letter}</div>
-    `).join('');
-
-    const cells = [];
-    const itemsByPosition = {};
-
-    if (this.currentCard.items) {
-      this.currentCard.items.forEach(item => {
-        itemsByPosition[item.position] = item;
-      });
-    }
-
-    for (let i = 0; i < 25; i++) {
-      if (i === 12) {
-        cells.push(`
-          <div class="bingo-cell bingo-cell--free">
-            <span class="bingo-cell-content">FREE</span>
-          </div>
-        `);
-      } else {
-        const item = itemsByPosition[i];
-        if (item) {
-          const isCompleted = item.is_completed;
-          const shortText = this.truncateText(item.content, 50);
-          cells.push(`
-            <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
-                 data-position="${i}"
-                 data-item-id="${item.id}"
-                 data-content="${this.escapeHtml(item.content)}"
-                 title="${this.escapeHtml(item.content)}">
-              <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
-            </div>
-          `);
-        } else {
-          cells.push(`
-            <div class="bingo-cell bingo-cell--empty" data-position="${i}"></div>
-          `);
-        }
-      }
-    }
-
-    return headerRow + cells.join('');
+    return this.renderGrid(true);
   },
 
   setupFriendCardEvents() {
@@ -4060,7 +4375,9 @@ const App = {
 
   renderArchiveCardView(container) {
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const progress = Math.round((completedCount / 24) * 100);
+    const gridSize = this.getGridSize(this.currentCard);
+    const capacity = this.getCardCapacity(this.currentCard);
+    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
     const stats = this.currentStats;
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
@@ -4077,6 +4394,7 @@ const App = {
             ${categoryBadge}
           </div>
           <div class="card-header-actions">
+            <button class="btn btn-ghost btn-sm" onclick="App.showCloneCardModal()" title="Clone card">📄</button>
             <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
@@ -4110,7 +4428,7 @@ const App = {
         ` : ''}
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized bingo-grid--archive" id="bingo-grid">
+          <div class="bingo-grid bingo-grid--finalized bingo-grid--archive" id="bingo-grid" style="--grid-size: ${gridSize};">
             ${this.renderArchiveGrid()}
           </div>
         </div>
@@ -4119,7 +4437,7 @@ const App = {
           <div class="progress-bar">
             <div class="progress-fill" style="width: ${progress}%"></div>
           </div>
-          <p class="progress-text">${completedCount}/24 completed</p>
+          <p class="progress-text">${completedCount}/${capacity} completed</p>
         </div>
       </div>
     `;
@@ -4128,50 +4446,7 @@ const App = {
   },
 
   renderArchiveGrid() {
-    const headers = ['B', 'I', 'N', 'G', 'O'];
-    const headerRow = headers.map(letter => `
-      <div class="bingo-header">${letter}</div>
-    `).join('');
-
-    const cells = [];
-    const itemsByPosition = {};
-
-    if (this.currentCard.items) {
-      this.currentCard.items.forEach(item => {
-        itemsByPosition[item.position] = item;
-      });
-    }
-
-    for (let i = 0; i < 25; i++) {
-      if (i === 12) {
-        cells.push(`
-          <div class="bingo-cell bingo-cell--free">
-            <span class="bingo-cell-content">FREE</span>
-          </div>
-        `);
-      } else {
-        const item = itemsByPosition[i];
-        if (item) {
-          const isCompleted = item.is_completed;
-          const shortText = this.truncateText(item.content, 50);
-          cells.push(`
-            <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
-                 data-position="${i}"
-                 data-item-id="${item.id}"
-                 data-content="${this.escapeHtml(item.content)}"
-                 title="${this.escapeHtml(item.content)}">
-              <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
-            </div>
-          `);
-        } else {
-          cells.push(`
-            <div class="bingo-cell bingo-cell--empty" data-position="${i}"></div>
-          `);
-        }
-      }
-    }
-
-    return headerRow + cells.join('');
+    return this.renderGrid(true);
   },
 
   setupArchiveCardEvents() {
@@ -4621,7 +4896,7 @@ const App = {
               <h3>What is Year of Bingo?</h3>
               <p>
                 Year of Bingo is a fun way to track your annual goals! Instead of making a single New Year's resolution,
-                you create a 5x5 Bingo card with 24 personal goals (the center is a free space). Throughout the year,
+                you create a Bingo card (2x2–5x5) with personal goals (optionally including a FREE space). Throughout the year,
                 you mark items complete and try to get Bingos!
               </p>
             </div>
@@ -4631,7 +4906,7 @@ const App = {
               <p>
                 Click "Get Started" or "Create New Card" to begin. You can type in your own goals, use our curated
                 suggestions by category, or use the "Fill Empty Spaces" button to randomly fill remaining slots.
-                Once you have 24 items, click "Finalize Card" to lock it in and start tracking!
+                Once you have filled all items, click "Finalize Card" to lock it in and start tracking!
               </p>
             </div>
 

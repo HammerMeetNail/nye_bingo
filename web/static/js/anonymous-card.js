@@ -24,10 +24,22 @@ const AnonymousCard = {
   // Save/create anonymous card to localStorage
   save(card) {
     const now = new Date().toISOString();
+    const size = card.grid_size || 5;
+    const totalSquares = size * size;
+    const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
+    const freePos = hasFree
+      ? (typeof card.free_space_position === 'number'
+        ? card.free_space_position
+        : (size % 2 === 1 ? Math.floor(totalSquares / 2) : Math.floor(Math.random() * totalSquares)))
+      : null;
     const data = {
       year: card.year,
       title: card.title || null,
       category: card.category || null,
+      grid_size: size,
+      header_text: card.header_text || 'BINGO',
+      has_free_space: hasFree,
+      free_space_position: freePos,
       items: card.items || [],
       createdAt: card.createdAt || now,
       updatedAt: now,
@@ -37,14 +49,24 @@ const AnonymousCard = {
   },
 
   // Create a new anonymous card (only if one doesn't exist)
-  create(year, title = null, category = null) {
+  create(year, title = null, category = null, gridSize = 5, headerText = null, hasFreeSpace = true) {
     if (this.exists()) {
       return this.get();
     }
+    const size = Number.isFinite(gridSize) ? gridSize : 5;
+    const header = (headerText || 'BINGO').toString().trim().toUpperCase();
+    const totalSquares = size * size;
+    const freePos = hasFreeSpace
+      ? (size % 2 === 1 ? Math.floor(totalSquares / 2) : Math.floor(Math.random() * totalSquares))
+      : null;
     const card = {
       year,
       title,
       category,
+      grid_size: size,
+      header_text: header.slice(0, size),
+      has_free_space: hasFreeSpace,
+      free_space_position: freePos,
       items: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -72,11 +94,17 @@ const AnonymousCard = {
     const card = this.get();
     if (!card) return null;
 
-    // Find next available position (0-24, excluding 12 which is FREE space)
+    const size = card.grid_size || 5;
+    const totalSquares = size * size;
+    const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
+    const freePos = hasFree ? card.free_space_position : null;
+
+    // Find next available position (0..N^2-1, excluding FREE if enabled)
     const usedPositions = new Set(card.items.map(i => i.position));
     let position = null;
-    for (let i = 0; i <= 24; i++) {
-      if (i !== 12 && !usedPositions.has(i)) {
+    for (let i = 0; i < totalSquares; i++) {
+      if (freePos !== null && i === freePos) continue;
+      if (!usedPositions.has(i)) {
         position = i;
         break;
       }
@@ -127,10 +155,16 @@ const AnonymousCard = {
     const card = this.get();
     if (!card || card.items.length === 0) return card;
 
-    // Get all available positions (0-24 excluding 12)
+    const size = card.grid_size || 5;
+    const totalSquares = size * size;
+    const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
+    const freePos = hasFree ? card.free_space_position : null;
+
+    // Get all available positions excluding FREE (if enabled)
     const availablePositions = [];
-    for (let i = 0; i <= 24; i++) {
-      if (i !== 12) availablePositions.push(i);
+    for (let i = 0; i < totalSquares; i++) {
+      if (freePos !== null && i === freePos) continue;
+      availablePositions.push(i);
     }
 
     // Fisher-Yates shuffle the positions
@@ -152,6 +186,23 @@ const AnonymousCard = {
   swapItems(pos1, pos2) {
     const card = this.get();
     if (!card) return false;
+
+    const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
+    const freePos = hasFree ? card.free_space_position : null;
+
+    if (freePos !== null && (pos1 === freePos || pos2 === freePos)) {
+      const oldFree = freePos;
+      const newFree = pos1 === oldFree ? pos2 : pos1;
+      if (newFree === oldFree) return true;
+
+      const displaced = card.items.find(i => i.position === newFree) || null;
+      if (displaced) {
+        displaced.position = oldFree;
+      }
+      card.free_space_position = newFree;
+      this.save(card);
+      return true;
+    }
 
     const item1 = card.items.find(i => i.position === pos1);
     const item2 = card.items.find(i => i.position === pos2);
@@ -183,7 +234,13 @@ const AnonymousCard = {
 
   // Check if card has all 24 items (ready to finalize)
   isReady() {
-    return this.getItemCount() === 24;
+    const card = this.get();
+    if (!card) return false;
+    const size = card.grid_size || 5;
+    const totalSquares = size * size;
+    const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
+    const capacity = hasFree ? totalSquares - 1 : totalSquares;
+    return this.getItemCount() === capacity;
   },
 
   // Get item at a specific position
@@ -213,11 +270,64 @@ const AnonymousCard = {
       year: card.year,
       title: card.title,
       category: card.category,
+      grid_size: card.grid_size || 5,
+      header_text: card.header_text || 'BINGO',
+      has_free_space: typeof card.has_free_space === 'boolean' ? card.has_free_space : true,
+      free_space_position: typeof card.free_space_position === 'number' ? card.free_space_position : null,
       items: card.items.map(item => ({
         position: item.position,
         content: item.text,
       })),
       finalize: true,
     };
+  },
+
+  updateConfig({ headerText = null, hasFreeSpace = null } = {}) {
+    const card = this.get();
+    if (!card) return null;
+
+    const size = card.grid_size || 5;
+    const totalSquares = size * size;
+
+    if (headerText !== null) {
+      const normalized = headerText.toString().trim().toUpperCase();
+      if (!normalized || normalized.length > size) return null;
+      card.header_text = normalized;
+    }
+
+    if (typeof hasFreeSpace === 'boolean' && hasFreeSpace !== card.has_free_space) {
+      if (hasFreeSpace) {
+        const used = new Set(card.items.map(i => i.position));
+        const empties = [];
+        for (let p = 0; p < totalSquares; p++) {
+          if (!used.has(p)) empties.push(p);
+        }
+        if (empties.length === 0) return null;
+
+        let desired;
+        if (size % 2 === 1) {
+          desired = Math.floor(totalSquares / 2);
+        } else {
+          desired = empties[Math.floor(Math.random() * empties.length)];
+        }
+
+        if (used.has(desired)) {
+          const otherEmpties = empties.filter(p => p !== desired);
+          if (otherEmpties.length === 0) return null;
+          const relocateTo = otherEmpties[Math.floor(Math.random() * otherEmpties.length)];
+          const displaced = card.items.find(i => i.position === desired);
+          if (displaced) displaced.position = relocateTo;
+        }
+
+        card.has_free_space = true;
+        card.free_space_position = desired;
+      } else {
+        card.has_free_space = false;
+        card.free_space_position = null;
+      }
+    }
+
+    this.save(card);
+    return card;
   },
 };

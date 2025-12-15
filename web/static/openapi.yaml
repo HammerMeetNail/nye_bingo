@@ -10,7 +10,7 @@ info:
     Example: `Authorization: Bearer yob_abc123...`
 
     Note: Some endpoints (e.g. AI generation) require an authenticated browser session cookie and do not accept API tokens.
-  version: 1.1.1
+  version: 1.2.0
 servers:
   - url: /api
 components:
@@ -30,6 +30,9 @@ components:
         id:
           type: string
           format: uuid
+        user_id:
+          type: string
+          format: uuid
         year:
           type: integer
         title:
@@ -38,9 +41,24 @@ components:
         category:
           type: string
           nullable: true
+        grid_size:
+          type: integer
+          description: Square grid size (2-5)
+          enum: [2, 3, 4, 5]
+        header_text:
+          type: string
+          description: Header text rendered as one character per column
+        has_free_space:
+          type: boolean
+        free_space_position:
+          type: integer
+          nullable: true
+          description: Reserved FREE cell position in 0..(grid_size^2-1) when enabled
         is_active:
           type: boolean
         is_finalized:
+          type: boolean
+        visible_to_friends:
           type: boolean
         is_archived:
           type: boolean
@@ -57,12 +75,18 @@ components:
     BingoItem:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
+        card_id:
+          type: string
+          format: uuid
         position:
           type: integer
-          description: 0-24 (excluding 12 for center)
+          description: 0..(grid_size^2-1); FREE position is reserved when enabled
         content:
           type: string
-        is_complete:
+        is_completed:
           type: boolean
         completed_at:
           type: string
@@ -74,23 +98,33 @@ components:
         proof_url:
           type: string
           nullable: true
+        created_at:
+          type: string
+          format: date-time
     CardStats:
       type: object
       properties:
-        completed_count:
+        card_id:
+          type: string
+          format: uuid
+        year:
           type: integer
-        total_count:
+        total_items:
           type: integer
-        percentage:
+        completed_items:
+          type: integer
+        completion_rate:
           type: number
-        bingo_count:
+        bingos_achieved:
           type: integer
-        bingo_positions:
-          type: array
-          items:
-            type: array
-            items:
-              type: integer
+        first_completion:
+          type: string
+          format: date-time
+          nullable: true
+        last_completion:
+          type: string
+          format: date-time
+          nullable: true
     User:
       type: object
       properties:
@@ -159,6 +193,13 @@ paths:
                   type: string
                 category:
                   type: string
+                grid_size:
+                  type: integer
+                  enum: [2, 3, 4, 5]
+                header_text:
+                  type: string
+                has_free_space:
+                  type: boolean
       responses:
         '201':
           description: Card created
@@ -313,6 +354,78 @@ paths:
                 properties:
                   card:
                     $ref: '#/components/schemas/BingoCard'
+  /cards/{id}/config:
+    put:
+      summary: Update draft card config (header/FREE)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                header_text:
+                  type: string
+                has_free_space:
+                  type: boolean
+      responses:
+        '200':
+          description: Card updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+  /cards/{id}/clone:
+    post:
+      summary: Clone card into a new draft
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                year:
+                  type: integer
+                title:
+                  type: string
+                category:
+                  type: string
+                grid_size:
+                  type: integer
+                  enum: [2, 3, 4, 5]
+                header_text:
+                  type: string
+                has_free_space:
+                  type: boolean
+      responses:
+        '201':
+          description: Card cloned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+                  message:
+                    type: string
   /cards/{id}/items/{pos}/complete:
     put:
       summary: Mark item as complete

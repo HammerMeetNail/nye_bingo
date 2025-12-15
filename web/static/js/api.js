@@ -170,10 +170,13 @@ const API = {
 
   // Card endpoints
   cards: {
-    async create(year, title = null, category = null) {
+    async create(year, title = null, category = null, options = {}) {
       const body = { year };
       if (title) body.title = title;
       if (category) body.category = category;
+      if (options && typeof options.gridSize === 'number') body.grid_size = options.gridSize;
+      if (options && typeof options.headerText === 'string') body.header_text = options.headerText;
+      if (options && typeof options.hasFreeSpace === 'boolean') body.has_free_space = options.hasFreeSpace;
       return API.request('POST', '/api/cards', body);
     },
 
@@ -227,6 +230,17 @@ const API = {
     async finalize(cardId, visibleToFriends = null) {
       const body = visibleToFriends !== null ? { visible_to_friends: visibleToFriends } : null;
       return API.request('POST', `/api/cards/${cardId}/finalize`, body);
+    },
+
+    async updateConfig(cardId, headerText = null, hasFreeSpace = null) {
+      const body = {};
+      if (headerText !== null) body.header_text = headerText;
+      if (hasFreeSpace !== null) body.has_free_space = hasFreeSpace;
+      return API.request('PUT', `/api/cards/${cardId}/config`, body);
+    },
+
+    async clone(cardId, params = {}) {
+      return API.request('POST', `/api/cards/${cardId}/clone`, params);
     },
 
     async updateVisibility(cardId, visibleToFriends) {
