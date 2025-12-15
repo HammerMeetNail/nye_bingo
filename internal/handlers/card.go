@@ -517,10 +517,6 @@ func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		req.HeaderText = &trimmed
 	}
 
-	hasFree := true
-	if req.HasFreeSpace != nil {
-		hasFree = *req.HasFreeSpace
-	}
 	header := ""
 	if req.HeaderText != nil {
 		header = *req.HeaderText
@@ -532,7 +528,7 @@ func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		Category:     req.Category,
 		GridSize:     req.GridSize,
 		HeaderText:   header,
-		HasFreeSpace: hasFree,
+		HasFreeSpace: req.HasFreeSpace,
 	})
 	if errors.Is(err, services.ErrCardNotFound) {
 		writeError(w, http.StatusNotFound, "Card not found")

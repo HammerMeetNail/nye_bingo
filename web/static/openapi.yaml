@@ -414,6 +414,7 @@ paths:
                   type: string
                 has_free_space:
                   type: boolean
+                  description: When omitted, defaults to the source card's FREE-space setting
       responses:
         '201':
           description: Card cloned

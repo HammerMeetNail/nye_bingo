@@ -1515,12 +1515,19 @@ type CloneParams struct {
 	Category     *string
 	GridSize     int
 	HeaderText   string
-	HasFreeSpace bool
+	HasFreeSpace *bool
 }
 
 type CloneResult struct {
 	Card               *models.BingoCard
 	TruncatedItemCount int
+}
+
+func resolveCloneHasFreeSpace(sourceHasFreeSpace bool, override *bool) bool {
+	if override == nil {
+		return sourceHasFreeSpace
+	}
+	return *override
 }
 
 func (s *CardService) Clone(ctx context.Context, userID, sourceCardID uuid.UUID, params CloneParams) (*CloneResult, error) {
@@ -1567,15 +1574,17 @@ func (s *CardService) Clone(ctx context.Context, userID, sourceCardID uuid.UUID,
 		category = params.Category
 	}
 
+	hasFreeSpace := resolveCloneHasFreeSpace(source.HasFreeSpace, params.HasFreeSpace)
+
 	freePos := (*int)(nil)
-	if params.HasFreeSpace {
+	if hasFreeSpace {
 		pos := models.BingoCard{GridSize: params.GridSize}.DefaultFreeSpacePosition()
 		freePos = &pos
 	}
 
 	totalSquares := params.GridSize * params.GridSize
 	capacity := totalSquares
-	if params.HasFreeSpace {
+	if hasFreeSpace {
 		capacity = totalSquares - 1
 	}
 

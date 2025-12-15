@@ -136,6 +136,29 @@ func TestCountBingos_Diagonal2(t *testing.T) {
 	}
 }
 
+func TestResolveCloneHasFreeSpace_InheritsWhenOmitted(t *testing.T) {
+	override := (*bool)(nil)
+
+	if got := resolveCloneHasFreeSpace(false, override); got != false {
+		t.Fatalf("expected false when omitted and source is false, got %v", got)
+	}
+	if got := resolveCloneHasFreeSpace(true, override); got != true {
+		t.Fatalf("expected true when omitted and source is true, got %v", got)
+	}
+}
+
+func TestResolveCloneHasFreeSpace_OverrideWins(t *testing.T) {
+	tval := true
+	fval := false
+
+	if got := resolveCloneHasFreeSpace(false, &tval); got != true {
+		t.Fatalf("expected true override, got %v", got)
+	}
+	if got := resolveCloneHasFreeSpace(true, &fval); got != false {
+		t.Fatalf("expected false override, got %v", got)
+	}
+}
+
 func TestCountBingos_MultipleBingos(t *testing.T) {
 	svc := &CardService{}
 

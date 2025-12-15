@@ -182,7 +182,7 @@ Clone request fields:
 - `title` (optional default: source title + “ (Copy)”)
 - `category` (optional default: source category)
 - `grid_size` (required; or default to source grid size)
-- `has_free_space` (optional default: true)
+- `has_free_space` (optional default: source `has_free_space`)
 - `header_text` (optional default: truncated BINGO for size)
 
 Clone behavior:
