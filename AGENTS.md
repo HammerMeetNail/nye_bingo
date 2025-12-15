@@ -2,6 +2,7 @@
 
 ## Project Overview
 Year of Bingo is a Go/Vanilla JS web app for creating annual Bingo cards.
+Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE space.
 **Domain**: yearofbingo.com
 
 ## Tech Stack
@@ -25,6 +26,8 @@ You are **REQUIRED** to read the specific documentation below if your task invol
   - **CRITICAL**: Follow the `App` object pattern for JS and Service layer pattern for Go.
 - **New Endpoints, Auth, Tokens** -> `read_file agent_docs/api.md`
   - **CRITICAL**: New endpoints must be registered in `main.go` and documented in `openapi.yaml`.
+- **Cards, Grid Size, FREE Space, Header, Clone** -> `read_file plans/flexible_cards.md`
+  - **CRITICAL**: Card config is draft-only; once finalized, the card is immutable. FREE defaults on and must not move during shuffle.
 - **AI, Gemini, LLM, Wizard, Rate Limit** -> `read_file plans/ai_goals.md`
   - **CRITICAL**: AI API work must also update `web/static/openapi.yaml`, keep the endpoint session-only (no API tokens), and preserve the verified-email gating (5 free generations per unverified user tracked via `users.ai_free_generations_used`).
 

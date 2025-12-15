@@ -2,21 +2,50 @@ package models
 
 import (
 	"fmt"
+	"math/rand"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 )
 
 const (
-	GridSize      = 5
-	TotalSquares  = GridSize * GridSize // 25
-	FreeSpacePos  = 12                  // Center position (0-indexed)
-	ItemsRequired = TotalSquares - 1    // 24 items (excluding free space)
+	MinGridSize = 2
+	MaxGridSize = 5
 )
 
-// IsValidPosition returns true if the position is valid (0-24, excluding free space at 12)
-func IsValidPosition(pos int) bool {
-	return pos >= 0 && pos < TotalSquares && pos != FreeSpacePos
+func IsValidGridSize(n int) bool {
+	return n >= MinGridSize && n <= MaxGridSize
+}
+
+func DefaultHeaderText(gridSize int) string {
+	if !IsValidGridSize(gridSize) {
+		gridSize = MaxGridSize
+	}
+	base := "BINGO"
+	if gridSize >= len(base) {
+		return base
+	}
+	return base[:gridSize]
+}
+
+func NormalizeHeaderText(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ToUpper(s)
+	return s
+}
+
+func ValidateHeaderText(headerText string, gridSize int) error {
+	if !IsValidGridSize(gridSize) {
+		return fmt.Errorf("invalid grid size")
+	}
+	headerText = NormalizeHeaderText(headerText)
+	n := utf8.RuneCountInString(headerText)
+	if n < 1 || n > gridSize {
+		return fmt.Errorf("header must be between 1 and %d characters", gridSize)
+	}
+	return nil
 }
 
 type BingoCard struct {
@@ -25,6 +54,10 @@ type BingoCard struct {
 	Year             int         `json:"year"`
 	Category         *string     `json:"category,omitempty"`
 	Title            *string     `json:"title,omitempty"`
+	GridSize         int         `json:"grid_size"`
+	HeaderText       string      `json:"header_text"`
+	HasFreeSpace     bool        `json:"has_free_space"`
+	FreeSpacePos     *int        `json:"free_space_position,omitempty"`
 	IsActive         bool        `json:"is_active"`
 	IsFinalized      bool        `json:"is_finalized"`
 	VisibleToFriends bool        `json:"visible_to_friends"`
@@ -32,6 +65,48 @@ type BingoCard struct {
 	CreatedAt        time.Time   `json:"created_at"`
 	UpdatedAt        time.Time   `json:"updated_at"`
 	Items            []BingoItem `json:"items,omitempty"`
+}
+
+func (c *BingoCard) TotalSquares() int {
+	if !IsValidGridSize(c.GridSize) {
+		return MaxGridSize * MaxGridSize
+	}
+	return c.GridSize * c.GridSize
+}
+
+func (c *BingoCard) Capacity() int {
+	total := c.TotalSquares()
+	if c.HasFreeSpace {
+		return total - 1
+	}
+	return total
+}
+
+func (c *BingoCard) HasFreePositionSet() bool {
+	return c.HasFreeSpace && c.FreeSpacePos != nil
+}
+
+func (c *BingoCard) IsPositionInRange(pos int) bool {
+	return pos >= 0 && pos < c.TotalSquares()
+}
+
+func (c *BingoCard) IsFreeSpacePosition(pos int) bool {
+	return c.HasFreePositionSet() && pos == *c.FreeSpacePos
+}
+
+func (c *BingoCard) IsValidItemPosition(pos int) bool {
+	return c.IsPositionInRange(pos) && !c.IsFreeSpacePosition(pos)
+}
+
+func (c BingoCard) DefaultFreeSpacePosition() int {
+	if !IsValidGridSize(c.GridSize) {
+		return (MaxGridSize * MaxGridSize) / 2
+	}
+	total := c.GridSize * c.GridSize
+	if c.GridSize%2 == 1 {
+		return total / 2
+	}
+	return rand.Intn(total)
 }
 
 // DisplayName returns a human-readable name for the card
@@ -93,11 +168,19 @@ type CreateCardParams struct {
 	Year     int
 	Category *string
 	Title    *string
+	GridSize int
+	Header   string
+	HasFree  bool
 }
 
 type UpdateCardMetaParams struct {
 	Category *string
 	Title    *string
+}
+
+type UpdateCardConfigParams struct {
+	HeaderText   *string
+	HasFreeSpace *bool
 }
 
 type AddItemParams struct {
@@ -137,6 +220,10 @@ type ImportCardParams struct {
 	Items            []ImportItem
 	Finalize         bool
 	VisibleToFriends *bool // Optional; defaults to true if nil
+	GridSize         int
+	HeaderText       string
+	HasFreeSpace     bool
+	FreeSpacePos     *int
 }
 
 // ImportItem represents a single item to import

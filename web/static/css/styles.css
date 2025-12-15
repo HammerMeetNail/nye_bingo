@@ -688,10 +688,12 @@ a:hover {
     display: flex;
     flex-direction: row;
     gap: var(--spacing-md);
+    flex-wrap: wrap;
   }
 
   .editor-actions .btn {
-    flex: 1;
+    flex: 1 1 calc(50% - var(--spacing-md));
+    min-width: 0;
   }
 
   .editor-suggestions {
@@ -1046,10 +1048,12 @@ a:hover {
 .action-bar--side {
   display: flex;
   gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
 .action-bar--side .btn {
-  flex: 1;
+  flex: 1 1 calc(50% - var(--spacing-md));
+  min-width: 0;
 }
 
 /* Progress Indicator */

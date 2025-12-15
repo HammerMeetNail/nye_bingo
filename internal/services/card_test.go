@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -13,7 +14,8 @@ func TestCountBingos_NoCompletions(t *testing.T) {
 	svc := &CardService{}
 
 	items := []models.BingoItem{}
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 
 	if count != 0 {
 		t.Errorf("expected 0 bingos, got %d", count)
@@ -32,7 +34,8 @@ func TestCountBingos_FirstRowComplete(t *testing.T) {
 		{Position: 4, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for first row, got %d", count)
 	}
@@ -51,7 +54,8 @@ func TestCountBingos_MiddleRowWithFreeSpace(t *testing.T) {
 		{Position: 14, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for middle row with free space, got %d", count)
 	}
@@ -69,7 +73,8 @@ func TestCountBingos_FirstColumnComplete(t *testing.T) {
 		{Position: 20, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for first column, got %d", count)
 	}
@@ -87,7 +92,8 @@ func TestCountBingos_MiddleColumnWithFreeSpace(t *testing.T) {
 		{Position: 22, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for middle column with free space, got %d", count)
 	}
@@ -105,7 +111,8 @@ func TestCountBingos_Diagonal1(t *testing.T) {
 		{Position: 24, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for diagonal, got %d", count)
 	}
@@ -123,9 +130,60 @@ func TestCountBingos_Diagonal2(t *testing.T) {
 		{Position: 20, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 1 {
 		t.Errorf("expected 1 bingo for anti-diagonal, got %d", count)
+	}
+}
+
+func TestResolveCloneHasFreeSpace_InheritsWhenOmitted(t *testing.T) {
+	override := (*bool)(nil)
+
+	if got := resolveCloneHasFreeSpace(false, override); got != false {
+		t.Fatalf("expected false when omitted and source is false, got %v", got)
+	}
+	if got := resolveCloneHasFreeSpace(true, override); got != true {
+		t.Fatalf("expected true when omitted and source is true, got %v", got)
+	}
+}
+
+func TestResolveCloneHasFreeSpace_OverrideWins(t *testing.T) {
+	tval := true
+	fval := false
+
+	if got := resolveCloneHasFreeSpace(false, &tval); got != true {
+		t.Fatalf("expected true override, got %v", got)
+	}
+	if got := resolveCloneHasFreeSpace(true, &fval); got != false {
+		t.Fatalf("expected false override, got %v", got)
+	}
+}
+
+func TestMapBingoCardsUniqueViolationToCardExistsError_Indexes(t *testing.T) {
+	title := "My Card"
+
+	if got := mapBingoCardsUniqueViolationToCardExistsError(&pgconn.PgError{Code: "23505", ConstraintName: "idx_bingo_cards_user_year_title"}, &title); got != ErrCardTitleExists {
+		t.Fatalf("expected ErrCardTitleExists, got %v", got)
+	}
+	if got := mapBingoCardsUniqueViolationToCardExistsError(&pgconn.PgError{Code: "23505", ConstraintName: "idx_bingo_cards_user_year_null_title"}, nil); got != ErrCardAlreadyExists {
+		t.Fatalf("expected ErrCardAlreadyExists, got %v", got)
+	}
+}
+
+func TestMapBingoCardsUniqueViolationToCardExistsError_Fallback(t *testing.T) {
+	unknown := &pgconn.PgError{Code: "23505", ConstraintName: "some_other_index"}
+	title := "Copy"
+	empty := "   "
+
+	if got := mapBingoCardsUniqueViolationToCardExistsError(unknown, &title); got != ErrCardTitleExists {
+		t.Fatalf("expected ErrCardTitleExists for non-empty title, got %v", got)
+	}
+	if got := mapBingoCardsUniqueViolationToCardExistsError(unknown, &empty); got != ErrCardAlreadyExists {
+		t.Fatalf("expected ErrCardAlreadyExists for blank title, got %v", got)
+	}
+	if got := mapBingoCardsUniqueViolationToCardExistsError(&pgconn.PgError{Code: "99999"}, &title); got != nil {
+		t.Fatalf("expected nil for non-unique error, got %v", got)
 	}
 }
 
@@ -145,7 +203,8 @@ func TestCountBingos_MultipleBingos(t *testing.T) {
 		{Position: 20, IsCompleted: true},
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 2 {
 		t.Errorf("expected 2 bingos (row + column), got %d", count)
 	}
@@ -162,7 +221,8 @@ func TestCountBingos_AllComplete(t *testing.T) {
 		}
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	// 5 rows + 5 columns + 2 diagonals = 12
 	if count != 12 {
 		t.Errorf("expected 12 bingos when all complete, got %d", count)
@@ -181,7 +241,8 @@ func TestCountBingos_PartialRow(t *testing.T) {
 		// Position 4 not completed
 	}
 
-	count := svc.countBingos(items)
+	freePos := 12
+	count := svc.countBingos(items, 5, &freePos)
 	if count != 0 {
 		t.Errorf("expected 0 bingos for partial row, got %d", count)
 	}
@@ -190,7 +251,9 @@ func TestCountBingos_PartialRow(t *testing.T) {
 func TestFindRandomPosition_EmptyCard(t *testing.T) {
 	svc := &CardService{}
 
-	pos, err := svc.findRandomPosition([]models.BingoItem{})
+	freePos := 12
+	card := &models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos, Items: []models.BingoItem{}}
+	pos, err := svc.findRandomPosition(card)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -212,7 +275,9 @@ func TestFindRandomPosition_PartiallyFilled(t *testing.T) {
 		{Position: 2},
 	}
 
-	pos, err := svc.findRandomPosition(existingItems)
+	freePos := 12
+	card := &models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos, Items: existingItems}
+	pos, err := svc.findRandomPosition(card)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +304,9 @@ func TestFindRandomPosition_AlmostFull(t *testing.T) {
 		}
 	}
 
-	pos, err := svc.findRandomPosition(existingItems)
+	freePos := 12
+	card := &models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos, Items: existingItems}
+	pos, err := svc.findRandomPosition(card)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -260,7 +327,9 @@ func TestFindRandomPosition_Full(t *testing.T) {
 		}
 	}
 
-	_, err := svc.findRandomPosition(existingItems)
+	freePos := 12
+	card := &models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos, Items: existingItems}
+	_, err := svc.findRandomPosition(card)
 	if err != ErrCardFull {
 		t.Errorf("expected ErrCardFull, got %v", err)
 	}
@@ -273,7 +342,9 @@ func TestFindRandomPosition_Randomness(t *testing.T) {
 	iterations := 1000
 
 	for i := 0; i < iterations; i++ {
-		pos, _ := svc.findRandomPosition([]models.BingoItem{})
+		freePos := 12
+		card := &models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos, Items: []models.BingoItem{}}
+		pos, _ := svc.findRandomPosition(card)
 		positions[pos]++
 	}
 
@@ -300,6 +371,9 @@ func TestCardServiceErrors(t *testing.T) {
 		ErrPositionOccupied,
 		ErrInvalidPosition,
 		ErrNotCardOwner,
+		ErrInvalidGridSize,
+		ErrInvalidHeaderText,
+		ErrNoSpaceForFree,
 	}
 
 	for _, err := range errors {
@@ -363,7 +437,10 @@ func timePtr(t time.Time) *time.Time {
 	return &t
 }
 
-func TestValidPosition(t *testing.T) {
+func TestValidItemPosition_Default5x5WithFree(t *testing.T) {
+	freePos := 12
+	card := models.BingoCard{GridSize: 5, HasFreeSpace: true, FreeSpacePos: &freePos}
+
 	tests := []struct {
 		position int
 		valid    bool
@@ -379,12 +456,9 @@ func TestValidPosition(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run("position_"+string(rune('0'+tt.position)), func(t *testing.T) {
-			valid := tt.position >= 0 && tt.position < models.TotalSquares && tt.position != models.FreeSpacePos
-			if valid != tt.valid {
-				t.Errorf("position %d: expected valid=%v, got %v", tt.position, tt.valid, valid)
-			}
-		})
+		if got := card.IsValidItemPosition(tt.position); got != tt.valid {
+			t.Errorf("position %d: expected valid=%v, got %v", tt.position, tt.valid, got)
+		}
 	}
 }
 

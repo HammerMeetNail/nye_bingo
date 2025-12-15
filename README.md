@@ -7,14 +7,14 @@
 
 **[yearofbingo.com](https://yearofbingo.com)**
 
-A web application for creating and tracking annual Bingo cards. Create a 5x5 card with 24 personal goals, then mark items complete throughout the year as you achieve them.
+A web application for creating and tracking annual Bingo cards. Create a Bingo card (2x2, 3x3, 4x4, or 5x5), fill it with personal goals, then mark items complete throughout the year as you achieve them.
 
 ## Features
 
-- **Create Bingo Cards**: Build a personalized 5x5 bingo card with 24 goals (center is a free space)
+- **Create Bingo Cards**: Build a personalized Bingo card in predefined sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE space (default on)
 - **Drag and Drop**: Rearrange items on your card with drag and drop (desktop) or long-press and drag (mobile)
 - **Try Before Signing Up**: Create and customize a card anonymously, then sign up to save it
-- **AI Goal Wizard**: Generate goals with AI to fill empty squares (requires an account; unverified users get 5 free generations, then must verify email)
+- **AI Goal Wizard**: Generate goals with AI to fill your empty squares (requires an account; unverified users get 5 free generations, then must verify email)
 - **Fill Empty Spaces**: Auto-fill empty card slots with random suggestions to get started quickly
 - **Quality of Life**: Clear all cells on an unfinalized card, and get a warning prompt if you try to leave a full but unfinalized card
 - **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
@@ -52,8 +52,8 @@ A web application for creating and tracking annual Bingo cards. Create a 5x5 car
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/nye_bingo.git
-cd nye_bingo
+git clone https://github.com/HammerMeetNail/yearofbingo.git
+cd yearofbingo
 
 # Start the application
 podman compose up
@@ -126,7 +126,7 @@ node web/static/js/tests/runner.js
 ## Project Structure
 
 ```
-nye_bingo/
+yearofbingo/
 ├── cmd/server/          # Application entry point
 ├── internal/
 │   ├── config/          # Environment configuration

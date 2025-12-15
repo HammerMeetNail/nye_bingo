@@ -698,7 +698,7 @@ func TestCardHandler_Import_TooManyItems(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 
-	if response.Error != "Cannot import more than 24 items" {
+	if response.Error != "Cannot import more than 24 items for a 5x5 card" {
 		t.Errorf("expected too many items error, got %q", response.Error)
 	}
 }

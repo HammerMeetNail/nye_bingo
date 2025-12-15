@@ -186,6 +186,8 @@ func run() error {
 	mux.Handle("GET /api/cards/{id}/stats", requireRead(http.HandlerFunc(cardHandler.Stats)))
 	mux.Handle("PUT /api/cards/{id}/meta", requireSession(http.HandlerFunc(cardHandler.UpdateMeta)))
 	mux.Handle("PUT /api/cards/{id}/visibility", requireSession(http.HandlerFunc(cardHandler.UpdateVisibility)))
+	mux.Handle("PUT /api/cards/{id}/config", requireWrite(http.HandlerFunc(cardHandler.UpdateConfig)))
+	mux.Handle("POST /api/cards/{id}/clone", requireWrite(http.HandlerFunc(cardHandler.Clone)))
 	mux.Handle("POST /api/cards/{id}/items", requireWrite(http.HandlerFunc(cardHandler.AddItem)))
 	mux.Handle("PUT /api/cards/{id}/items/{pos}", requireWrite(http.HandlerFunc(cardHandler.UpdateItem)))
 	mux.Handle("DELETE /api/cards/{id}/items/{pos}", requireWrite(http.HandlerFunc(cardHandler.RemoveItem)))
