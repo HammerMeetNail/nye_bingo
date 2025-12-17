@@ -37,7 +37,9 @@ type Service struct {
 func NewService(cfg *config.Config, db services.DBConn) *Service {
 	return &Service{
 		apiKey: cfg.AI.GeminiAPIKey,
-		client: &http.Client{Timeout: 30 * time.Second},
+		// Some Gemini models (especially previews) can take longer than 30s.
+		// Keep this in sync with the server write timeout and frontend request timeout.
+		client: &http.Client{Timeout: 90 * time.Second},
 		db:     db,
 		stub:   cfg.AI.Stub,
 	}

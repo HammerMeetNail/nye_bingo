@@ -236,10 +236,12 @@ func run() error {
 	// Create server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	server := &http.Server{
-		Addr:         addr,
-		Handler:      handler,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		Addr:        addr,
+		Handler:     handler,
+		ReadTimeout: 15 * time.Second,
+		// AI generation calls can legitimately take >15s; keep a higher write timeout
+		// so the frontend gets a JSON error/response instead of a dropped connection.
+		WriteTimeout: 90 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
