@@ -14,10 +14,10 @@ import (
 )
 
 type ReactionHandler struct {
-	reactionService *services.ReactionService
+	reactionService services.ReactionServiceInterface
 }
 
-func NewReactionHandler(reactionService *services.ReactionService) *ReactionHandler {
+func NewReactionHandler(reactionService services.ReactionServiceInterface) *ReactionHandler {
 	return &ReactionHandler{reactionService: reactionService}
 }
 

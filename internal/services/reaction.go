@@ -21,10 +21,10 @@ var (
 
 type ReactionService struct {
 	db            *pgxpool.Pool
-	friendService *FriendService
+	friendService FriendChecker
 }
 
-func NewReactionService(db *pgxpool.Pool, friendService *FriendService) *ReactionService {
+func NewReactionService(db *pgxpool.Pool, friendService FriendChecker) *ReactionService {
 	return &ReactionService{
 		db:            db,
 		friendService: friendService,

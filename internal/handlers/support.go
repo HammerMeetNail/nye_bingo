@@ -22,11 +22,11 @@ const (
 )
 
 type SupportHandler struct {
-	emailService *services.EmailService
+	emailService services.EmailServiceInterface
 	redis        *redis.Client
 }
 
-func NewSupportHandler(emailService *services.EmailService, redisClient *redis.Client) *SupportHandler {
+func NewSupportHandler(emailService services.EmailServiceInterface, redisClient *redis.Client) *SupportHandler {
 	return &SupportHandler{
 		emailService: emailService,
 		redis:        redisClient,

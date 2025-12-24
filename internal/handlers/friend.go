@@ -14,11 +14,11 @@ import (
 )
 
 type FriendHandler struct {
-	friendService *services.FriendService
-	cardService   *services.CardService
+	friendService services.FriendServiceInterface
+	cardService   services.CardServiceInterface
 }
 
-func NewFriendHandler(friendService *services.FriendService, cardService *services.CardService) *FriendHandler {
+func NewFriendHandler(friendService services.FriendServiceInterface, cardService services.CardServiceInterface) *FriendHandler {
 	return &FriendHandler{
 		friendService: friendService,
 		cardService:   cardService,

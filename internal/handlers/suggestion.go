@@ -9,10 +9,10 @@ import (
 )
 
 type SuggestionHandler struct {
-	suggestionService *services.SuggestionService
+	suggestionService services.SuggestionServiceInterface
 }
 
-func NewSuggestionHandler(suggestionService *services.SuggestionService) *SuggestionHandler {
+func NewSuggestionHandler(suggestionService services.SuggestionServiceInterface) *SuggestionHandler {
 	return &SuggestionHandler{suggestionService: suggestionService}
 }
 

@@ -97,101 +97,6 @@ func TestValidatePassword(t *testing.T) {
 	}
 }
 
-// Mock services for testing
-type mockUserService struct {
-	createFunc            func(ctx context.Context, params models.CreateUserParams) (*models.User, error)
-	getByIDFunc           func(ctx context.Context, id uuid.UUID) (*models.User, error)
-	getByEmailFunc        func(ctx context.Context, email string) (*models.User, error)
-	updatePasswordFunc    func(ctx context.Context, userID uuid.UUID, newPasswordHash string) error
-	updateSearchableFunc  func(ctx context.Context, userID uuid.UUID, searchable bool) error
-	markEmailVerifiedFunc func(ctx context.Context, userID uuid.UUID) error
-}
-
-func (m *mockUserService) Create(ctx context.Context, params models.CreateUserParams) (*models.User, error) {
-	if m.createFunc != nil {
-		return m.createFunc(ctx, params)
-	}
-	return nil, nil
-}
-
-func (m *mockUserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
-	if m.getByIDFunc != nil {
-		return m.getByIDFunc(ctx, id)
-	}
-	return nil, nil
-}
-
-func (m *mockUserService) GetByEmail(ctx context.Context, email string) (*models.User, error) {
-	if m.getByEmailFunc != nil {
-		return m.getByEmailFunc(ctx, email)
-	}
-	return nil, nil
-}
-
-func (m *mockUserService) UpdatePassword(ctx context.Context, userID uuid.UUID, newPasswordHash string) error {
-	if m.updatePasswordFunc != nil {
-		return m.updatePasswordFunc(ctx, userID, newPasswordHash)
-	}
-	return nil
-}
-
-func (m *mockUserService) UpdateSearchable(ctx context.Context, userID uuid.UUID, searchable bool) error {
-	if m.updateSearchableFunc != nil {
-		return m.updateSearchableFunc(ctx, userID, searchable)
-	}
-	return nil
-}
-
-func (m *mockUserService) MarkEmailVerified(ctx context.Context, userID uuid.UUID) error {
-	if m.markEmailVerifiedFunc != nil {
-		return m.markEmailVerifiedFunc(ctx, userID)
-	}
-	return nil
-}
-
-type mockAuthService struct {
-	hashPasswordFunc          func(password string) (string, error)
-	verifyPasswordFunc        func(hash, password string) bool
-	createSessionFunc         func(ctx context.Context, userID uuid.UUID) (string, error)
-	deleteSessionFunc         func(ctx context.Context, token string) error
-	deleteAllUserSessionsFunc func(ctx context.Context, userID uuid.UUID) error
-}
-
-func (m *mockAuthService) HashPassword(password string) (string, error) {
-	if m.hashPasswordFunc != nil {
-		return m.hashPasswordFunc(password)
-	}
-	return "hashed_" + password, nil
-}
-
-func (m *mockAuthService) VerifyPassword(hash, password string) bool {
-	if m.verifyPasswordFunc != nil {
-		return m.verifyPasswordFunc(hash, password)
-	}
-	return hash == "hashed_"+password
-}
-
-func (m *mockAuthService) CreateSession(ctx context.Context, userID uuid.UUID) (string, error) {
-	if m.createSessionFunc != nil {
-		return m.createSessionFunc(ctx, userID)
-	}
-	return "test_session_token", nil
-}
-
-func (m *mockAuthService) DeleteSession(ctx context.Context, token string) error {
-	if m.deleteSessionFunc != nil {
-		return m.deleteSessionFunc(ctx, token)
-	}
-	return nil
-}
-
-func (m *mockAuthService) DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error {
-	if m.deleteAllUserSessionsFunc != nil {
-		return m.deleteAllUserSessionsFunc(ctx, userID)
-	}
-	return nil
-}
-
 func TestAuthHandler_Register_InvalidBody(t *testing.T) {
 	handler := NewAuthHandler(nil, nil, nil, false)
 
@@ -263,6 +168,72 @@ func TestAuthHandler_Register_InvalidPassword(t *testing.T) {
 	}
 }
 
+func TestAuthHandler_Register_Success(t *testing.T) {
+	createdUser := &models.User{ID: uuid.New(), Email: "test@example.com", Username: "testuser"}
+	mockUser := &mockUserService{
+		CreateFunc: func(ctx context.Context, params models.CreateUserParams) (*models.User, error) {
+			if params.Email != createdUser.Email {
+				t.Fatalf("unexpected email: %s", params.Email)
+			}
+			if params.PasswordHash != "hashed_password" {
+				t.Fatalf("unexpected password hash: %s", params.PasswordHash)
+			}
+			return createdUser, nil
+		},
+	}
+	mockAuth := &mockAuthService{
+		HashPasswordFunc: func(password string) (string, error) {
+			if password != "SecurePass123" {
+				t.Fatalf("unexpected password: %s", password)
+			}
+			return "hashed_password", nil
+		},
+		CreateSessionFunc: func(ctx context.Context, userID uuid.UUID) (string, error) {
+			if userID != createdUser.ID {
+				t.Fatalf("unexpected user id: %s", userID)
+			}
+			return "session-token", nil
+		},
+	}
+
+	handler := NewAuthHandler(mockUser, mockAuth, &mockEmailService{}, false)
+
+	body := RegisterRequest{Email: "test@example.com", Password: "SecurePass123", Username: "testuser", Searchable: true}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Register(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", rr.Code)
+	}
+
+	var response AuthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if response.User == nil || response.User.ID != createdUser.ID {
+		t.Fatalf("expected returned user %s", createdUser.ID)
+	}
+
+	cookies := rr.Result().Cookies()
+	found := false
+	for _, c := range cookies {
+		if c.Name == sessionCookieName {
+			found = true
+			if c.Value != "session-token" {
+				t.Fatalf("expected session token cookie, got %s", c.Value)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("expected session cookie to be set")
+	}
+}
+
 func TestAuthHandler_Register_UsernameTooShort(t *testing.T) {
 	handler := NewAuthHandler(nil, nil, nil, false)
 
@@ -314,26 +285,33 @@ func TestAuthHandler_Register_UsernameTooLong(t *testing.T) {
 
 func TestAuthHandler_Register_DuplicateEmail(t *testing.T) {
 	mockUser := &mockUserService{
-		createFunc: func(ctx context.Context, params models.CreateUserParams) (*models.User, error) {
+		CreateFunc: func(ctx context.Context, params models.CreateUserParams) (*models.User, error) {
 			return nil, services.ErrEmailAlreadyExists
 		},
 	}
-	mockAuth := &mockAuthService{}
 
-	handler := &AuthHandler{
-		userService: &services.UserService{},
-		authService: &services.AuthService{},
-		secure:      false,
+	handler := NewAuthHandler(mockUser, &mockAuthService{}, nil, false)
+
+	body := RegisterRequest{Email: "test@example.com", Password: "SecurePass123", Username: "testuser"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Register(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", rr.Code)
 	}
 
-	// We can't easily inject mocks into the real handler, so let's test validation paths
-	// For integration with mocks, we need to test via the real service or refactor
-	_ = mockUser
-	_ = mockAuth
-	_ = handler
+	var response ErrorResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
 
-	// This test demonstrates the pattern - in practice, you'd use dependency injection
-	// or test with actual database mocks
+	if response.Error != "Email already registered" {
+		t.Fatalf("unexpected error message: %s", response.Error)
+	}
 }
 
 func TestAuthHandler_Login_InvalidBody(t *testing.T) {
@@ -346,6 +324,99 @@ func TestAuthHandler_Login_InvalidBody(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", rr.Code)
+	}
+}
+
+func TestAuthHandler_Login_Success(t *testing.T) {
+	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: "stored-hash"}
+	mockUser := &mockUserService{
+		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
+			if email != user.Email {
+				t.Fatalf("unexpected email lookup: %s", email)
+			}
+			return user, nil
+		},
+	}
+	mockAuth := &mockAuthService{
+		VerifyPasswordFunc: func(hash, password string) bool {
+			return hash == "stored-hash" && password == "SecurePass123"
+		},
+		CreateSessionFunc: func(ctx context.Context, userID uuid.UUID) (string, error) {
+			if userID != user.ID {
+				t.Fatalf("unexpected session user id: %s", userID)
+			}
+			return "login-session", nil
+		},
+	}
+
+	handler := NewAuthHandler(mockUser, mockAuth, nil, false)
+
+	body := LoginRequest{Email: "test@example.com", Password: "SecurePass123"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Login(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	var response AuthResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if response.User == nil || response.User.ID != user.ID {
+		t.Fatalf("expected user %s", user.ID)
+	}
+}
+
+func TestAuthHandler_Login_InvalidPassword(t *testing.T) {
+	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: "stored-hash"}
+	mockUser := &mockUserService{
+		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
+			return user, nil
+		},
+	}
+	mockAuth := &mockAuthService{
+		VerifyPasswordFunc: func(hash, password string) bool { return false },
+	}
+
+	handler := NewAuthHandler(mockUser, mockAuth, nil, false)
+
+	body := LoginRequest{Email: "test@example.com", Password: "wrong"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Login(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rr.Code)
+	}
+}
+
+func TestAuthHandler_Login_UserNotFound(t *testing.T) {
+	mockUser := &mockUserService{
+		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
+			return nil, services.ErrUserNotFound
+		},
+	}
+
+	handler := NewAuthHandler(mockUser, &mockAuthService{}, nil, false)
+
+	body := LoginRequest{Email: "missing@example.com", Password: "SecurePass123"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Login(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rr.Code)
 	}
 }
 

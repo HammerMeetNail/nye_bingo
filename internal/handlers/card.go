@@ -17,10 +17,10 @@ import (
 )
 
 type CardHandler struct {
-	cardService *services.CardService
+	cardService services.CardServiceInterface
 }
 
-func NewCardHandler(cardService *services.CardService) *CardHandler {
+func NewCardHandler(cardService services.CardServiceInterface) *CardHandler {
 	return &CardHandler{cardService: cardService}
 }
 

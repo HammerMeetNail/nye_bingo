@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -80,6 +82,47 @@ func TestCardHandler_Create_InvalidYear(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCardHandler_Create_Success(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	createdCard := &models.BingoCard{ID: uuid.New(), UserID: user.ID, Year: time.Now().Year()}
+	mockCard := &mockCardService{
+		CreateFunc: func(ctx context.Context, params models.CreateCardParams) (*models.BingoCard, error) {
+			if params.UserID != user.ID {
+				t.Fatalf("unexpected user id: %s", params.UserID)
+			}
+			return createdCard, nil
+		},
+	}
+
+	handler := NewCardHandler(mockCard)
+
+	body := CreateCardRequest{Year: createdCard.Year, GridSize: ptrToInt(models.MaxGridSize)}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards", bytes.NewBuffer(bodyBytes))
+	ctx := SetUserInContext(req.Context(), user)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+
+	handler.Create(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", rr.Code)
+	}
+
+	var response CardResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if response.Card == nil || response.Card.ID != createdCard.ID {
+		t.Fatalf("expected card %s", createdCard.ID)
+	}
+}
+
+func ptrToInt(i int) *int {
+	return &i
 }
 
 func TestCardHandler_List_Unauthenticated(t *testing.T) {
@@ -163,6 +206,48 @@ func TestCardHandler_AddItem_InvalidBody(t *testing.T) {
 
 	if rr.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", rr.Code)
+	}
+}
+
+func TestCardHandler_AddItem_Success(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	cardID := uuid.New()
+	createdItem := &models.BingoItem{ID: uuid.New(), CardID: cardID, Position: 1, Content: "Test"}
+	mockCard := &mockCardService{
+		AddItemFunc: func(ctx context.Context, userID uuid.UUID, params models.AddItemParams) (*models.BingoItem, error) {
+			if userID != user.ID {
+				t.Fatalf("unexpected user id: %s", userID)
+			}
+			if params.CardID != cardID {
+				t.Fatalf("unexpected card id: %s", params.CardID)
+			}
+			return createdItem, nil
+		},
+	}
+
+	handler := NewCardHandler(mockCard)
+
+	body := AddItemRequest{Content: "Test item"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+cardID.String()+"/items", bytes.NewBuffer(bodyBytes))
+	ctx := SetUserInContext(req.Context(), user)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+
+	handler.AddItem(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", rr.Code)
+	}
+
+	var response CardResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	if response.Item == nil || response.Item.ID != createdItem.ID {
+		t.Fatalf("expected item %s", createdItem.ID)
 	}
 }
 

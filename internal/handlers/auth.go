@@ -21,13 +21,13 @@ const (
 )
 
 type AuthHandler struct {
-	userService  *services.UserService
-	authService  *services.AuthService
-	emailService *services.EmailService
+	userService  services.UserServiceInterface
+	authService  services.AuthServiceInterface
+	emailService services.EmailServiceInterface
 	secure       bool // Use secure cookies (HTTPS only)
 }
 
-func NewAuthHandler(userService *services.UserService, authService *services.AuthService, emailService *services.EmailService, secure bool) *AuthHandler {
+func NewAuthHandler(userService services.UserServiceInterface, authService services.AuthServiceInterface, emailService services.EmailServiceInterface, secure bool) *AuthHandler {
 	return &AuthHandler{
 		userService:  userService,
 		authService:  authService,
