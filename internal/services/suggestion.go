@@ -4,16 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 type SuggestionService struct {
-	db *pgxpool.Pool
+	db DBConn
 }
 
-func NewSuggestionService(db *pgxpool.Pool) *SuggestionService {
+func NewSuggestionService(db DBConn) *SuggestionService {
 	return &SuggestionService{db: db}
 }
 

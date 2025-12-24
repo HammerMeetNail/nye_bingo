@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -22,10 +21,10 @@ var (
 )
 
 type ApiTokenService struct {
-	db *pgxpool.Pool
+	db DBConn
 }
 
-func NewApiTokenService(db *pgxpool.Pool) *ApiTokenService {
+func NewApiTokenService(db DBConn) *ApiTokenService {
 	return &ApiTokenService{db: db}
 }
 

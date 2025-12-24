@@ -4,6 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/HammerMeetNail/yearofbingo/internal/config"
 )
 
 func TestGenerateToken(t *testing.T) {
@@ -83,6 +88,71 @@ func TestHashToken(t *testing.T) {
 				t.Error("hash should be deterministic")
 			}
 		})
+	}
+}
+
+func TestEmailService_VerifyEmail_InvalidToken(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return context.Canceled
+			}}
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	err := service.VerifyEmail(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "invalid verification token") {
+		t.Fatalf("expected invalid verification token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyEmail_Expired(t *testing.T) {
+	expired := time.Now().Add(-1 * time.Hour)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), expired)
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			t.Fatal("unexpected exec for expired token")
+			return fakeCommandTag{}, nil
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	err := service.VerifyEmail(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expected expired token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyMagicLink_Used(t *testing.T) {
+	usedAt := time.Now().Add(-1 * time.Minute)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), "user@example.com", time.Now().Add(1*time.Hour), &usedAt)
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	_, err := service.VerifyMagicLink(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "already been used") {
+		t.Fatalf("expected used token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyPasswordResetToken_Expired(t *testing.T) {
+	expired := time.Now().Add(-1 * time.Hour)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), uuid.New(), expired, (*time.Time)(nil))
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	_, err := service.VerifyPasswordResetToken(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expected expired token error, got %v", err)
 	}
 }
 

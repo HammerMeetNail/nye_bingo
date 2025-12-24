@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -19,10 +18,10 @@ var (
 )
 
 type UserService struct {
-	db *pgxpool.Pool
+	db DBConn
 }
 
-func NewUserService(db *pgxpool.Pool) *UserService {
+func NewUserService(db DBConn) *UserService {
 	return &UserService{db: db}
 }
 

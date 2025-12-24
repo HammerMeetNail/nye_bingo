@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/resend/resend-go/v2"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/config"
@@ -42,14 +41,14 @@ type EmailProvider interface {
 // EmailService handles all email-related operations
 type EmailService struct {
 	provider    EmailProvider
-	db          *pgxpool.Pool
+	db          DBConn
 	fromAddress string
 	fromName    string
 	baseURL     string
 }
 
 // NewEmailService creates a new email service based on configuration
-func NewEmailService(cfg *config.EmailConfig, db *pgxpool.Pool) *EmailService {
+func NewEmailService(cfg *config.EmailConfig, db DBConn) *EmailService {
 	var provider EmailProvider
 
 	switch cfg.Provider {

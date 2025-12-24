@@ -12,8 +12,15 @@ type RedisDB struct {
 	Client *redis.Client
 }
 
+var (
+	newRedisClient = redis.NewClient
+	redisPing      = func(ctx context.Context, client *redis.Client) error {
+		return client.Ping(ctx).Err()
+	}
+)
+
 func NewRedisDB(addr, password string, db int) (*RedisDB, error) {
-	client := redis.NewClient(&redis.Options{
+	client := newRedisClient(&redis.Options{
 		Addr:         addr,
 		Password:     password,
 		DB:           db,
@@ -27,7 +34,7 @@ func NewRedisDB(addr, password string, db int) (*RedisDB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := client.Ping(ctx).Err(); err != nil {
+	if err := redisPing(ctx, client); err != nil {
 		return nil, fmt.Errorf("pinging redis: %w", err)
 	}
 
@@ -42,5 +49,5 @@ func (r *RedisDB) Close() error {
 }
 
 func (r *RedisDB) Health(ctx context.Context) error {
-	return r.Client.Ping(ctx).Err()
+	return redisPing(ctx, r.Client)
 }

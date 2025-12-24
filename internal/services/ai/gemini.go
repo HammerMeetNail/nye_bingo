@@ -14,10 +14,10 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/config"
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 const (
@@ -30,10 +30,10 @@ var geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 type Service struct {
 	apiKey string
 	client *http.Client
-	db     *pgxpool.Pool
+	db     services.DBConn
 }
 
-func NewService(cfg *config.Config, db *pgxpool.Pool) *Service {
+func NewService(cfg *config.Config, db services.DBConn) *Service {
 	return &Service{
 		apiKey: cfg.AI.GeminiAPIKey,
 		client: &http.Client{Timeout: 30 * time.Second},

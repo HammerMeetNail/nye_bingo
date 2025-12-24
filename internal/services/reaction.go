@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -20,11 +19,11 @@ var (
 )
 
 type ReactionService struct {
-	db            *pgxpool.Pool
+	db            DBConn
 	friendService FriendChecker
 }
 
-func NewReactionService(db *pgxpool.Pool, friendService FriendChecker) *ReactionService {
+func NewReactionService(db DBConn, friendService FriendChecker) *ReactionService {
 	return &ReactionService{
 		db:            db,
 		friendService: friendService,

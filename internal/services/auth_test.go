@@ -1,8 +1,14 @@
 package services
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestAuthService_HashPassword(t *testing.T) {
@@ -199,6 +205,242 @@ func TestPasswordComplexity_TooLong(t *testing.T) {
 	// bcrypt should return an error for passwords > 72 bytes
 	if err == nil {
 		t.Log("Note: bcrypt accepted password over 72 bytes (truncates silently in some implementations)")
+	}
+}
+
+type fakeRedis struct {
+	setErr      error
+	getValue    string
+	getErr      error
+	expireErr   error
+	delErr      error
+	setCalls    int
+	getCalls    int
+	expireCalls int
+	delCalls    int
+}
+
+func (f *fakeRedis) Set(ctx context.Context, key string, value any, expiration time.Duration) error {
+	f.setCalls++
+	return f.setErr
+}
+
+func (f *fakeRedis) Get(ctx context.Context, key string) (string, error) {
+	f.getCalls++
+	return f.getValue, f.getErr
+}
+
+func (f *fakeRedis) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	f.expireCalls++
+	return f.expireErr
+}
+
+func (f *fakeRedis) Del(ctx context.Context, keys ...string) error {
+	f.delCalls += len(keys)
+	return f.delErr
+}
+
+func TestAuthService_CreateSession_RedisFailure_FallsBackToDB(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	execCalled := false
+
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalled = true
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	redis := &fakeRedis{setErr: errors.New("redis down")}
+
+	auth := NewAuthService(db, redis)
+	token, err := auth.CreateSession(ctx, userID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if token == "" {
+		t.Fatal("expected token to be returned")
+	}
+	if !execCalled {
+		t.Fatal("expected database fallback when redis set fails")
+	}
+}
+
+func TestAuthService_ValidateSession_RedisHit(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	now := time.Now().UTC()
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(
+				userID,
+				"user@example.com",
+				"hash",
+				"username",
+				true,
+				nil,
+				1,
+				true,
+				now,
+				now,
+			)
+		},
+	}
+	redis := &fakeRedis{getValue: userID.String()}
+
+	auth := NewAuthService(db, redis)
+	user, err := auth.ValidateSession(ctx, "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.ID != userID {
+		t.Fatalf("expected user ID %v, got %v", userID, user.ID)
+	}
+	if redis.expireCalls != 1 {
+		t.Fatalf("expected redis expire call, got %d", redis.expireCalls)
+	}
+}
+
+func TestAuthService_ValidateSession_DBExpired(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	sessionID := uuid.New()
+	expired := time.Now().Add(-2 * time.Hour)
+	execCalled := false
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(sessionID, userID, "hash", expired, expired)
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalled = true
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	redis := &fakeRedis{getErr: errors.New("miss")}
+
+	auth := NewAuthService(db, redis)
+	_, err := auth.ValidateSession(ctx, "token")
+	if !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("expected ErrSessionExpired, got %v", err)
+	}
+	if !execCalled {
+		t.Fatal("expected expired session cleanup to hit database")
+	}
+}
+
+func TestAuthService_ValidateSession_DBNotFound(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return pgx.ErrNoRows
+			}}
+		},
+	}
+	redis := &fakeRedis{getErr: errors.New("miss")}
+
+	auth := NewAuthService(db, redis)
+	_, err := auth.ValidateSession(ctx, "token")
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound, got %v", err)
+	}
+}
+
+func TestAuthService_DeleteAllUserSessions_DeletesRedisAndDB(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	execCalled := false
+
+	db := &fakeDB{
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			return &fakeRows{rows: [][]any{{"hash1"}, {"hash2"}}}, nil
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalled = true
+			return fakeCommandTag{rowsAffected: 2}, nil
+		},
+	}
+	redis := &fakeRedis{}
+
+	auth := NewAuthService(db, redis)
+	if err := auth.DeleteAllUserSessions(ctx, userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if redis.delCalls != 2 {
+		t.Fatalf("expected 2 redis deletions, got %d", redis.delCalls)
+	}
+	if !execCalled {
+		t.Fatal("expected database delete for user sessions")
+	}
+}
+
+func TestAuthService_ValidateSession_RedisInvalidUserID(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{}
+	redis := &fakeRedis{getValue: "not-a-uuid"}
+
+	auth := NewAuthService(db, redis)
+	_, err := auth.ValidateSession(ctx, "token")
+	if err == nil {
+		t.Fatal("expected error for invalid user id")
+	}
+}
+
+func TestAuthService_DeleteSession_DBError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, errors.New("db error")
+		},
+	}
+	redis := &fakeRedis{}
+
+	auth := NewAuthService(db, redis)
+	err := auth.DeleteSession(ctx, "token")
+	if err == nil {
+		t.Fatal("expected error on delete session")
+	}
+}
+
+func TestAuthService_ValidateSession_DBHit(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	sessionID := uuid.New()
+	expires := time.Now().Add(1 * time.Hour)
+	now := time.Now().UTC()
+	call := 0
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			call++
+			if call == 1 {
+				return rowFromValues(sessionID, userID, "hash", expires, now)
+			}
+			return rowFromValues(
+				userID,
+				"user@example.com",
+				"hash",
+				"username",
+				true,
+				nil,
+				0,
+				true,
+				now,
+				now,
+			)
+		},
+	}
+	redis := &fakeRedis{getErr: errors.New("miss")}
+
+	auth := NewAuthService(db, redis)
+	user, err := auth.ValidateSession(ctx, "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if user.ID != userID {
+		t.Fatalf("expected user ID %v, got %v", userID, user.ID)
 	}
 }
 

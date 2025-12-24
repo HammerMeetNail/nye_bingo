@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -23,10 +22,10 @@ var (
 )
 
 type FriendService struct {
-	db *pgxpool.Pool
+	db DBConn
 }
 
-func NewFriendService(db *pgxpool.Pool) *FriendService {
+func NewFriendService(db DBConn) *FriendService {
 	return &FriendService{db: db}
 }
 
