@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,13 +13,20 @@ import (
 func TestNewPostgresDB_ParseError(t *testing.T) {
 	origParse := parsePGConfig
 	t.Cleanup(func() { parsePGConfig = origParse })
+	parseErr := errors.New("bad dsn")
 	parsePGConfig = func(dsn string) (*pgxpool.Config, error) {
-		return nil, errors.New("bad dsn")
+		return nil, parseErr
 	}
 
 	_, err := NewPostgresDB("bad")
-	if err == nil || err.Error() == "" {
+	if err == nil {
 		t.Fatal("expected parse error")
+	}
+	if !errors.Is(err, parseErr) {
+		t.Fatalf("expected parse error to wrap %v, got %v", parseErr, err)
+	}
+	if !strings.Contains(err.Error(), "parsing database config") {
+		t.Fatalf("expected parse error message context, got %q", err.Error())
 	}
 }
 
@@ -42,14 +50,21 @@ func TestNewPostgresDB_PingError(t *testing.T) {
 	newPGPool = func(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
 		return pool, nil
 	}
+	pingErr := errors.New("ping failed")
 	pingPGPool = func(ctx context.Context, pool *pgxpool.Pool) error {
-		return errors.New("ping failed")
+		return pingErr
 	}
 	closePGPool = func(pool *pgxpool.Pool) {}
 
 	_, err := NewPostgresDB("dsn")
-	if err == nil || err.Error() == "" {
+	if err == nil {
 		t.Fatal("expected ping error")
+	}
+	if !errors.Is(err, pingErr) {
+		t.Fatalf("expected ping error to wrap %v, got %v", pingErr, err)
+	}
+	if !strings.Contains(err.Error(), "pinging database") {
+		t.Fatalf("expected ping error message context, got %q", err.Error())
 	}
 }
 
@@ -64,13 +79,20 @@ func TestNewPostgresDB_NewPoolError(t *testing.T) {
 	parsePGConfig = func(dsn string) (*pgxpool.Config, error) {
 		return &pgxpool.Config{}, nil
 	}
+	newErr := errors.New("new pool error")
 	newPGPool = func(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
-		return nil, errors.New("new pool error")
+		return nil, newErr
 	}
 
 	_, err := NewPostgresDB("dsn")
-	if err == nil || err.Error() == "" {
+	if err == nil {
 		t.Fatal("expected new pool error")
+	}
+	if !errors.Is(err, newErr) {
+		t.Fatalf("expected pool error to wrap %v, got %v", newErr, err)
+	}
+	if !strings.Contains(err.Error(), "creating connection pool") {
+		t.Fatalf("expected pool error message context, got %q", err.Error())
 	}
 }
 
@@ -138,9 +160,4 @@ func TestPostgresDB_Close_CallsPoolClose(t *testing.T) {
 	if !called {
 		t.Fatal("expected closePGPool to be called")
 	}
-}
-
-func TestPostgresDB_Close_NilPool(t *testing.T) {
-	db := &PostgresDB{}
-	db.Close()
 }

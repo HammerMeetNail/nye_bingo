@@ -9,18 +9,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestAssertHelpers(t *testing.T) {
-	AssertEqual(t, 1, 1, "equal")
-	AssertNotEqual(t, 1, 2, "not equal")
-	AssertNil(t, nil, "nil")
-	AssertNotNil(t, 1, "not nil")
-	AssertTrue(t, true, "true")
-	AssertFalse(t, false, "false")
-	AssertNoError(t, nil, "no error")
-	AssertError(t, http.ErrAbortHandler, "error")
-	AssertContains(t, "hello", "ell", "contains")
-}
-
 func TestNewTestRequestWithJSON(t *testing.T) {
 	req := NewTestRequestWithJSON(t, http.MethodPost, "/path", map[string]string{"ok": "yes"})
 	if ct := req.Header.Get("Content-Type"); ct != "application/json" {

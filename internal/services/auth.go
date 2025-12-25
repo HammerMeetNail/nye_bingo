@@ -26,6 +26,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrSessionNotFound    = errors.New("session not found")
 	ErrSessionExpired     = errors.New("session expired")
+	ErrPasswordTooLong    = errors.New("password exceeds bcrypt limit")
 )
 
 type AuthService struct {
@@ -41,6 +42,9 @@ func NewAuthService(db DBConn, redis RedisClient) *AuthService {
 }
 
 func (s *AuthService) HashPassword(password string) (string, error) {
+	if len([]byte(password)) > 72 {
+		return "", ErrPasswordTooLong
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return "", fmt.Errorf("hashing password: %w", err)

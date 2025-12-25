@@ -24,13 +24,16 @@ func TestCardHandler_Create_Unauthenticated(t *testing.T) {
 
 	handler.Create(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Create_InvalidBody(t *testing.T) {
-	handler := NewCardHandler(nil)
+	handler := NewCardHandler(&mockCardService{
+		CreateFunc: func(ctx context.Context, params models.CreateCardParams) (*models.BingoCard, error) {
+			t.Fatal("Create should not be called for invalid body")
+			return nil, nil
+		},
+	})
 
 	user := &models.User{ID: uuid.New()}
 	req := httptest.NewRequest(http.MethodPost, "/api/cards", bytes.NewBufferString("invalid"))
@@ -40,9 +43,7 @@ func TestCardHandler_Create_InvalidBody(t *testing.T) {
 
 	handler.Create(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestCardHandler_Create_InvalidYear(t *testing.T) {
@@ -143,9 +144,7 @@ func TestCardHandler_List_Unauthenticated(t *testing.T) {
 
 	handler.List(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Get_Unauthenticated(t *testing.T) {
@@ -156,9 +155,7 @@ func TestCardHandler_Get_Unauthenticated(t *testing.T) {
 
 	handler.Get(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Get_InvalidCardID(t *testing.T) {
@@ -172,9 +169,7 @@ func TestCardHandler_Get_InvalidCardID(t *testing.T) {
 
 	handler.Get(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid card ID")
 }
 
 func TestCardHandler_Delete_Unauthenticated(t *testing.T) {
@@ -185,9 +180,7 @@ func TestCardHandler_Delete_Unauthenticated(t *testing.T) {
 
 	handler.Delete(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_AddItem_Unauthenticated(t *testing.T) {
@@ -198,13 +191,16 @@ func TestCardHandler_AddItem_Unauthenticated(t *testing.T) {
 
 	handler.AddItem(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_AddItem_InvalidBody(t *testing.T) {
-	handler := NewCardHandler(nil)
+	handler := NewCardHandler(&mockCardService{
+		AddItemFunc: func(ctx context.Context, userID uuid.UUID, params models.AddItemParams) (*models.BingoItem, error) {
+			t.Fatal("AddItem should not be called for invalid body")
+			return nil, nil
+		},
+	})
 
 	user := &models.User{ID: uuid.New()}
 	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/items", bytes.NewBufferString("invalid"))
@@ -214,9 +210,7 @@ func TestCardHandler_AddItem_InvalidBody(t *testing.T) {
 
 	handler.AddItem(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestCardHandler_AddItem_Success(t *testing.T) {
@@ -325,9 +319,7 @@ func TestCardHandler_UpdateItem_Unauthenticated(t *testing.T) {
 
 	handler.UpdateItem(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_UpdateItem_InvalidPosition(t *testing.T) {
@@ -403,9 +395,7 @@ func TestCardHandler_RemoveItem_Unauthenticated(t *testing.T) {
 
 	handler.RemoveItem(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Shuffle_Unauthenticated(t *testing.T) {
@@ -416,9 +406,7 @@ func TestCardHandler_Shuffle_Unauthenticated(t *testing.T) {
 
 	handler.Shuffle(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_SwapItems_Unauthenticated(t *testing.T) {
@@ -429,13 +417,16 @@ func TestCardHandler_SwapItems_Unauthenticated(t *testing.T) {
 
 	handler.SwapItems(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_SwapItems_InvalidBody(t *testing.T) {
-	handler := NewCardHandler(nil)
+	handler := NewCardHandler(&mockCardService{
+		SwapItemsFunc: func(ctx context.Context, userID, cardID uuid.UUID, fromPos, toPos int) error {
+			t.Fatal("SwapItems should not be called for invalid body")
+			return nil
+		},
+	})
 
 	user := &models.User{ID: uuid.New()}
 	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/swap", bytes.NewBufferString("invalid"))
@@ -445,9 +436,7 @@ func TestCardHandler_SwapItems_InvalidBody(t *testing.T) {
 
 	handler.SwapItems(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestCardHandler_Finalize_Unauthenticated(t *testing.T) {
@@ -458,9 +447,7 @@ func TestCardHandler_Finalize_Unauthenticated(t *testing.T) {
 
 	handler.Finalize(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_CompleteItem_Unauthenticated(t *testing.T) {
@@ -471,9 +458,7 @@ func TestCardHandler_CompleteItem_Unauthenticated(t *testing.T) {
 
 	handler.CompleteItem(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_UncompleteItem_Unauthenticated(t *testing.T) {
@@ -484,9 +469,7 @@ func TestCardHandler_UncompleteItem_Unauthenticated(t *testing.T) {
 
 	handler.UncompleteItem(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_UpdateNotes_Unauthenticated(t *testing.T) {
@@ -497,9 +480,7 @@ func TestCardHandler_UpdateNotes_Unauthenticated(t *testing.T) {
 
 	handler.UpdateNotes(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Archive_Unauthenticated(t *testing.T) {
@@ -510,9 +491,7 @@ func TestCardHandler_Archive_Unauthenticated(t *testing.T) {
 
 	handler.Archive(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Archive_ServiceError(t *testing.T) {
@@ -543,9 +522,7 @@ func TestCardHandler_Stats_Unauthenticated(t *testing.T) {
 
 	handler.Stats(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_UpdateVisibility_Unauthenticated(t *testing.T) {
@@ -556,9 +533,7 @@ func TestCardHandler_UpdateVisibility_Unauthenticated(t *testing.T) {
 
 	handler.UpdateVisibility(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_BulkUpdateVisibility_Unauthenticated(t *testing.T) {
@@ -569,9 +544,7 @@ func TestCardHandler_BulkUpdateVisibility_Unauthenticated(t *testing.T) {
 
 	handler.BulkUpdateVisibility(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_BulkUpdateVisibility_EmptyCardIDs(t *testing.T) {
@@ -651,9 +624,7 @@ func TestCardHandler_BulkDelete_Unauthenticated(t *testing.T) {
 
 	handler.BulkDelete(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_BulkDelete_EmptyCardIDs(t *testing.T) {
@@ -705,9 +676,7 @@ func TestCardHandler_BulkUpdateArchive_Unauthenticated(t *testing.T) {
 
 	handler.BulkUpdateArchive(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_BulkUpdateArchive_EmptyCardIDs(t *testing.T) {
@@ -791,9 +760,7 @@ func TestCardHandler_Import_Unauthenticated(t *testing.T) {
 
 	handler.Import(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestCardHandler_Import_InvalidYear(t *testing.T) {

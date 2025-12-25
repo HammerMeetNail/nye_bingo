@@ -82,15 +82,26 @@ func TestApiTokenService_ValidateToken_QueryError(t *testing.T) {
 }
 
 func TestApiTokenService_UpdateLastUsed(t *testing.T) {
+	tokenID := uuid.New()
+	var gotSQL string
+	var gotArgs []any
 	db := &fakeDB{
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			gotSQL = sql
+			gotArgs = args
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
 	}
 
 	svc := NewApiTokenService(db)
-	if err := svc.UpdateLastUsed(context.Background(), uuid.New()); err != nil {
+	if err := svc.UpdateLastUsed(context.Background(), tokenID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotSQL, "UPDATE api_tokens") || !strings.Contains(gotSQL, "WHERE id = $1") {
+		t.Fatalf("unexpected update sql: %q", gotSQL)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != tokenID {
+		t.Fatalf("unexpected update args: %v", gotArgs)
 	}
 }
 
@@ -188,28 +199,51 @@ func TestApiTokenService_List_Error(t *testing.T) {
 }
 
 func TestApiTokenService_Delete_Success(t *testing.T) {
+	userID := uuid.New()
+	tokenID := uuid.New()
+	var gotSQL string
+	var gotArgs []any
 	db := &fakeDB{
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			gotSQL = sql
+			gotArgs = args
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
 	}
 
 	svc := NewApiTokenService(db)
-	if err := svc.Delete(context.Background(), uuid.New(), uuid.New()); err != nil {
+	if err := svc.Delete(context.Background(), userID, tokenID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotSQL, "DELETE FROM api_tokens") || !strings.Contains(gotSQL, "WHERE id = $1 AND user_id = $2") {
+		t.Fatalf("unexpected delete sql: %q", gotSQL)
+	}
+	if len(gotArgs) != 2 || gotArgs[0] != tokenID || gotArgs[1] != userID {
+		t.Fatalf("unexpected delete args: %v", gotArgs)
 	}
 }
 
 func TestApiTokenService_DeleteAll_Success(t *testing.T) {
+	userID := uuid.New()
+	var gotSQL string
+	var gotArgs []any
 	db := &fakeDB{
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			gotSQL = sql
+			gotArgs = args
 			return fakeCommandTag{rowsAffected: 2}, nil
 		},
 	}
 
 	svc := NewApiTokenService(db)
-	if err := svc.DeleteAll(context.Background(), uuid.New()); err != nil {
+	if err := svc.DeleteAll(context.Background(), userID); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotSQL, "DELETE FROM api_tokens") || !strings.Contains(gotSQL, "WHERE user_id = $1") {
+		t.Fatalf("unexpected delete all sql: %q", gotSQL)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != userID {
+		t.Fatalf("unexpected delete all args: %v", gotArgs)
 	}
 }
 

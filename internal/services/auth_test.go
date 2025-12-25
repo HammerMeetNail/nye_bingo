@@ -202,9 +202,8 @@ func TestPasswordComplexity_TooLong(t *testing.T) {
 	longPassword := "This is a very long password that exceeds the seventy-two byte limit of bcrypt"
 
 	_, err := auth.HashPassword(longPassword)
-	// bcrypt should return an error for passwords > 72 bytes
-	if err == nil {
-		t.Log("Note: bcrypt accepted password over 72 bytes (truncates silently in some implementations)")
+	if !errors.Is(err, ErrPasswordTooLong) {
+		t.Fatalf("expected ErrPasswordTooLong, got %v", err)
 	}
 }
 

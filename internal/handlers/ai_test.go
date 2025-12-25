@@ -20,13 +20,20 @@ import (
 type MockAIService struct {
 	GenerateGoalsFunc func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
 	ConsumeFunc       func(ctx context.Context, userID uuid.UUID) (int, error)
+	GenerateCalls     int
+	ConsumeCalls      int
 }
 
 func (m *MockAIService) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+	m.GenerateCalls++
+	if m.GenerateGoalsFunc == nil {
+		return nil, ai.UsageStats{}, errors.New("GenerateGoalsFunc not set")
+	}
 	return m.GenerateGoalsFunc(ctx, userID, prompt)
 }
 
 func (m *MockAIService) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error) {
+	m.ConsumeCalls++
 	if m.ConsumeFunc == nil {
 		return 0, nil
 	}
@@ -49,6 +56,11 @@ func TestGenerate(t *testing.T) {
 		user           *models.User
 		mockSetup      func() *MockAIService
 		expectedStatus int
+		expectedError  string
+		expectedGoals  []string
+		freeRemaining  *int
+		generateCalls  int
+		consumeCalls   int
 	}{
 		{
 			name:        "Success",
@@ -62,6 +74,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
+			expectedGoals:  []string{"Goal 1", "Goal 2"},
+			generateCalls:  1,
 		},
 		{
 			name:        "Success (Count defaults to 24)",
@@ -78,6 +92,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
+			expectedGoals:  []string{"Goal 1", "Goal 2"},
+			generateCalls:  1,
 		},
 		{
 			name: "Success (Count passed through)",
@@ -101,6 +117,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
+			expectedGoals:  []string{"Goal 1", "Goal 2"},
+			generateCalls:  1,
 		},
 		{
 			name: "Invalid Input - Count",
@@ -120,6 +138,7 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Count must be between 1 and 24",
 		},
 		{
 			name:        "Success (Unverified consumes quota)",
@@ -136,6 +155,10 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusOK,
+			expectedGoals:  []string{"Goal 1", "Goal 2"},
+			freeRemaining:  ptrToIntValue(4),
+			generateCalls:  1,
+			consumeCalls:   1,
 		},
 		{
 			name:        "Unverified blocked when quota exhausted",
@@ -153,15 +176,28 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusForbidden,
+			expectedError:  "You've used your 5 free AI generations. Verify your email to keep using AI.",
+			freeRemaining:  ptrToIntValue(0),
+			consumeCalls:   1,
 		},
 		{
 			name:        "Unauthorized",
 			requestBody: validBody,
 			user:        nil,
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when unauthorized")
+						return nil, ai.UsageStats{}, nil
+					},
+					ConsumeFunc: func(ctx context.Context, userID uuid.UUID) (int, error) {
+						t.Fatal("ConsumeUnverifiedFreeGeneration should not be called when unauthorized")
+						return 0, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusUnauthorized,
+			expectedError:  "Authentication required",
 		},
 		{
 			name: "Invalid Input - Category",
@@ -172,9 +208,15 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when category is invalid")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid category",
 		},
 		{
 			name: "Invalid Input - Missing Difficulty",
@@ -184,9 +226,15 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when required fields are missing")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Missing required fields",
 		},
 		{
 			name: "Invalid Input - Difficulty",
@@ -197,9 +245,15 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when difficulty is invalid")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid difficulty",
 		},
 		{
 			name: "Invalid Input - Budget",
@@ -210,9 +264,15 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when budget is invalid")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid budget",
 		},
 		{
 			name: "Invalid Input - Focus Too Long",
@@ -224,9 +284,15 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when focus is too long")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Focus is too long (max 100 chars)",
 		},
 		{
 			name: "Invalid Input - Context Too Long",
@@ -238,18 +304,30 @@ func TestGenerate(t *testing.T) {
 			},
 			user: &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when context is too long")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Context is too long (max 500 chars)",
 		},
 		{
 			name:        "Invalid Input - Unknown Field",
 			requestBody: `{"category":"hobbies","difficulty":"medium","budget":"low","unknown":true}`,
 			user:        &models.User{ID: uuid.New(), EmailVerified: true},
 			mockSetup: func() *MockAIService {
-				return &MockAIService{}
+				return &MockAIService{
+					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
+						t.Fatal("GenerateGoals should not be called when body has unknown fields")
+						return nil, ai.UsageStats{}, nil
+					},
+				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid request body",
 		},
 		{
 			name:        "Service Error - Safety",
@@ -263,6 +341,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusBadRequest,
+			expectedError:  "We couldn't generate safe goals for that topic. Please try rephrasing.",
+			generateCalls:  1,
 		},
 		{
 			name:        "Service Error - Rate Limit",
@@ -276,6 +356,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusTooManyRequests,
+			expectedError:  "AI provider rate limit exceeded.",
+			generateCalls:  1,
 		},
 		{
 			name:        "Service Error - Unavailable",
@@ -289,6 +371,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "The AI service is currently down. Please try again later.",
+			generateCalls:  1,
 		},
 		{
 			name:        "Service Error - Not Configured",
@@ -302,6 +386,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "AI is not configured on this server. Please try again later.",
+			generateCalls:  1,
 		},
 		{
 			name:        "Service Error - Generic",
@@ -315,6 +401,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusInternalServerError,
+			expectedError:  "An unexpected error occurred.",
+			generateCalls:  1,
 		},
 		{
 			name:        "Unverified Usage Tracking Unavailable",
@@ -332,6 +420,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "AI usage tracking is temporarily unavailable. Please try again later.",
+			consumeCalls:   1,
 		},
 		{
 			name:        "Unverified Usage Tracking Generic Error",
@@ -349,6 +439,8 @@ func TestGenerate(t *testing.T) {
 				}
 			},
 			expectedStatus: http.StatusServiceUnavailable,
+			expectedError:  "AI usage tracking is temporarily unavailable. Please try again later.",
+			consumeCalls:   1,
 		},
 	}
 
@@ -378,6 +470,70 @@ func TestGenerate(t *testing.T) {
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
+			if ct := w.Result().Header.Get("Content-Type"); ct != "application/json" {
+				t.Fatalf("expected content type application/json, got %q", ct)
+			}
+
+			if len(tt.expectedGoals) > 0 {
+				var response GenerateResponse
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
+				if len(response.Goals) != len(tt.expectedGoals) {
+					t.Fatalf("expected %d goals, got %d", len(tt.expectedGoals), len(response.Goals))
+				}
+				if tt.freeRemaining == nil && response.FreeRemaining != nil {
+					t.Fatalf("expected free_remaining to be omitted, got %d", *response.FreeRemaining)
+				}
+				if tt.freeRemaining != nil {
+					if response.FreeRemaining == nil {
+						t.Fatal("expected free_remaining to be set")
+					}
+					if *response.FreeRemaining != *tt.freeRemaining {
+						t.Fatalf("expected free_remaining %d, got %d", *tt.freeRemaining, *response.FreeRemaining)
+					}
+				}
+			}
+
+			if tt.expectedError != "" {
+				var response map[string]any
+				if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+					t.Fatalf("failed to parse error response: %v", err)
+				}
+				if response["error"] != tt.expectedError {
+					t.Fatalf("expected error %q, got %v", tt.expectedError, response["error"])
+				}
+				if tt.freeRemaining == nil {
+					if _, ok := response["free_remaining"]; ok {
+						t.Fatalf("expected free_remaining to be omitted, got %v", response["free_remaining"])
+					}
+				} else {
+					got, ok := response["free_remaining"]
+					if !ok {
+						t.Fatal("expected free_remaining in response")
+					}
+					if int(got.(float64)) != *tt.freeRemaining {
+						t.Fatalf("expected free_remaining %d, got %v", *tt.freeRemaining, got)
+					}
+				}
+			}
+
+			if tt.generateCalls > 0 && mockService.GenerateCalls != tt.generateCalls {
+				t.Fatalf("expected GenerateGoals calls %d, got %d", tt.generateCalls, mockService.GenerateCalls)
+			}
+			if tt.consumeCalls > 0 && mockService.ConsumeCalls != tt.consumeCalls {
+				t.Fatalf("expected ConsumeUnverifiedFreeGeneration calls %d, got %d", tt.consumeCalls, mockService.ConsumeCalls)
+			}
+			if tt.generateCalls == 0 && mockService.GenerateCalls != 0 {
+				t.Fatalf("expected no GenerateGoals calls, got %d", mockService.GenerateCalls)
+			}
+			if tt.consumeCalls == 0 && mockService.ConsumeCalls != 0 {
+				t.Fatalf("expected no ConsumeUnverifiedFreeGeneration calls, got %d", mockService.ConsumeCalls)
+			}
 		})
 	}
+}
+
+func ptrToIntValue(value int) *int {
+	return &value
 }

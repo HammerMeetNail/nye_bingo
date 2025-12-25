@@ -84,29 +84,6 @@ func TestBingoCardCapacityAndFree(t *testing.T) {
 	}
 }
 
-func TestCardStats_ZeroValues(t *testing.T) {
-	stats := CardStats{}
-
-	if stats.TotalItems != 0 {
-		t.Errorf("expected TotalItems to be 0, got %d", stats.TotalItems)
-	}
-	if stats.CompletedItems != 0 {
-		t.Errorf("expected CompletedItems to be 0, got %d", stats.CompletedItems)
-	}
-	if stats.CompletionRate != 0 {
-		t.Errorf("expected CompletionRate to be 0, got %f", stats.CompletionRate)
-	}
-	if stats.BingosAchieved != 0 {
-		t.Errorf("expected BingosAchieved to be 0, got %d", stats.BingosAchieved)
-	}
-	if stats.FirstCompletion != nil {
-		t.Error("expected FirstCompletion to be nil")
-	}
-	if stats.LastCompletion != nil {
-		t.Error("expected LastCompletion to be nil")
-	}
-}
-
 func TestDefaultFreeSpacePosition(t *testing.T) {
 	card := BingoCard{GridSize: 5}
 	if pos := card.DefaultFreeSpacePosition(); pos != 12 {

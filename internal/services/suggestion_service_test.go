@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,12 @@ import (
 func TestSuggestionService_GetAll(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if !strings.Contains(sql, "FROM suggestions") || !strings.Contains(sql, "WHERE is_active = true") {
+				t.Fatalf("unexpected get all sql: %q", sql)
+			}
+			if len(args) != 0 {
+				t.Fatalf("unexpected get all args: %v", args)
+			}
 			return &fakeRows{rows: [][]any{
 				{uuid.New(), "health", "Walk 10k steps", true},
 				{uuid.New(), "travel", "Visit a new city", true},
@@ -87,6 +94,12 @@ func TestSuggestionService_GetGroupedByCategory(t *testing.T) {
 func TestSuggestionService_GetByCategory(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if !strings.Contains(sql, "FROM suggestions") || !strings.Contains(sql, "WHERE is_active = true AND category = $1") {
+				t.Fatalf("unexpected get by category sql: %q", sql)
+			}
+			if len(args) != 1 || args[0] != "health" {
+				t.Fatalf("unexpected get by category args: %v", args)
+			}
 			return &fakeRows{rows: [][]any{
 				{uuid.New(), "health", "Run", true},
 			}}, nil
@@ -134,6 +147,12 @@ func TestSuggestionService_GetByCategory_ScanError(t *testing.T) {
 func TestSuggestionService_GetCategories(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if !strings.Contains(sql, "SELECT DISTINCT category") || !strings.Contains(sql, "FROM suggestions") || !strings.Contains(sql, "WHERE is_active = true") {
+				t.Fatalf("unexpected get categories sql: %q", sql)
+			}
+			if len(args) != 0 {
+				t.Fatalf("unexpected get categories args: %v", args)
+			}
 			return &fakeRows{rows: [][]any{
 				{"health"},
 				{"travel"},

@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -87,15 +88,23 @@ func TestFriendService_SendRequest_Self(t *testing.T) {
 
 func TestFriendService_SendRequest_AlreadyExists(t *testing.T) {
 	calls := 0
+	userID := uuid.New()
+	friendID := uuid.New()
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
 			calls++
+			if !strings.Contains(sql, "SELECT EXISTS") || !strings.Contains(sql, "FROM friendships") {
+				t.Fatalf("unexpected existence sql: %q", sql)
+			}
+			if len(args) != 2 || args[0] != userID || args[1] != friendID {
+				t.Fatalf("unexpected existence args: %v", args)
+			}
 			return rowFromValues(true)
 		},
 	}
 
 	svc := NewFriendService(db)
-	_, err := svc.SendRequest(context.Background(), uuid.New(), uuid.New())
+	_, err := svc.SendRequest(context.Background(), userID, friendID)
 	if !errors.Is(err, ErrFriendshipExists) {
 		t.Fatalf("expected ErrFriendshipExists, got %v", err)
 	}
@@ -129,7 +138,19 @@ func TestFriendService_SendRequest_Success(t *testing.T) {
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
 			call++
 			if call == 1 {
+				if !strings.Contains(sql, "SELECT EXISTS") || !strings.Contains(sql, "FROM friendships") {
+					t.Fatalf("unexpected existence sql: %q", sql)
+				}
+				if len(args) != 2 || args[0] != userID || args[1] != friendID {
+					t.Fatalf("unexpected existence args: %v", args)
+				}
 				return rowFromValues(false)
+			}
+			if !strings.Contains(sql, "INSERT INTO friendships") || !strings.Contains(sql, "RETURNING id, user_id, friend_id, status, created_at") {
+				t.Fatalf("unexpected insert sql: %q", sql)
+			}
+			if len(args) != 2 || args[0] != userID || args[1] != friendID {
+				t.Fatalf("unexpected insert args: %v", args)
 			}
 			return rowFromValues(friendshipRowValues(friendshipID, userID, friendID, models.FriendshipStatusPending)...)
 		},
@@ -192,6 +213,12 @@ func TestFriendService_AcceptRequest_Success(t *testing.T) {
 			return rowFromValues(friendshipRowValues(friendshipID, uuid.New(), userID, models.FriendshipStatusPending)...)
 		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			if !strings.Contains(sql, "UPDATE friendships SET status = 'accepted'") || !strings.Contains(sql, "WHERE id = $1") {
+				t.Fatalf("unexpected accept sql: %q", sql)
+			}
+			if len(args) != 1 || args[0] != friendshipID {
+				t.Fatalf("unexpected accept args: %v", args)
+			}
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
 	}

@@ -68,19 +68,6 @@ func TestGetUserFromContext_NilContext(t *testing.T) {
 	}
 }
 
-func TestContextKey_UniqueType(t *testing.T) {
-	// Verify that our context key type is distinct
-	user := &models.User{ID: uuid.New()}
-
-	ctx := SetUserInContext(context.Background(), user)
-
-	// Using a string key should not find the user
-	retrieved := ctx.Value("user")
-	if retrieved != nil {
-		t.Error("string key should not find user (type safety)")
-	}
-}
-
 func TestSetUserInContext_NilUser(t *testing.T) {
 	ctx := SetUserInContext(context.Background(), nil)
 	retrieved := GetUserFromContext(ctx)

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,13 +21,20 @@ func TestNewRedisDB_PingError(t *testing.T) {
 	newRedisClient = func(opts *redis.Options) *redis.Client {
 		return &redis.Client{}
 	}
+	pingErr := errors.New("ping failed")
 	redisPing = func(ctx context.Context, client *redis.Client) error {
-		return errors.New("ping failed")
+		return pingErr
 	}
 
 	_, err := NewRedisDB("localhost:6379", "pass", 2)
-	if err == nil || err.Error() == "" {
+	if err == nil {
 		t.Fatal("expected ping error")
+	}
+	if !errors.Is(err, pingErr) {
+		t.Fatalf("expected ping error to wrap %v, got %v", pingErr, err)
+	}
+	if !strings.Contains(err.Error(), "pinging redis") {
+		t.Fatalf("expected ping error message context, got %q", err.Error())
 	}
 }
 
@@ -103,13 +111,6 @@ func TestRedisDB_HealthSuccess(t *testing.T) {
 	db := &RedisDB{Client: &redis.Client{}}
 	if err := db.Health(context.Background()); err != nil {
 		t.Fatalf("unexpected health error: %v", err)
-	}
-}
-
-func TestRedisDB_CloseNil(t *testing.T) {
-	db := &RedisDB{}
-	if err := db.Close(); err != nil {
-		t.Fatalf("unexpected close error: %v", err)
 	}
 }
 

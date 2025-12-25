@@ -106,18 +106,7 @@ func TestAuthHandler_Register_InvalidBody(t *testing.T) {
 
 	handler.Register(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
-
-	var response ErrorResponse
-	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
-		t.Fatalf("failed to parse response: %v", err)
-	}
-
-	if response.Error != "Invalid request body" {
-		t.Errorf("expected error 'Invalid request body', got %q", response.Error)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_Register_InvalidEmail(t *testing.T) {
@@ -394,9 +383,7 @@ func TestAuthHandler_Login_InvalidBody(t *testing.T) {
 
 	handler.Login(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_Login_Success(t *testing.T) {
@@ -465,9 +452,7 @@ func TestAuthHandler_Login_InvalidPassword(t *testing.T) {
 
 	handler.Login(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Invalid email or password")
 }
 
 func TestAuthHandler_Login_UserNotFound(t *testing.T) {
@@ -487,9 +472,7 @@ func TestAuthHandler_Login_UserNotFound(t *testing.T) {
 
 	handler.Login(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Invalid email or password")
 }
 
 func TestAuthHandler_Login_GetByEmailError(t *testing.T) {
@@ -588,9 +571,7 @@ func TestAuthHandler_Me_Unauthenticated(t *testing.T) {
 
 	handler.Me(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Not authenticated")
 }
 
 func TestAuthHandler_Me_Authenticated(t *testing.T) {
@@ -633,9 +614,7 @@ func TestAuthHandler_ChangePassword_Unauthenticated(t *testing.T) {
 
 	handler.ChangePassword(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Not authenticated")
 }
 
 func TestAuthHandler_ChangePassword_InvalidBody(t *testing.T) {
@@ -654,9 +633,7 @@ func TestAuthHandler_ChangePassword_InvalidBody(t *testing.T) {
 
 	handler.ChangePassword(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_VerifyEmail_MissingToken(t *testing.T) {
@@ -668,9 +645,7 @@ func TestAuthHandler_VerifyEmail_MissingToken(t *testing.T) {
 
 	handler.VerifyEmail(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Token is required")
 }
 
 func TestAuthHandler_VerifyEmail_Error(t *testing.T) {
@@ -687,9 +662,7 @@ func TestAuthHandler_VerifyEmail_Error(t *testing.T) {
 
 	handler.VerifyEmail(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "invalid token")
 }
 
 func TestAuthHandler_ResendVerification_Unauthenticated(t *testing.T) {
@@ -700,9 +673,7 @@ func TestAuthHandler_ResendVerification_Unauthenticated(t *testing.T) {
 
 	handler.ResendVerification(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Not authenticated")
 }
 
 func TestAuthHandler_ResendVerification_AlreadyVerified(t *testing.T) {
@@ -776,9 +747,7 @@ func TestAuthHandler_MagicLink_InvalidBody(t *testing.T) {
 
 	handler.MagicLink(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_MagicLink_InvalidEmail(t *testing.T) {
@@ -790,9 +759,7 @@ func TestAuthHandler_MagicLink_InvalidEmail(t *testing.T) {
 
 	handler.MagicLink(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid email address")
 }
 
 func TestAuthHandler_MagicLink_Success(t *testing.T) {
@@ -894,9 +861,7 @@ func TestAuthHandler_ForgotPassword_InvalidBody(t *testing.T) {
 
 	handler.ForgotPassword(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_ForgotPassword_InvalidEmail(t *testing.T) {
@@ -908,9 +873,7 @@ func TestAuthHandler_ForgotPassword_InvalidEmail(t *testing.T) {
 
 	handler.ForgotPassword(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid email address")
 }
 
 func TestAuthHandler_ForgotPassword_Success(t *testing.T) {
@@ -952,9 +915,7 @@ func TestAuthHandler_ResetPassword_InvalidBody(t *testing.T) {
 
 	handler.ResetPassword(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_ResetPassword_MissingToken(t *testing.T) {
@@ -1021,9 +982,7 @@ func TestAuthHandler_UpdateSearchable_Unauthenticated(t *testing.T) {
 
 	handler.UpdateSearchable(rr, req)
 
-	if rr.Code != http.StatusUnauthorized {
-		t.Errorf("expected status 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestAuthHandler_UpdateSearchable_InvalidBody(t *testing.T) {
@@ -1042,9 +1001,7 @@ func TestAuthHandler_UpdateSearchable_InvalidBody(t *testing.T) {
 
 	handler.UpdateSearchable(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
 }
 
 func TestAuthHandler_UpdateSearchable_UpdateError(t *testing.T) {

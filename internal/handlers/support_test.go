@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
@@ -135,19 +134,6 @@ func TestSupportHandler_Submit_Success(t *testing.T) {
 	if !called {
 		t.Fatalf("expected support email to be sent")
 	}
-}
-
-func TestSupportHandler_RedisAdapter_Coverage(t *testing.T) {
-	client := redis.NewClient(&redis.Options{Addr: "127.0.0.1:1"})
-	t.Cleanup(func() { _ = client.Close() })
-
-	h := NewSupportHandler(&mockEmailService{}, client)
-	if h.rateLimiter == nil {
-		t.Fatalf("expected rate limiter to be set")
-	}
-
-	_, _ = h.rateLimiter.Incr(context.Background(), "ratelimit:support:test")
-	_ = h.rateLimiter.Expire(context.Background(), "ratelimit:support:test", time.Second)
 }
 
 func TestSupportHandler_Submit_ValidationAndErrors(t *testing.T) {

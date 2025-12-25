@@ -14,9 +14,10 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
-func TestFriendHandlerSearchValidationAndError(t *testing.T) {
+func TestFriendHandler_Search_ShortQuery(t *testing.T) {
 	handler := NewFriendHandler(&mockFriendService{SearchUsersFunc: func(ctx context.Context, userID uuid.UUID, query string) ([]models.UserSearchResult, error) {
-		return nil, errors.New("boom")
+		t.Fatal("SearchUsers should not be called for short queries")
+		return nil, nil
 	}}, &mockCardService{})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/friends/search?q=a", nil)
@@ -24,19 +25,36 @@ func TestFriendHandlerSearchValidationAndError(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.Search(rr, req)
 	if rr.Code != http.StatusOK {
-		t.Fatalf("expected short query to return 200")
-	}
-
-	req = httptest.NewRequest(http.MethodGet, "/api/friends/search?q=abc", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
-	rr = httptest.NewRecorder()
-	handler.Search(rr, req)
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("expected error path, got %d", rr.Code)
+		t.Fatalf("expected short query to return 200, got %d", rr.Code)
 	}
 }
 
-func TestFriendHandlerSendRequestScenarios(t *testing.T) {
+func TestFriendHandler_Search_ServiceError(t *testing.T) {
+	handler := NewFriendHandler(&mockFriendService{SearchUsersFunc: func(ctx context.Context, userID uuid.UUID, query string) ([]models.UserSearchResult, error) {
+		return nil, errors.New("boom")
+	}}, &mockCardService{})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/friends/search?q=abc", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.Search(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+}
+
+func TestFriendHandler_SendRequest_InvalidBody(t *testing.T) {
+	handler := NewFriendHandler(&mockFriendService{SendRequestFunc: func(ctx context.Context, userID, friendID uuid.UUID) (*models.Friendship, error) {
+		t.Fatal("SendRequest should not be called for invalid body")
+		return nil, nil
+	}}, &mockCardService{})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBufferString("{"))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.SendRequest(rr, req)
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid request body")
+}
+
+func TestFriendHandler_SendRequest_Self(t *testing.T) {
 	friendID := uuid.New()
 	handler := NewFriendHandler(&mockFriendService{SendRequestFunc: func(ctx context.Context, userID, friendID uuid.UUID) (*models.Friendship, error) {
 		if friendID == userID {
@@ -45,31 +63,26 @@ func TestFriendHandlerSendRequestScenarios(t *testing.T) {
 		return &models.Friendship{}, nil
 	}}, &mockCardService{})
 
-	// invalid body
-	req := httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBufferString("{"))
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
-	rr := httptest.NewRecorder()
-	handler.SendRequest(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected bad request for invalid json")
-	}
-
-	// self request
 	payload := []byte(`{"friend_id":"` + friendID.String() + `"}`)
 	user := &models.User{ID: friendID}
-	req = httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBuffer(payload))
+	req := httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBuffer(payload))
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	handler.SendRequest(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected bad request for self friend")
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Cannot send friend request to yourself")
+}
 
-	// success
-	user.ID = uuid.New()
-	req = httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBuffer(payload))
+func TestFriendHandler_SendRequest_Success(t *testing.T) {
+	friendID := uuid.New()
+	handler := NewFriendHandler(&mockFriendService{SendRequestFunc: func(ctx context.Context, userID, friendID uuid.UUID) (*models.Friendship, error) {
+		return &models.Friendship{}, nil
+	}}, &mockCardService{})
+
+	payload := []byte(`{"friend_id":"` + friendID.String() + `"}`)
+	user := &models.User{ID: uuid.New()}
+	req := httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBuffer(payload))
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))
-	rr = httptest.NewRecorder()
+	rr := httptest.NewRecorder()
 	handler.SendRequest(rr, req)
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("expected created, got %d", rr.Code)
@@ -77,14 +90,15 @@ func TestFriendHandlerSendRequestScenarios(t *testing.T) {
 }
 
 func TestFriendHandler_SendRequest_InvalidFriendID(t *testing.T) {
-	handler := NewFriendHandler(&mockFriendService{}, &mockCardService{})
+	handler := NewFriendHandler(&mockFriendService{SendRequestFunc: func(ctx context.Context, userID, friendID uuid.UUID) (*models.Friendship, error) {
+		t.Fatal("SendRequest should not be called for invalid friend ID")
+		return nil, nil
+	}}, &mockCardService{})
 	req := httptest.NewRequest(http.MethodPost, "/api/friends/request", bytes.NewBufferString(`{"friend_id":"not-a-uuid"}`))
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
 	rr := httptest.NewRecorder()
 	handler.SendRequest(rr, req)
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid friend ID")
 }
 
 func TestFriendHandler_SendRequest_Conflict(t *testing.T) {
@@ -98,9 +112,7 @@ func TestFriendHandler_SendRequest_Conflict(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
 	rr := httptest.NewRecorder()
 	handler.SendRequest(rr, req)
-	if rr.Code != http.StatusConflict {
-		t.Fatalf("expected 409, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusConflict, "Friend request already exists")
 }
 
 func TestFriendHandler_SendRequest_Error(t *testing.T) {
@@ -114,9 +126,7 @@ func TestFriendHandler_SendRequest_Error(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
 	rr := httptest.NewRecorder()
 	handler.SendRequest(rr, req)
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
 }
 
 func TestFriendHandlerAcceptAndReject(t *testing.T) {
@@ -165,9 +175,7 @@ func TestFriendHandler_AcceptRequest_NotRecipient(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
 	rr := httptest.NewRecorder()
 	handler.AcceptRequest(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusForbidden, "Only the recipient can accept this request")
 }
 
 func TestFriendHandler_RejectRequest_NotRecipient(t *testing.T) {
@@ -182,9 +190,7 @@ func TestFriendHandler_RejectRequest_NotRecipient(t *testing.T) {
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
 	rr := httptest.NewRecorder()
 	handler.RejectRequest(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusForbidden, "Only the recipient can reject this request")
 }
 
 func TestFriendHandler_RemoveAndCancel(t *testing.T) {
@@ -234,9 +240,7 @@ func TestFriendHandler_Remove_Unauthenticated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodDelete, "/api/friends/123", nil)
 	rr := httptest.NewRecorder()
 	handler.Remove(rr, req)
-	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", rr.Code)
-	}
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
 }
 
 func TestFriendHandler_Remove_InvalidID(t *testing.T) {
