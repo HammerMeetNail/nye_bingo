@@ -573,7 +573,7 @@ if [ -n "$ALICE_FRIENDSHIP" ]; then
     for item_id in $COMPLETED_ITEMS; do
         emoji="${EMOJIS[$((i % 5))]}"
         react_to_item "$item_id" "$emoji" || true
-        ((i++))
+        i=$((i + 1))
     done
     log_info "Added reactions to ${i} items"
 else
