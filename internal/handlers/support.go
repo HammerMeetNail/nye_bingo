@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -22,14 +23,19 @@ const (
 )
 
 type SupportHandler struct {
-	emailService *services.EmailService
-	redis        *redis.Client
+	emailService services.EmailServiceInterface
+	rateLimiter  rateLimitStore
 }
 
-func NewSupportHandler(emailService *services.EmailService, redisClient *redis.Client) *SupportHandler {
+func NewSupportHandler(emailService services.EmailServiceInterface, redisClient *redis.Client) *SupportHandler {
+	var rateLimiter rateLimitStore
+	if redisClient != nil {
+		rateLimiter = redisRateLimitStore{client: redisClient}
+	}
+
 	return &SupportHandler{
 		emailService: emailService,
-		redis:        redisClient,
+		rateLimiter:  rateLimiter,
 	}
 }
 
@@ -115,9 +121,26 @@ func (h *SupportHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type rateLimitStore interface {
+	Incr(ctx context.Context, key string) (int64, error)
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+}
+
+type redisRateLimitStore struct {
+	client *redis.Client
+}
+
+func (s redisRateLimitStore) Incr(ctx context.Context, key string) (int64, error) {
+	return s.client.Incr(ctx, key).Result()
+}
+
+func (s redisRateLimitStore) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	return s.client.Expire(ctx, key, expiration).Err()
+}
+
 // checkRateLimit checks if the client has exceeded the rate limit
 func (h *SupportHandler) checkRateLimit(r *http.Request, clientIP string) bool {
-	if h.redis == nil {
+	if h.rateLimiter == nil {
 		return true // no rate limiting if Redis not configured
 	}
 
@@ -125,7 +148,7 @@ func (h *SupportHandler) checkRateLimit(r *http.Request, clientIP string) bool {
 	key := fmt.Sprintf("%s%s", supportRateLimitPrefix, clientIP)
 
 	// Increment counter
-	count, err := h.redis.Incr(ctx, key).Result()
+	count, err := h.rateLimiter.Incr(ctx, key)
 	if err != nil {
 		logging.Error("Rate limit Redis error", map[string]interface{}{"error": err.Error()})
 		return true // allow request on Redis error
@@ -133,7 +156,7 @@ func (h *SupportHandler) checkRateLimit(r *http.Request, clientIP string) bool {
 
 	// Set expiry on first request
 	if count == 1 {
-		h.redis.Expire(ctx, key, supportRateLimitWindow)
+		_ = h.rateLimiter.Expire(ctx, key, supportRateLimitWindow)
 	}
 
 	return count <= supportRateLimitMax

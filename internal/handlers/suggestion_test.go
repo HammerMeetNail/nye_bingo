@@ -1,104 +1,188 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
-// Note: The SuggestionHandler doesn't require authentication and delegates to the service.
-// These tests verify the handler properly parses query parameters.
-
-func TestSuggestionHandler_GetAll_NoQueryParams(t *testing.T) {
-	// Handler with nil service will panic when called, but we can test endpoint exists
-	// In real usage, service would be injected
-	handler := NewSuggestionHandler(nil)
-
-	if handler == nil {
-		t.Error("expected handler to be created")
+func TestSuggestionHandler_GetAll_Grouped(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetGroupedByCategoryFunc: func(ctx context.Context) ([]services.SuggestionsByCategory, error) {
+			return []services.SuggestionsByCategory{
+				{Category: "Health", Suggestions: []*models.Suggestion{{ID: uuid.New(), Category: "Health", Content: "Walk"}}},
+			}, nil
+		},
 	}
-}
-
-func TestSuggestionHandler_GetAll_GroupedParam(t *testing.T) {
-	// Verify the handler is created correctly and would parse grouped param
-	handler := NewSuggestionHandler(nil)
+	handler := NewSuggestionHandler(mockSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/suggestions?grouped=true", nil)
-	// We can't actually call the handler without a real service, but we verify the URL parsing
-	if req.URL.Query().Get("grouped") != "true" {
-		t.Error("expected grouped param to be parsed")
+	rr := httptest.NewRecorder()
+
+	handler.GetAll(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
-	_ = handler
+
+	var resp SuggestionsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(resp.Grouped) != 1 {
+		t.Fatalf("expected grouped results")
+	}
 }
 
-func TestSuggestionHandler_GetAll_CategoryParam(t *testing.T) {
-	handler := NewSuggestionHandler(nil)
+func TestSuggestionHandler_GetAll_ByCategory(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetByCategoryFunc: func(ctx context.Context, category string) ([]*models.Suggestion, error) {
+			if category != "Health" {
+				t.Fatalf("unexpected category: %q", category)
+			}
+			return []*models.Suggestion{{ID: uuid.New(), Category: category, Content: "Walk"}}, nil
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/suggestions?category=Health", nil)
-	if req.URL.Query().Get("category") != "Health" {
-		t.Error("expected category param to be parsed")
+	rr := httptest.NewRecorder()
+
+	handler.GetAll(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
-	_ = handler
+
+	var resp SuggestionsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(resp.Suggestions) != 1 {
+		t.Fatalf("expected suggestions results")
+	}
 }
 
-func TestSuggestionHandler_QueryParams(t *testing.T) {
-	tests := []struct {
-		name         string
-		url          string
-		wantGrouped  string
-		wantCategory string
-	}{
-		{
-			name:         "no params",
-			url:          "/api/suggestions",
-			wantGrouped:  "",
-			wantCategory: "",
-		},
-		{
-			name:         "grouped true",
-			url:          "/api/suggestions?grouped=true",
-			wantGrouped:  "true",
-			wantCategory: "",
-		},
-		{
-			name:         "grouped false",
-			url:          "/api/suggestions?grouped=false",
-			wantGrouped:  "false",
-			wantCategory: "",
-		},
-		{
-			name:         "category only",
-			url:          "/api/suggestions?category=Health",
-			wantGrouped:  "",
-			wantCategory: "Health",
-		},
-		{
-			name:         "both params",
-			url:          "/api/suggestions?grouped=true&category=Health",
-			wantGrouped:  "true",
-			wantCategory: "Health",
-		},
-		{
-			name:         "special characters in category",
-			url:          "/api/suggestions?category=Health%20%26%20Wellness",
-			wantGrouped:  "",
-			wantCategory: "Health & Wellness",
+func TestSuggestionHandler_GetAll_ByCategoryError(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetByCategoryFunc: func(ctx context.Context, category string) ([]*models.Suggestion, error) {
+			return nil, errors.New("boom")
 		},
 	}
+	handler := NewSuggestionHandler(mockSvc)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions?category=Health", nil)
+	rr := httptest.NewRecorder()
 
-			gotGrouped := req.URL.Query().Get("grouped")
-			gotCategory := req.URL.Query().Get("category")
+	handler.GetAll(rr, req)
 
-			if gotGrouped != tt.wantGrouped {
-				t.Errorf("grouped: expected %q, got %q", tt.wantGrouped, gotGrouped)
-			}
-			if gotCategory != tt.wantCategory {
-				t.Errorf("category: expected %q, got %q", tt.wantCategory, gotCategory)
-			}
-		})
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
+	}
+}
+
+func TestSuggestionHandler_GetAll_All(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetAllFunc: func(ctx context.Context) ([]*models.Suggestion, error) {
+			return []*models.Suggestion{{ID: uuid.New(), Category: "Health", Content: "Walk"}}, nil
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetAll(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+}
+
+func TestSuggestionHandler_GetAll_GroupedError(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetGroupedByCategoryFunc: func(ctx context.Context) ([]services.SuggestionsByCategory, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions?grouped=true", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetAll(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
+	}
+}
+
+func TestSuggestionHandler_GetAll_Error(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetAllFunc: func(ctx context.Context) ([]*models.Suggestion, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetAll(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
+	}
+}
+
+func TestSuggestionHandler_GetCategories_Success(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetCategoriesFunc: func(ctx context.Context) ([]string, error) {
+			return []string{"Health", "Career"}, nil
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions/categories", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetCategories(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+
+	var resp SuggestionsResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if len(resp.Categories) != 2 {
+		t.Fatalf("expected categories")
+	}
+}
+
+func TestSuggestionHandler_GetCategories_Error(t *testing.T) {
+	mockSvc := &mockSuggestionService{
+		GetCategoriesFunc: func(ctx context.Context) ([]string, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	handler := NewSuggestionHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/suggestions/categories", nil)
+	rr := httptest.NewRecorder()
+
+	handler.GetCategories(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rr.Code)
 	}
 }

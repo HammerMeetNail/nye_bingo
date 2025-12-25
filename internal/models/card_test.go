@@ -84,25 +84,42 @@ func TestBingoCardCapacityAndFree(t *testing.T) {
 	}
 }
 
-func TestCardStats_ZeroValues(t *testing.T) {
-	stats := CardStats{}
+func TestDefaultFreeSpacePosition(t *testing.T) {
+	card := BingoCard{GridSize: 5}
+	if pos := card.DefaultFreeSpacePosition(); pos != 12 {
+		t.Fatalf("expected center position 12, got %d", pos)
+	}
 
-	if stats.TotalItems != 0 {
-		t.Errorf("expected TotalItems to be 0, got %d", stats.TotalItems)
+	card.GridSize = 0
+	if pos := card.DefaultFreeSpacePosition(); pos != 12 {
+		t.Fatalf("expected fallback center position 12, got %d", pos)
 	}
-	if stats.CompletedItems != 0 {
-		t.Errorf("expected CompletedItems to be 0, got %d", stats.CompletedItems)
+
+	card.GridSize = 4
+	pos := card.DefaultFreeSpacePosition()
+	if pos < 0 || pos >= 16 {
+		t.Fatalf("expected position within range, got %d", pos)
 	}
-	if stats.CompletionRate != 0 {
-		t.Errorf("expected CompletionRate to be 0, got %f", stats.CompletionRate)
+}
+
+func TestDisplayName(t *testing.T) {
+	title := "My Card"
+	card := BingoCard{Title: &title, Year: 2024}
+	if name := card.DisplayName(); name != "My Card" {
+		t.Fatalf("expected title display name, got %s", name)
 	}
-	if stats.BingosAchieved != 0 {
-		t.Errorf("expected BingosAchieved to be 0, got %d", stats.BingosAchieved)
+
+	card.Title = nil
+	if name := card.DisplayName(); name != "2024 Bingo Card" {
+		t.Fatalf("expected year display name, got %s", name)
 	}
-	if stats.FirstCompletion != nil {
-		t.Error("expected FirstCompletion to be nil")
+}
+
+func TestIsValidCategory(t *testing.T) {
+	if !IsValidCategory("health") {
+		t.Fatal("expected valid category")
 	}
-	if stats.LastCompletion != nil {
-		t.Error("expected LastCompletion to be nil")
+	if IsValidCategory("invalid") {
+		t.Fatal("expected invalid category")
 	}
 }

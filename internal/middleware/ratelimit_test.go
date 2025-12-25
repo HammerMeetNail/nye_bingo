@@ -82,6 +82,21 @@ func TestGetClientIP(t *testing.T) {
 	}
 }
 
+func TestWriteError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	writeError(rr, http.StatusTooManyRequests, "Rate limit exceeded")
+
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected status 429, got %d", rr.Code)
+	}
+	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
+		t.Fatalf("expected content-type application/json, got %q", ct)
+	}
+	if body := rr.Body.String(); body == "" || body == "{}\n" {
+		t.Fatalf("expected JSON body, got %q", body)
+	}
+}
+
 // Note: Full integration testing of RateLimiter requires a running Redis instance
 // or a mock that implements the go-redis interface, which is not trivial without
 // external libraries like redismock.

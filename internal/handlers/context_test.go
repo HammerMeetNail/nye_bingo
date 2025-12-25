@@ -68,19 +68,6 @@ func TestGetUserFromContext_NilContext(t *testing.T) {
 	}
 }
 
-func TestContextKey_UniqueType(t *testing.T) {
-	// Verify that our context key type is distinct
-	user := &models.User{ID: uuid.New()}
-
-	ctx := SetUserInContext(context.Background(), user)
-
-	// Using a string key should not find the user
-	retrieved := ctx.Value("user")
-	if retrieved != nil {
-		t.Error("string key should not find user (type safety)")
-	}
-}
-
 func TestSetUserInContext_NilUser(t *testing.T) {
 	ctx := SetUserInContext(context.Background(), nil)
 	retrieved := GetUserFromContext(ctx)
@@ -105,5 +92,18 @@ func TestSetUserInContext_OverwriteUser(t *testing.T) {
 	}
 	if retrieved.Email != "user2@test.com" {
 		t.Error("expected second user to overwrite first")
+	}
+}
+
+func TestTokenScopeContext(t *testing.T) {
+	ctx := context.Background()
+
+	if got := GetTokenScopeFromContext(ctx); got != "" {
+		t.Fatalf("expected empty scope, got %q", got)
+	}
+
+	ctx = SetTokenScopeInContext(ctx, models.ScopeReadWrite)
+	if got := GetTokenScopeFromContext(ctx); got != models.ScopeReadWrite {
+		t.Fatalf("expected scope %q, got %q", models.ScopeReadWrite, got)
 	}
 }

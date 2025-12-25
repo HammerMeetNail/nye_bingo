@@ -76,15 +76,18 @@ func run() error {
 	logger.Info("Connected to Redis")
 
 	// Initialize services
-	userService := services.NewUserService(db.Pool)
-	authService := services.NewAuthService(db.Pool, redisDB.Client)
-	emailService := services.NewEmailService(&cfg.Email, db.Pool)
-	cardService := services.NewCardService(db.Pool)
-	suggestionService := services.NewSuggestionService(db.Pool)
-	friendService := services.NewFriendService(db.Pool)
-	reactionService := services.NewReactionService(db.Pool, friendService)
-	apiTokenService := services.NewApiTokenService(db.Pool)
-	aiService := ai.NewService(cfg, db.Pool)
+	dbAdapter := services.NewPoolAdapter(db.Pool)
+	redisAdapter := services.NewRedisAdapter(redisDB.Client)
+
+	userService := services.NewUserService(dbAdapter)
+	authService := services.NewAuthService(dbAdapter, redisAdapter)
+	emailService := services.NewEmailService(&cfg.Email, dbAdapter)
+	cardService := services.NewCardService(dbAdapter)
+	suggestionService := services.NewSuggestionService(dbAdapter)
+	friendService := services.NewFriendService(dbAdapter)
+	reactionService := services.NewReactionService(dbAdapter, friendService)
+	apiTokenService := services.NewApiTokenService(dbAdapter)
+	aiService := ai.NewService(cfg, dbAdapter)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
@@ -110,22 +113,7 @@ func run() error {
 	requestLogger := middleware.NewRequestLogger(logger)
 
 	// AI Rate Limit configuration
-	aiRateLimit := int64(10)
-	if cfg.Server.Environment == "development" {
-		aiRateLimit = 100
-		logger.Info("Using development AI rate limit", map[string]interface{}{"limit": aiRateLimit})
-	}
-	if v, ok := os.LookupEnv("AI_RATE_LIMIT"); ok && v != "" {
-		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
-			aiRateLimit = parsed
-			logger.Info("Using AI rate limit from env", map[string]interface{}{"limit": aiRateLimit})
-		} else {
-			logger.Warn("Invalid AI_RATE_LIMIT; using default", map[string]interface{}{
-				"value": v,
-				"limit": aiRateLimit,
-			})
-		}
-	}
+	aiRateLimit := resolveAIRateLimit(cfg, logger, os.LookupEnv)
 
 	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {
 		user := handlers.GetUserFromContext(r.Context())
@@ -286,4 +274,24 @@ func run() error {
 	<-done
 	logger.Info("Server stopped")
 	return nil
+}
+
+func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv func(string) (string, bool)) int64 {
+	aiRateLimit := int64(10)
+	if cfg.Server.Environment == "development" {
+		aiRateLimit = 100
+		logger.Info("Using development AI rate limit", map[string]interface{}{"limit": aiRateLimit})
+	}
+	if v, ok := lookupEnv("AI_RATE_LIMIT"); ok && v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
+			aiRateLimit = parsed
+			logger.Info("Using AI rate limit from env", map[string]interface{}{"limit": aiRateLimit})
+		} else {
+			logger.Warn("Invalid AI_RATE_LIMIT; using default", map[string]interface{}{
+				"value": v,
+				"limit": aiRateLimit,
+			})
+		}
+	}
+	return aiRateLimit
 }

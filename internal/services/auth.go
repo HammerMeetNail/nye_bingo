@@ -11,8 +11,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -28,14 +26,15 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrSessionNotFound    = errors.New("session not found")
 	ErrSessionExpired     = errors.New("session expired")
+	ErrPasswordTooLong    = errors.New("password exceeds bcrypt limit")
 )
 
 type AuthService struct {
-	db    *pgxpool.Pool
-	redis *redis.Client
+	db    DBConn
+	redis RedisClient
 }
 
-func NewAuthService(db *pgxpool.Pool, redis *redis.Client) *AuthService {
+func NewAuthService(db DBConn, redis RedisClient) *AuthService {
 	return &AuthService{
 		db:    db,
 		redis: redis,
@@ -43,6 +42,9 @@ func NewAuthService(db *pgxpool.Pool, redis *redis.Client) *AuthService {
 }
 
 func (s *AuthService) HashPassword(password string) (string, error) {
+	if len([]byte(password)) > 72 {
+		return "", ErrPasswordTooLong
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
 		return "", fmt.Errorf("hashing password: %w", err)
@@ -83,7 +85,7 @@ func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID) (toke
 
 	// Store in Redis for fast lookups
 	redisKey := sessionKeyPrefix + tokenHash
-	err = s.redis.Set(ctx, redisKey, userID.String(), sessionDuration).Err()
+	err = s.redis.Set(ctx, redisKey, userID.String(), sessionDuration)
 	if err != nil {
 		// Fall back to PostgreSQL if Redis fails
 		_, err = s.db.Exec(ctx,
@@ -103,10 +105,10 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 
 	// Try Redis first
 	redisKey := sessionKeyPrefix + tokenHash
-	userIDStr, err := s.redis.Get(ctx, redisKey).Result()
+	userIDStr, err := s.redis.Get(ctx, redisKey)
 	if err == nil {
 		// Found in Redis, extend session
-		s.redis.Expire(ctx, redisKey, sessionDuration)
+		_ = s.redis.Expire(ctx, redisKey, sessionDuration)
 
 		userID, err := uuid.Parse(userIDStr)
 		if err != nil {
@@ -145,7 +147,7 @@ func (s *AuthService) DeleteSession(ctx context.Context, token string) error {
 
 	// Delete from Redis
 	redisKey := sessionKeyPrefix + tokenHash
-	s.redis.Del(ctx, redisKey)
+	_ = s.redis.Del(ctx, redisKey)
 
 	// Delete from PostgreSQL
 	_, err := s.db.Exec(ctx, "DELETE FROM sessions WHERE token_hash = $1", tokenHash)
@@ -175,7 +177,7 @@ func (s *AuthService) DeleteAllUserSessions(ctx context.Context, userID uuid.UUI
 
 	// Delete from Redis
 	for _, hash := range tokenHashes {
-		s.redis.Del(ctx, sessionKeyPrefix+hash)
+		_ = s.redis.Del(ctx, sessionKeyPrefix+hash)
 	}
 
 	// Delete from PostgreSQL

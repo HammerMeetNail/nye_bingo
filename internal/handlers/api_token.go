@@ -14,10 +14,10 @@ import (
 )
 
 type ApiTokenHandler struct {
-	apiTokenService *services.ApiTokenService
+	apiTokenService services.ApiTokenServiceInterface
 }
 
-func NewApiTokenHandler(apiTokenService *services.ApiTokenService) *ApiTokenHandler {
+func NewApiTokenHandler(apiTokenService services.ApiTokenServiceInterface) *ApiTokenHandler {
 	return &ApiTokenHandler{apiTokenService: apiTokenService}
 }
 

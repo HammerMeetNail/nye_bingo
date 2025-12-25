@@ -2,9 +2,25 @@ package services
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/HammerMeetNail/yearofbingo/internal/config"
 )
+
+type fakeEmailProvider struct {
+	sent []*Email
+	err  error
+}
+
+func (f *fakeEmailProvider) Send(ctx context.Context, email *Email) error {
+	f.sent = append(f.sent, email)
+	return f.err
+}
 
 func TestGenerateToken(t *testing.T) {
 	token, hash, err := GenerateToken()
@@ -86,6 +102,112 @@ func TestHashToken(t *testing.T) {
 	}
 }
 
+func TestEmailService_VerifyEmail_InvalidToken(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return context.Canceled
+			}}
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	err := service.VerifyEmail(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "invalid verification token") {
+		t.Fatalf("expected invalid verification token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyEmail_Expired(t *testing.T) {
+	expired := time.Now().Add(-1 * time.Hour)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), expired)
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			t.Fatal("unexpected exec for expired token")
+			return fakeCommandTag{}, nil
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	err := service.VerifyEmail(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expected expired token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyEmail_UpdateError(t *testing.T) {
+	expires := time.Now().Add(1 * time.Hour)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), expires)
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, errors.New("update error")
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	err := service.VerifyEmail(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "updating user verification status") {
+		t.Fatalf("expected update error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyEmail_Success(t *testing.T) {
+	userID := uuid.New()
+	expires := time.Now().Add(1 * time.Hour)
+	execCalls := 0
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(userID, expires)
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	if err := service.VerifyEmail(context.Background(), "token"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if execCalls != 2 {
+		t.Fatalf("expected 2 exec calls, got %d", execCalls)
+	}
+}
+
+func TestEmailService_VerifyMagicLink_Used(t *testing.T) {
+	usedAt := time.Now().Add(-1 * time.Minute)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), "user@example.com", time.Now().Add(1*time.Hour), &usedAt)
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	_, err := service.VerifyMagicLink(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "already been used") {
+		t.Fatalf("expected used token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyPasswordResetToken_Expired(t *testing.T) {
+	expired := time.Now().Add(-1 * time.Hour)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), uuid.New(), expired, (*time.Time)(nil))
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	_, err := service.VerifyPasswordResetToken(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "expired") {
+		t.Fatalf("expected expired token error, got %v", err)
+	}
+}
+
 func TestHashToken_Deterministic(t *testing.T) {
 	token := "test_token_12345"
 
@@ -129,6 +251,297 @@ func TestConsoleProvider_Send(t *testing.T) {
 	err := provider.Send(context.Background(), email)
 	if err != nil {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestEmailService_SendVerificationEmail_Success(t *testing.T) {
+	userID := uuid.New()
+	provider := &fakeEmailProvider{}
+	execCalls := 0
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := &EmailService{
+		provider:    provider,
+		db:          db,
+		fromAddress: "from@example.com",
+		fromName:    "Year of Bingo",
+		baseURL:     "https://example.com",
+	}
+	if err := service.SendVerificationEmail(context.Background(), userID, "to@example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if execCalls != 1 {
+		t.Fatalf("expected token insert, got %d calls", execCalls)
+	}
+	if len(provider.sent) != 1 {
+		t.Fatalf("expected 1 email sent, got %d", len(provider.sent))
+	}
+	if provider.sent[0].To != "to@example.com" {
+		t.Fatalf("unexpected recipient: %s", provider.sent[0].To)
+	}
+}
+
+func TestEmailService_SendVerificationEmail_DBError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, errors.New("boom")
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendVerificationEmail(context.Background(), uuid.New(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_SendVerificationEmail_SendError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{err: errors.New("boom")},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendVerificationEmail(context.Background(), uuid.New(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_SendMagicLinkEmail_Success(t *testing.T) {
+	provider := &fakeEmailProvider{}
+	execCalls := 0
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := &EmailService{
+		provider: provider,
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendMagicLinkEmail(context.Background(), "to@example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if execCalls != 1 {
+		t.Fatalf("expected token insert, got %d calls", execCalls)
+	}
+	if len(provider.sent) != 1 {
+		t.Fatalf("expected 1 email sent, got %d", len(provider.sent))
+	}
+}
+
+func TestEmailService_SendMagicLinkEmail_DBError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, errors.New("boom")
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendMagicLinkEmail(context.Background(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_SendMagicLinkEmail_SendError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{err: errors.New("boom")},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendMagicLinkEmail(context.Background(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_VerifyMagicLink_Success(t *testing.T) {
+	tokenID := uuid.New()
+	expiry := time.Now().Add(1 * time.Hour)
+	execCalls := 0
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(tokenID, "user@example.com", expiry, (*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	email, err := service.VerifyMagicLink(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if email != "user@example.com" {
+		t.Fatalf("expected email, got %s", email)
+	}
+	if execCalls != 1 {
+		t.Fatalf("expected token mark used, got %d calls", execCalls)
+	}
+}
+
+func TestEmailService_VerifyPasswordResetToken_Used(t *testing.T) {
+	usedAt := time.Now().Add(-1 * time.Minute)
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), uuid.New(), time.Now().Add(1*time.Hour), &usedAt)
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	_, err := service.VerifyPasswordResetToken(context.Background(), "token")
+	if err == nil || !strings.Contains(err.Error(), "already been used") {
+		t.Fatalf("expected used token error, got %v", err)
+	}
+}
+
+func TestEmailService_VerifyPasswordResetToken_Success(t *testing.T) {
+	userID := uuid.New()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return rowFromValues(uuid.New(), userID, time.Now().Add(1*time.Hour), (*time.Time)(nil))
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	got, err := service.VerifyPasswordResetToken(context.Background(), "token")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != userID {
+		t.Fatalf("expected user %v, got %v", userID, got)
+	}
+}
+
+func TestEmailService_SendPasswordResetEmail_Success(t *testing.T) {
+	provider := &fakeEmailProvider{}
+	execCalls := 0
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := &EmailService{
+		provider: provider,
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendPasswordResetEmail(context.Background(), uuid.New(), "to@example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if execCalls != 1 {
+		t.Fatalf("expected token insert, got %d calls", execCalls)
+	}
+	if len(provider.sent) != 1 {
+		t.Fatalf("expected 1 email sent, got %d", len(provider.sent))
+	}
+}
+
+func TestEmailService_SendPasswordResetEmail_DBError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, errors.New("boom")
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendPasswordResetEmail(context.Background(), uuid.New(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_SendPasswordResetEmail_SendError(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	service := &EmailService{
+		provider: &fakeEmailProvider{err: errors.New("boom")},
+		db:       db,
+		baseURL:  "https://example.com",
+	}
+	if err := service.SendPasswordResetEmail(context.Background(), uuid.New(), "to@example.com"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestEmailService_MarkPasswordResetUsed(t *testing.T) {
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	service := NewEmailService(&config.EmailConfig{}, db)
+	if err := service.MarkPasswordResetUsed(context.Background(), "token"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestEmailService_SendSupportEmail_Success(t *testing.T) {
+	provider := &fakeEmailProvider{}
+	service := &EmailService{
+		provider: provider,
+	}
+
+	if err := service.SendSupportEmail(context.Background(), "from@example.com", "Bug", "Help", "user-123"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(provider.sent) != 1 {
+		t.Fatalf("expected 1 email sent, got %d", len(provider.sent))
+	}
+	if provider.sent[0].To != "support@yearofbingo.com" {
+		t.Fatalf("unexpected recipient: %s", provider.sent[0].To)
+	}
+}
+
+func TestNewEmailService_Providers(t *testing.T) {
+	db := &fakeDB{}
+	cfg := &config.EmailConfig{Provider: "resend"}
+	service := NewEmailService(cfg, db)
+	if _, ok := service.provider.(*ResendProvider); !ok {
+		t.Fatal("expected resend provider")
+	}
+
+	cfg = &config.EmailConfig{Provider: "smtp"}
+	service = NewEmailService(cfg, db)
+	if _, ok := service.provider.(*SMTPProvider); !ok {
+		t.Fatal("expected smtp provider")
+	}
+
+	cfg = &config.EmailConfig{Provider: "unknown"}
+	service = NewEmailService(cfg, db)
+	if _, ok := service.provider.(*ConsoleProvider); !ok {
+		t.Fatal("expected console provider")
 	}
 }
 

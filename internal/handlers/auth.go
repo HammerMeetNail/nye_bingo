@@ -21,13 +21,13 @@ const (
 )
 
 type AuthHandler struct {
-	userService  *services.UserService
-	authService  *services.AuthService
-	emailService *services.EmailService
+	userService  services.UserServiceInterface
+	authService  services.AuthServiceInterface
+	emailService services.EmailServiceInterface
 	secure       bool // Use secure cookies (HTTPS only)
 }
 
-func NewAuthHandler(userService *services.UserService, authService *services.AuthService, emailService *services.EmailService, secure bool) *AuthHandler {
+func NewAuthHandler(userService services.UserServiceInterface, authService services.AuthServiceInterface, emailService services.EmailServiceInterface, secure bool) *AuthHandler {
 	return &AuthHandler{
 		userService:  userService,
 		authService:  authService,
@@ -87,6 +87,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Hash password
 	passwordHash, err := h.authService.HashPassword(req.Password)
 	if err != nil {
+		if errors.Is(err, services.ErrPasswordTooLong) {
+			writeError(w, http.StatusBadRequest, "Password is too long")
+			return
+		}
 		log.Printf("Error hashing password: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
@@ -225,6 +229,10 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Hash new password
 	newHash, err := h.authService.HashPassword(req.NewPassword)
 	if err != nil {
+		if errors.Is(err, services.ErrPasswordTooLong) {
+			writeError(w, http.StatusBadRequest, "Password is too long")
+			return
+		}
 		log.Printf("Error hashing password: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
@@ -430,6 +438,10 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	// Hash new password
 	passwordHash, err := h.authService.HashPassword(req.Password)
 	if err != nil {
+		if errors.Is(err, services.ErrPasswordTooLong) {
+			writeError(w, http.StatusBadRequest, "Password is too long")
+			return
+		}
 		log.Printf("Error hashing password: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
@@ -538,8 +550,8 @@ func validatePassword(password string) error {
 	if len(password) < 8 {
 		return errors.New("password must be at least 8 characters")
 	}
-	if len(password) > 128 {
-		return errors.New("password must be at most 128 characters")
+	if len([]byte(password)) > 72 {
+		return errors.New("password must be at most 72 bytes")
 	}
 
 	var hasUpper, hasLower, hasDigit bool

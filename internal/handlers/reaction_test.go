@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
 func TestReactionHandler_AddReaction_Unauthenticated(t *testing.T) {
@@ -160,6 +163,271 @@ func TestReactionHandler_GetAllowedEmojis(t *testing.T) {
 			t.Errorf("expected emoji %s to be in allowed emojis", emoji)
 		}
 	}
+}
+
+func TestReactionHandler_AddReaction_SuccessAndErrors(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	itemID := uuid.New()
+
+	t.Run("success", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				if gotItemID != itemID {
+					t.Fatalf("unexpected item id")
+				}
+				return &models.Reaction{UserID: userID, ItemID: gotItemID, Emoji: emoji}, nil
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rr.Code)
+		}
+	})
+
+	t.Run("invalid emoji", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, services.ErrInvalidEmoji
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "nope"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("item not found", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, services.ErrItemNotFound
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected status 404, got %d", rr.Code)
+		}
+	})
+
+	t.Run("cannot react to own", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, services.ErrCannotReactToOwn
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("item not completed", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, services.ErrItemNotCompleted
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400, got %d", rr.Code)
+		}
+	})
+
+	t.Run("not friend", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, services.ErrNotFriend
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("expected status 403, got %d", rr.Code)
+		}
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			AddReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID, emoji string) (*models.Reaction, error) {
+				return nil, errors.New("boom")
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		bodyBytes, _ := json.Marshal(AddReactionRequest{Emoji: "🎉"})
+		req := httptest.NewRequest(http.MethodPost, "/api/items/"+itemID.String()+"/react", bytes.NewBuffer(bodyBytes))
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.AddReaction(rr, req)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("expected status 500, got %d", rr.Code)
+		}
+	})
+}
+
+func TestReactionHandler_GetReactions_SuccessAndError(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	itemID := uuid.New()
+
+	t.Run("success", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			GetReactionsForItemFunc: func(ctx context.Context, gotItemID uuid.UUID) ([]models.ReactionWithUser, error) {
+				return []models.ReactionWithUser{}, nil
+			},
+			GetReactionSummaryForItemFunc: func(ctx context.Context, gotItemID uuid.UUID) ([]models.ReactionSummary, error) {
+				return []models.ReactionSummary{}, nil
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/items/"+itemID.String()+"/reactions", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.GetReactions(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rr.Code)
+		}
+	})
+
+	t.Run("summary error", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			GetReactionsForItemFunc: func(ctx context.Context, gotItemID uuid.UUID) ([]models.ReactionWithUser, error) {
+				return []models.ReactionWithUser{}, nil
+			},
+			GetReactionSummaryForItemFunc: func(ctx context.Context, gotItemID uuid.UUID) ([]models.ReactionSummary, error) {
+				return nil, errors.New("boom")
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/items/"+itemID.String()+"/reactions", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.GetReactions(rr, req)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("expected status 500, got %d", rr.Code)
+		}
+	})
+
+	t.Run("reactions error", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			GetReactionsForItemFunc: func(ctx context.Context, gotItemID uuid.UUID) ([]models.ReactionWithUser, error) {
+				return nil, errors.New("boom")
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/items/"+itemID.String()+"/reactions", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.GetReactions(rr, req)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("expected status 500, got %d", rr.Code)
+		}
+	})
+}
+
+func TestReactionHandler_RemoveReaction_SuccessAndErrors(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	itemID := uuid.New()
+
+	t.Run("reaction not found", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			RemoveReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID) error {
+				return services.ErrReactionNotFound
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/items/"+itemID.String()+"/react", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.RemoveReaction(rr, req)
+		if rr.Code != http.StatusNotFound {
+			t.Fatalf("expected 404, got %d", rr.Code)
+		}
+	})
+
+	t.Run("internal error", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			RemoveReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID) error {
+				return errors.New("boom")
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/items/"+itemID.String()+"/react", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.RemoveReaction(rr, req)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("expected 500, got %d", rr.Code)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		mockSvc := &mockReactionService{
+			RemoveReactionFunc: func(ctx context.Context, userID, gotItemID uuid.UUID) error {
+				return nil
+			},
+		}
+		handler := NewReactionHandler(mockSvc)
+
+		req := httptest.NewRequest(http.MethodDelete, "/api/items/"+itemID.String()+"/react", nil)
+		req = req.WithContext(SetUserInContext(req.Context(), user))
+		rr := httptest.NewRecorder()
+
+		handler.RemoveReaction(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d", rr.Code)
+		}
+	})
 }
 
 func TestParseItemID(t *testing.T) {

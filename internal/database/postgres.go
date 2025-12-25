@@ -12,8 +12,19 @@ type PostgresDB struct {
 	Pool *pgxpool.Pool
 }
 
+var (
+	parsePGConfig = pgxpool.ParseConfig
+	newPGPool     = pgxpool.NewWithConfig
+	pingPGPool    = func(ctx context.Context, pool *pgxpool.Pool) error {
+		return pool.Ping(ctx)
+	}
+	closePGPool = func(pool *pgxpool.Pool) {
+		pool.Close()
+	}
+)
+
 func NewPostgresDB(dsn string) (*PostgresDB, error) {
-	config, err := pgxpool.ParseConfig(dsn)
+	config, err := parsePGConfig(dsn)
 	if err != nil {
 		return nil, fmt.Errorf("parsing database config: %w", err)
 	}
@@ -27,13 +38,13 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.NewWithConfig(ctx, config)
+	pool, err := newPGPool(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("creating connection pool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
+	if err := pingPGPool(ctx, pool); err != nil {
+		closePGPool(pool)
 		return nil, fmt.Errorf("pinging database: %w", err)
 	}
 
@@ -42,7 +53,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 
 func (db *PostgresDB) Close() {
 	if db.Pool != nil {
-		db.Pool.Close()
+		closePGPool(db.Pool)
 	}
 }
 

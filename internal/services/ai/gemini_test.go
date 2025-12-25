@@ -9,11 +9,45 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/config"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
+
+type fakeRow struct {
+	scanFunc func(dest ...any) error
+}
+
+func (f fakeRow) Scan(dest ...any) error {
+	return f.scanFunc(dest...)
+}
+
+type fakeDB struct {
+	execFunc     func(ctx context.Context, sql string, args ...any) (services.CommandTag, error)
+	queryRowFunc func(ctx context.Context, sql string, args ...any) services.Row
+}
+
+func (f *fakeDB) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+	if f.execFunc != nil {
+		return f.execFunc(ctx, sql, args...)
+	}
+	return nil, nil
+}
+
+func (f *fakeDB) Query(ctx context.Context, sql string, args ...any) (services.Rows, error) {
+	return nil, nil
+}
+
+func (f *fakeDB) QueryRow(ctx context.Context, sql string, args ...any) services.Row {
+	if f.queryRowFunc != nil {
+		return f.queryRowFunc(ctx, sql, args...)
+	}
+	return fakeRow{scanFunc: func(dest ...any) error { return nil }}
+}
 
 func TestGenerateGoals(t *testing.T) {
 	makeGoals := func(n int) []string {
@@ -83,6 +117,26 @@ func TestGenerateGoals(t *testing.T) {
 			},
 			wantGoals:  24,
 			wantTokens: 100,
+		},
+		{
+			name: "success-trims-extra-goals",
+			roundTrip: func(r *http.Request) (*http.Response, error) {
+				resp := geminiResponse{
+					Candidates: []geminiCandidate{
+						{
+							Content: geminiContent{
+								Parts: []geminiPart{
+									{Text: mustJSON(t, makeGoals(30))},
+								},
+							},
+							FinishReason: "STOP",
+						},
+					},
+					Usage: geminiUsage{},
+				}
+				return jsonHTTPResponse(t, http.StatusOK, resp), nil
+			},
+			wantGoals: 24,
 		},
 		{
 			name: "success-custom-count",
@@ -193,6 +247,17 @@ func TestGenerateGoals(t *testing.T) {
 			wantErrIs: ErrRateLimitExceeded,
 		},
 		{
+			name: "provider-error",
+			roundTrip: func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusBadGateway,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader("")),
+				}, nil
+			},
+			wantErrIs: ErrAIProviderUnavailable,
+		},
+		{
 			name: "invalid-json",
 			roundTrip: func(r *http.Request) (*http.Response, error) {
 				resp := geminiResponse{
@@ -204,6 +269,33 @@ func TestGenerateGoals(t *testing.T) {
 							FinishReason: "STOP",
 						},
 					},
+				}
+				return jsonHTTPResponse(t, http.StatusOK, resp), nil
+			},
+			wantErrIs: ErrAIProviderUnavailable,
+		},
+		{
+			name: "invalid-response-body",
+			roundTrip: func(r *http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Header:     http.Header{"Content-Type": []string{"application/json"}},
+					Body:       io.NopCloser(strings.NewReader("not-json")),
+				}, nil
+			},
+			wantErrIs: ErrAIProviderUnavailable,
+		},
+		{
+			name: "empty-content-parts",
+			roundTrip: func(r *http.Request) (*http.Response, error) {
+				resp := geminiResponse{
+					Candidates: []geminiCandidate{
+						{
+							Content:      geminiContent{Parts: []geminiPart{}},
+							FinishReason: "STOP",
+						},
+					},
+					Usage: geminiUsage{},
 				}
 				return jsonHTTPResponse(t, http.StatusOK, resp), nil
 			},
@@ -264,6 +356,130 @@ func TestGenerateGoals(t *testing.T) {
 				t.Fatalf("expected %d input tokens, got %d", tt.wantTokens, stats.TokensInput)
 			}
 		})
+	}
+}
+
+func TestNewService(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.AI.GeminiAPIKey = "test-key"
+	svc := NewService(cfg, nil)
+	if svc == nil {
+		t.Fatal("expected service")
+	}
+	if svc.apiKey != "test-key" {
+		t.Fatalf("expected api key, got %s", svc.apiKey)
+	}
+}
+
+func TestConsumeUnverifiedFreeGeneration_NoDB(t *testing.T) {
+	svc := &Service{}
+	_, err := svc.ConsumeUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if !errors.Is(err, ErrAIUsageTrackingUnavailable) {
+		t.Fatalf("expected tracking unavailable, got %v", err)
+	}
+}
+
+func TestConsumeUnverifiedFreeGeneration_RequiresVerification(t *testing.T) {
+	db := &fakeDB{
+		queryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return pgx.ErrNoRows
+			}}
+		},
+	}
+	svc := &Service{db: db}
+	_, err := svc.ConsumeUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if !errors.Is(err, ErrEmailVerificationRequired) {
+		t.Fatalf("expected verification required, got %v", err)
+	}
+}
+
+func TestConsumeUnverifiedFreeGeneration_DBError(t *testing.T) {
+	db := &fakeDB{
+		queryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("boom")
+			}}
+		},
+	}
+	svc := &Service{db: db}
+	_, err := svc.ConsumeUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if !errors.Is(err, ErrAIUsageTrackingUnavailable) {
+		t.Fatalf("expected ErrAIUsageTrackingUnavailable, got %v", err)
+	}
+}
+
+func TestConsumeUnverifiedFreeGeneration_Success(t *testing.T) {
+	db := &fakeDB{
+		queryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				*(dest[0].(*int)) = 3
+				return nil
+			}}
+		},
+	}
+	svc := &Service{db: db}
+	remaining, err := svc.ConsumeUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if remaining != 2 {
+		t.Fatalf("expected 2 remaining, got %d", remaining)
+	}
+}
+
+func TestLogUsage_NoDB(t *testing.T) {
+	svc := &Service{}
+	svc.logUsage(context.Background(), uuid.New(), UsageStats{}, "success")
+}
+
+func TestLogUsage_WritesToDB(t *testing.T) {
+	called := false
+	db := &fakeDB{
+		execFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			called = true
+			return nil, nil
+		},
+	}
+	svc := &Service{db: db}
+	svc.logUsage(context.Background(), uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success")
+	if !called {
+		t.Fatal("expected log usage insert")
+	}
+}
+
+func TestLogUsageWithTimeout_NoDB(t *testing.T) {
+	svc := &Service{}
+	svc.logUsageWithTimeout(uuid.New(), UsageStats{}, "success")
+}
+
+func TestLogUsageWithTimeout_WritesToDB(t *testing.T) {
+	called := false
+	db := &fakeDB{
+		execFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			called = true
+			return nil, nil
+		},
+	}
+	svc := &Service{db: db}
+	svc.logUsageWithTimeout(uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success")
+	if !called {
+		t.Fatal("expected log usage insert")
+	}
+}
+
+func TestStripMarkdownCodeBlock(t *testing.T) {
+	input := "```json\n[\"A\"]\n```"
+	if got := stripMarkdownCodeBlock(input); got != "[\"A\"]" {
+		t.Fatalf("unexpected strip result: %q", got)
+	}
+}
+
+func TestSanitizeInput_Truncates(t *testing.T) {
+	long := strings.Repeat("a", 600)
+	got := sanitizeInput(long)
+	if len([]rune(got)) != 500 {
+		t.Fatalf("expected 500 chars, got %d", len([]rune(got)))
 	}
 }
 
