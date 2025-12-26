@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -106,8 +107,8 @@ func Load() (*Config, error) {
 		},
 		AI: AIConfig{
 			GeminiAPIKey:          getEnv("GEMINI_API_KEY", ""),
-			GeminiModel:           getEnv("GEMINI_MODEL", "gemini-3-flash-preview"),
-			GeminiThinkingLevel:   getEnv("GEMINI_THINKING_LEVEL", "low"),
+			GeminiModel:           getEnvNonEmpty("GEMINI_MODEL", "gemini-3-flash-preview"),
+			GeminiThinkingLevel:   getEnvNonEmpty("GEMINI_THINKING_LEVEL", "minimal"),
 			GeminiThinkingBudget:  getEnvInt("GEMINI_THINKING_BUDGET", 0),
 			GeminiTemperature:     getEnvFloat64("GEMINI_TEMPERATURE", 0.8),
 			GeminiMaxOutputTokens: getEnvInt("GEMINI_MAX_OUTPUT_TOKENS", 4096),
@@ -121,6 +122,16 @@ func Load() (*Config, error) {
 func getEnv(key, defaultValue string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return defaultValue
+}
+
+func getEnvNonEmpty(key, defaultValue string) string {
+	if value, exists := os.LookupEnv(key); exists {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+		return defaultValue
 	}
 	return defaultValue
 }

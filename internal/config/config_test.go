@@ -80,8 +80,8 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.AI.GeminiModel != "gemini-3-flash-preview" {
 		t.Errorf("expected AI.GeminiModel to be gemini-3-flash-preview, got %q", cfg.AI.GeminiModel)
 	}
-	if cfg.AI.GeminiThinkingLevel != "low" {
-		t.Errorf("expected AI.GeminiThinkingLevel to be low, got %q", cfg.AI.GeminiThinkingLevel)
+	if cfg.AI.GeminiThinkingLevel != "minimal" {
+		t.Errorf("expected AI.GeminiThinkingLevel to be minimal, got %q", cfg.AI.GeminiThinkingLevel)
 	}
 	if cfg.AI.GeminiThinkingBudget != 0 {
 		t.Errorf("expected AI.GeminiThinkingBudget to be 0, got %d", cfg.AI.GeminiThinkingBudget)
