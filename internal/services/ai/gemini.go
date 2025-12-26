@@ -63,7 +63,7 @@ func NewService(cfg *config.Config, db services.DBConn) *Service {
 	}
 
 	temperature := cfg.AI.GeminiTemperature
-	if temperature <= 0 {
+	if temperature < 0 {
 		temperature = 0.8
 	}
 
@@ -80,7 +80,8 @@ func NewService(cfg *config.Config, db services.DBConn) *Service {
 		apiKey: cfg.AI.GeminiAPIKey,
 		// Some Gemini models (especially previews) can take longer than 30s.
 		// Keep this in sync with the server write timeout and frontend request timeout.
-		client:          &http.Client{Timeout: 90 * time.Second},
+		// Leave some slack so the server can return a JSON error/response before write deadlines.
+		client:          &http.Client{Timeout: 85 * time.Second},
 		db:              db,
 		stub:            cfg.AI.Stub,
 		model:           model,
@@ -128,12 +129,12 @@ func (s *Service) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uu
 	return remaining, nil
 }
 
-func (s *Service) RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) error {
+func (s *Service) RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (bool, error) {
 	if s.db == nil {
-		return ErrAIUsageTrackingUnavailable
+		return false, ErrAIUsageTrackingUnavailable
 	}
 
-	_, err := s.db.Exec(ctx, `
+	tag, err := s.db.Exec(ctx, `
 		UPDATE users
 		SET ai_free_generations_used = GREATEST(ai_free_generations_used - 1, 0)
 		WHERE id = $1
@@ -145,9 +146,12 @@ func (s *Service) RefundUnverifiedFreeGeneration(ctx context.Context, userID uui
 			"error":   err.Error(),
 			"user_id": userID.String(),
 		})
-		return ErrAIUsageTrackingUnavailable
+		return false, ErrAIUsageTrackingUnavailable
 	}
-	return nil
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	return true, nil
 }
 
 type GoalPrompt struct {

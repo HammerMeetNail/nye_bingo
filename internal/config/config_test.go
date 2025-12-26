@@ -72,6 +72,29 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Redis.DB != 0 {
 		t.Errorf("expected Redis.DB to be 0, got %d", cfg.Redis.DB)
 	}
+
+	// AI defaults
+	if cfg.AI.GeminiAPIKey != "" {
+		t.Errorf("expected AI.GeminiAPIKey to be empty, got %q", cfg.AI.GeminiAPIKey)
+	}
+	if cfg.AI.GeminiModel != "gemini-3-flash-preview" {
+		t.Errorf("expected AI.GeminiModel to be gemini-3-flash-preview, got %q", cfg.AI.GeminiModel)
+	}
+	if cfg.AI.GeminiThinkingLevel != "low" {
+		t.Errorf("expected AI.GeminiThinkingLevel to be low, got %q", cfg.AI.GeminiThinkingLevel)
+	}
+	if cfg.AI.GeminiThinkingBudget != 0 {
+		t.Errorf("expected AI.GeminiThinkingBudget to be 0, got %d", cfg.AI.GeminiThinkingBudget)
+	}
+	if cfg.AI.GeminiTemperature != 0.8 {
+		t.Errorf("expected AI.GeminiTemperature to be 0.8, got %v", cfg.AI.GeminiTemperature)
+	}
+	if cfg.AI.GeminiMaxOutputTokens != 4096 {
+		t.Errorf("expected AI.GeminiMaxOutputTokens to be 4096, got %d", cfg.AI.GeminiMaxOutputTokens)
+	}
+	if cfg.AI.Stub != false {
+		t.Error("expected AI.Stub to be false")
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {

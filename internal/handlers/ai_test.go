@@ -20,7 +20,7 @@ import (
 type MockAIService struct {
 	GenerateGoalsFunc func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
 	ConsumeFunc       func(ctx context.Context, userID uuid.UUID) (int, error)
-	RefundFunc        func(ctx context.Context, userID uuid.UUID) error
+	RefundFunc        func(ctx context.Context, userID uuid.UUID) (bool, error)
 	GenerateCalls     int
 	ConsumeCalls      int
 	RefundCalls       int
@@ -42,10 +42,10 @@ func (m *MockAIService) ConsumeUnverifiedFreeGeneration(ctx context.Context, use
 	return m.ConsumeFunc(ctx, userID)
 }
 
-func (m *MockAIService) RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) error {
+func (m *MockAIService) RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (bool, error) {
 	m.RefundCalls++
 	if m.RefundFunc == nil {
-		return nil
+		return false, nil
 	}
 	return m.RefundFunc(ctx, userID)
 }
@@ -180,8 +180,8 @@ func TestGenerate(t *testing.T) {
 					ConsumeFunc: func(ctx context.Context, userID uuid.UUID) (int, error) {
 						return 4, nil
 					},
-					RefundFunc: func(ctx context.Context, userID uuid.UUID) error {
-						return nil
+					RefundFunc: func(ctx context.Context, userID uuid.UUID) (bool, error) {
+						return true, nil
 					},
 					GenerateGoalsFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
 						return nil, ai.UsageStats{}, ai.ErrAIProviderUnavailable

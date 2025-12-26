@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -14,7 +15,7 @@ import (
 type AIService interface {
 	GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
 	ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error)
-	RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) error
+	RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
 type AIHandler struct {
@@ -159,7 +160,9 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if consumedFree && (errors.Is(err, ai.ErrAIProviderUnavailable) || errors.Is(err, ai.ErrAINotConfigured) || errors.Is(err, ai.ErrRateLimitExceeded)) {
-			if refundErr := h.service.RefundUnverifiedFreeGeneration(r.Context(), user.ID); refundErr == nil && freeRemaining != nil {
+			refundCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			if refunded, refundErr := h.service.RefundUnverifiedFreeGeneration(refundCtx, user.ID); refundErr == nil && refunded && freeRemaining != nil {
 				freeRemainingValue++
 			}
 		}

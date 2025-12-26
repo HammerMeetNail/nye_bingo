@@ -197,9 +197,10 @@ yearofbingo/
 | `REDIS_DB` | Redis database number | `0` |
 | `GEMINI_API_KEY` | Gemini API key (server-side only) | (empty) |
 | `GEMINI_MODEL` | Gemini model name (server-side only) | `gemini-3-flash-preview` |
-| `GEMINI_THINKING_BUDGET` | Gemini thinking budget (0 disables) | `0` |
+| `GEMINI_THINKING_LEVEL` | Gemini 3 thinking level (minimal/low/medium/high) | `low` |
+| `GEMINI_THINKING_BUDGET` | Gemini 2.5 thinking budget (0 disables) | `0` |
 | `GEMINI_TEMPERATURE` | Gemini sampling temperature | `0.8` |
-| `GEMINI_MAX_OUTPUT_TOKENS` | Gemini max output tokens | `6000` |
+| `GEMINI_MAX_OUTPUT_TOKENS` | Gemini max output tokens | `4096` |
 | `AI_RATE_LIMIT` | AI generations per hour per user | `10` (prod), `100` (dev) |
 | `EMAIL_PROVIDER` | Email provider (resend, smtp, console) | `console` |
 | `RESEND_API_KEY` | Resend API key (for production) | - |
