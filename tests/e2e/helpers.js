@@ -217,7 +217,7 @@ function getMessageBody(message) {
   return message.Text || message.text || message.HTML || message.html || message.Body || message.body || '';
 }
 
-async function waitForEmail(request, { to, subject, timeout = MAILPIT_WAIT_TIMEOUT_MS } = {}) {
+async function waitForEmail(request, { to, subject, timeout = MAILPIT_WAIT_TIMEOUT_MS, after = null } = {}) {
   const start = Date.now();
   const lowerTo = String(to || '').toLowerCase();
   const lowerSubject = subject ? String(subject).toLowerCase() : '';
@@ -234,6 +234,10 @@ async function waitForEmail(request, { to, subject, timeout = MAILPIT_WAIT_TIMEO
 
       const messages = (data && (data.messages || data.Messages || data.items)) || [];
       const filtered = messages.filter((message) => {
+        if (typeof after === 'number' && after > 0) {
+          const createdAt = getMessageCreated(message);
+          if (!createdAt || createdAt <= after) return false;
+        }
         const recipients = getMessageRecipients(message).map((recipient) => recipient.toLowerCase());
         const matchesRecipient = !lowerTo || recipients.some((recipient) => recipient.includes(lowerTo));
         const matchesSubject = !lowerSubject || getMessageSubject(message).toLowerCase().includes(lowerSubject);
@@ -260,7 +264,7 @@ async function waitForEmail(request, { to, subject, timeout = MAILPIT_WAIT_TIMEO
   throw new Error(`Timed out waiting for email${to ? ` to ${to}` : ''}${subject ? ` with subject ${subject}` : ''}`);
 }
 
-async function expectNoEmail(request, { to, subject, timeout = 3000 } = {}) {
+async function expectNoEmail(request, { to, subject, timeout = 3000, after = null } = {}) {
   const start = Date.now();
   const lowerTo = String(to || '').toLowerCase();
   const lowerSubject = subject ? String(subject).toLowerCase() : '';
@@ -277,6 +281,10 @@ async function expectNoEmail(request, { to, subject, timeout = 3000 } = {}) {
 
       const messages = (data && (data.messages || data.Messages || data.items)) || [];
       const filtered = messages.filter((message) => {
+        if (typeof after === 'number' && after > 0) {
+          const createdAt = getMessageCreated(message);
+          if (!createdAt || createdAt <= after) return false;
+        }
         const recipients = getMessageRecipients(message).map((recipient) => recipient.toLowerCase());
         const matchesRecipient = !lowerTo || recipients.some((recipient) => recipient.includes(lowerTo));
         const matchesSubject = !lowerSubject || getMessageSubject(message).toLowerCase().includes(lowerSubject);

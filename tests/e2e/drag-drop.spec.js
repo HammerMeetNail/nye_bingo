@@ -27,7 +27,10 @@ test('dragging items reorders without moving FREE cell', async ({ page }, testIn
   const targetCell = page.locator('.bingo-cell--empty').first();
   const targetPosition = await targetCell.getAttribute('data-position');
 
-  await sourceCell.dragTo(targetCell);
+  const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+  await sourceCell.dispatchEvent('dragstart', { dataTransfer });
+  await targetCell.dispatchEvent('drop', { dataTransfer });
+  await sourceCell.dispatchEvent('dragend', { dataTransfer });
 
   await expect(page.locator(`.bingo-cell[data-position="${targetPosition}"] .bingo-cell-content`)).toHaveText(sourceText);
   await expect(page.locator(`.bingo-cell[data-position="${sourcePosition}"]`)).toHaveClass(/bingo-cell--empty/);

@@ -4,6 +4,12 @@ const isHeadless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || 'playwright-report';
+const workers = (() => {
+  const raw = process.env.PLAYWRIGHT_WORKERS;
+  if (!raw) return 1;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+})();
 
 module.exports = defineConfig({
   testDir: 'tests/e2e',
@@ -12,7 +18,7 @@ module.exports = defineConfig({
     timeout: 10000,
   },
   fullyParallel: false,
-  workers: 1,
+  workers,
   outputDir,
   reporter: [
     ['list'],

@@ -3,20 +3,19 @@ const {
   buildUser,
   register,
   expectToast,
-  clearMailpit,
   waitForEmail,
   expectNoEmail,
 } = require('./helpers');
 
 test('support form sends an email to support', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'support');
-  await clearMailpit(request);
 
   await page.goto('/#support');
   await page.fill('#support-email', user.email);
   await page.selectOption('#support-category', 'Bug Report');
   const message = 'Support request message for E2E coverage.';
   await page.fill('#support-message', message);
+  const after = Date.now();
   await page.getByRole('button', { name: 'Send Message' }).click();
 
   await expectToast(page, 'message has been sent');
@@ -24,6 +23,7 @@ test('support form sends an email to support', async ({ page, request }, testInf
   const email = await waitForEmail(request, {
     to: 'support@yearofbingo.com',
     subject: '[Support] Bug Report',
+    after,
   });
   const body = email.Text || email.text || email.HTML || email.html || '';
   expect(body).toContain(user.email);
@@ -32,7 +32,6 @@ test('support form sends an email to support', async ({ page, request }, testInf
 
 test('support form validates required fields and message length', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'support');
-  await clearMailpit(request);
 
   await page.goto('/#support');
   await page.fill('#support-email', user.email);
@@ -42,10 +41,11 @@ test('support form validates required fields and message length', async ({ page,
     const form = document.getElementById('support-form');
     if (form) form.noValidate = true;
   });
+  const after = Date.now();
   await page.getByRole('button', { name: 'Send Message' }).click();
 
   await expectToast(page, 'Message must be at least 10 characters');
-  await expectNoEmail(request, { to: 'support@yearofbingo.com', timeout: 2000 });
+  await expectNoEmail(request, { to: 'support@yearofbingo.com', timeout: 2000, after });
 });
 
 test('support form pre-fills email when logged in', async ({ page }, testInfo) => {

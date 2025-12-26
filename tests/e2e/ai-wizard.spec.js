@@ -3,7 +3,6 @@ const {
   buildUser,
   register,
   expectToast,
-  clearMailpit,
   waitForEmail,
   extractTokenFromEmail,
 } = require('./helpers');
@@ -115,18 +114,19 @@ test('AI wizard requires verification after free generations are used', async ({
 
 test('AI wizard continues after free limit for verified users', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'aiver');
-  await clearMailpit(request);
   await register(page, user);
 
   await page.goto('/#dashboard');
   const banner = page.locator('.verification-banner');
   await expect(banner).toBeVisible();
+  const after = Date.now();
   await banner.getByRole('button', { name: 'Resend verification email' }).click();
   await expectToast(page, 'Verification email sent');
 
   const message = await waitForEmail(request, {
     to: user.email,
     subject: 'Verify your Year of Bingo account',
+    after,
   });
   const token = extractTokenFromEmail(message, 'verify-email');
 
