@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const {
   buildUser,
+  register,
   expectToast,
   clearMailpit,
   waitForEmail,
@@ -45,4 +46,12 @@ test('support form validates required fields and message length', async ({ page,
 
   await expectToast(page, 'Message must be at least 10 characters');
   await expectNoEmail(request, { to: 'support@yearofbingo.com', timeout: 2000 });
+});
+
+test('support form pre-fills email when logged in', async ({ page }, testInfo) => {
+  const user = buildUser(testInfo, 'support');
+  await register(page, user);
+
+  await page.goto('/#support');
+  await expect(page.locator('#support-email')).toHaveValue(user.email);
 });

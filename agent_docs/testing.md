@@ -36,6 +36,10 @@ make e2e BROWSERS=firefox,webkit
 
 Artifacts are written to `test-results` and `playwright-report`.
 
+Notes:
+- `make e2e` runs with `AI_STUB=1` so AI wizard flows are deterministic without external APIs.
+- Leaving `AI_STUB` unset (or empty) keeps the default behavior (real AI, if configured).
+
 ### Go Tests
 Unit tests are in `*_test.go` files alongside the source code:
 - `internal/config/config_test.go` - Configuration loading tests

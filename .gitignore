@@ -54,6 +54,7 @@ playwright-report/
 
 # Temporary files
 /tmp/
+temp/
 *.tmp
 *.temp
 .cache/

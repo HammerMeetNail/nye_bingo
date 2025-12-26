@@ -117,10 +117,17 @@ async function fillCardWithSuggestions(page) {
   await expect(page.locator('.editor-actions').getByRole('button', { name: /Finalize Card/i })).toBeEnabled();
 }
 
-async function finalizeCard(page) {
+async function finalizeCard(page, { visibleToFriends = true } = {}) {
   await page.locator('.editor-actions').getByRole('button', { name: /Finalize Card/i }).click();
   const modal = page.locator('#modal-overlay');
   await expect(modal).toHaveClass(/modal-overlay--visible/);
+  if (!visibleToFriends) {
+    const checkbox = modal.locator('#finalize-visibility');
+    await expect(checkbox).toBeVisible();
+    if (await checkbox.isChecked()) {
+      await checkbox.uncheck();
+    }
+  }
   await modal.getByRole('button', { name: 'Finalize Card' }).click();
   await expect(page.locator('.finalized-card-view')).toBeVisible();
 }
