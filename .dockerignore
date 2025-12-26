@@ -15,13 +15,20 @@ web/static/dist/
 server
 *.exe
 
+# Local caches
+.cache/
+.gocache/
+
 # Test artifacts
 coverage.out
 coverage.html
+test-results/
+playwright-report/
 
 # Local files
 *.local
 .env.local
+temp/
 
 # Plans and docs
 plans/

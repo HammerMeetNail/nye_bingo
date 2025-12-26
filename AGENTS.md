@@ -14,6 +14,18 @@ Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE s
 - **Start Dev**: `make local` (or `podman compose up`)
 - **Test**: `./scripts/test.sh` (Runs Go + JS tests in container)
 - **Lint**: `make lint`
+- **E2E**: `make e2e` (Playwright runs in a container; uses Mailpit via SMTP for email flows)
+- **Test Coverage**: All changes must update and pass tests without decreasing coverage.
+
+## Playwright E2E Notes
+- Specs live in `tests/e2e/*.spec.js`; shared helpers live in `tests/e2e/helpers.js`.
+- `make e2e` is destructive (drops volumes), seeds data, and runs Playwright in a container (Mailpit is used for email flows).
+- E2E runs with `AI_STUB=1` by default so AI wizard flows are deterministic (no network/API keys).
+- Prefer user-like interactions (click/keyboard) over calling internal globals (`App.*`) from tests.
+- When adding new E2E scenarios, update the coverage outline in `plans/playwright.md`.
+
+## CI Notes
+- CI runs Playwright E2E via Docker Compose (no Podman), using the Playwright container and Mailpit (SMTP) for email verification/magic-link/reset flows.
 
 ## Documentation Map & Constraints
 You are **REQUIRED** to read the specific documentation below if your task involves these keywords:

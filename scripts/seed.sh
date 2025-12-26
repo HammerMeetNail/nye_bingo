@@ -187,7 +187,7 @@ accept_friend_request() {
 
 # Get pending friend requests
 get_pending_requests() {
-    curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends" | jq -r '.requests[0].id // empty'
+    curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends" | jq -r '(.requests // []) | .[0].id // empty' 2>/dev/null || true
 }
 
 # React to item
@@ -206,7 +206,7 @@ react_to_item() {
 # Get friend's card and items
 get_friend_card_items() {
     local friendship_id="$1"
-    curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends/$friendship_id/card" | jq -r '.card.items[] | select(.is_completed == true) | .id'
+    curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends/$friendship_id/card" | jq -r '(.card.items // [])[] | select(.is_completed == true) | .id' 2>/dev/null || true
 }
 
 # Main seeding logic
@@ -563,7 +563,7 @@ log_info "Bob adding reactions to Alice's items..."
 login_user "bob@test.com" "Password1" > /dev/null
 
 # Get friendship ID for Alice
-ALICE_FRIENDSHIP=$(curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends" | jq -r '.friends[0].id')
+ALICE_FRIENDSHIP=$(curl -s -b "$COOKIE_JAR" "$BASE_URL/api/friends" | jq -r '(.friends // []) | .[0].id // empty' 2>/dev/null || true)
 
 if [ -n "$ALICE_FRIENDSHIP" ]; then
     EMOJIS=("🎉" "👏" "🔥" "❤️" "⭐")
@@ -572,10 +572,12 @@ if [ -n "$ALICE_FRIENDSHIP" ]; then
     i=0
     for item_id in $COMPLETED_ITEMS; do
         emoji="${EMOJIS[$((i % 5))]}"
-        react_to_item "$item_id" "$emoji"
-        ((i++))
+        react_to_item "$item_id" "$emoji" || true
+        i=$((i + 1))
     done
     log_info "Added reactions to ${i} items"
+else
+    log_warn "No friendship found for Bob; skipping reactions"
 fi
 logout_user
 

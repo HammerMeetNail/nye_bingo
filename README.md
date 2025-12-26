@@ -123,6 +123,34 @@ go test ./...
 node web/static/js/tests/runner.js
 ```
 
+#### E2E (Playwright)
+
+Playwright runs in a container (no npm install on the host) and uses Mailpit (SMTP) for email flows.
+
+```bash
+# Full E2E run (fresh DB, seeds, Firefox by default)
+make e2e
+
+# Run other browsers
+make e2e BROWSERS=chromium
+make e2e BROWSERS=webkit
+
+# Headed mode
+make e2e HEADLESS=false
+```
+
+Artifacts:
+- HTML report: `playwright-report/`
+- Raw results: `test-results/`
+
+Notes:
+- E2E runs with `AI_STUB=1` by default so AI wizard tests are deterministic (no network/API keys).
+- Specs live in `tests/e2e/*.spec.js` (with shared helpers in `tests/e2e/helpers.js`).
+- Seeded-data tests rely on the seeded baseline created by `scripts/seed.sh` (see `tests/e2e/seeded-data.spec.js`).
+- For a current “coverage map” of workflows, see `plans/playwright.md`.
+
+CI runs the E2E suite headless using Docker Compose and the Playwright container (Mailpit is used for verification/magic-link/reset tests).
+
 ## Project Structure
 
 ```

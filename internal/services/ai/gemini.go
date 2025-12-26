@@ -31,6 +31,7 @@ type Service struct {
 	apiKey string
 	client *http.Client
 	db     services.DBConn
+	stub   bool
 }
 
 func NewService(cfg *config.Config, db services.DBConn) *Service {
@@ -38,6 +39,7 @@ func NewService(cfg *config.Config, db services.DBConn) *Service {
 		apiKey: cfg.AI.GeminiAPIKey,
 		client: &http.Client{Timeout: 30 * time.Second},
 		db:     db,
+		stub:   cfg.AI.Stub,
 	}
 }
 
@@ -154,6 +156,30 @@ type geminiUsage struct {
 
 func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt GoalPrompt) ([]string, UsageStats, error) {
 	start := time.Now()
+
+	count := prompt.Count
+	if count == 0 {
+		count = 24
+	}
+	if count < 1 || count > 24 {
+		return nil, UsageStats{}, fmt.Errorf("%w: invalid goal count %d", ErrAIProviderUnavailable, count)
+	}
+
+	if s.stub {
+		goals := stubGoals(prompt)
+		if len(goals) < count {
+			return nil, UsageStats{}, fmt.Errorf("%w: expected %d goals, got %d", ErrAIProviderUnavailable, count, len(goals))
+		}
+		goals = goals[:count]
+
+		stats := UsageStats{
+			Model:    "stub",
+			Duration: time.Since(start),
+		}
+		s.logUsageWithTimeout(userID, stats, "success")
+		return goals, stats, nil
+	}
+
 	if strings.TrimSpace(s.apiKey) == "" {
 		logging.Warn("Gemini API key missing; AI generation unavailable", map[string]interface{}{
 			"user_id": userID.String(),
@@ -170,14 +196,6 @@ func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt Go
 
 	// Construct the prompt with specific style rules
 	topic := prompt.Category
-
-	count := prompt.Count
-	if count == 0 {
-		count = 24
-	}
-	if count < 1 || count > 24 {
-		return nil, UsageStats{}, fmt.Errorf("%w: invalid goal count %d", ErrAIProviderUnavailable, count)
-	}
 
 	difficulty := prompt.Difficulty
 	if difficulty == "" {
@@ -439,4 +457,205 @@ func sanitizeInput(input string) string {
 func escapeXMLTags(input string) string {
 	replacer := strings.NewReplacer("<", "＜", ">", "＞")
 	return replacer.Replace(input)
+}
+
+func rotateGoals(goals []string, offset int) []string {
+	if len(goals) == 0 {
+		return nil
+	}
+	n := offset % len(goals)
+	if n < 0 {
+		n += len(goals)
+	}
+	if n == 0 {
+		return append([]string(nil), goals...)
+	}
+	out := make([]string, 0, len(goals))
+	out = append(out, goals[n:]...)
+	out = append(out, goals[:n]...)
+	return out
+}
+
+func stubGoals(prompt GoalPrompt) []string {
+	category := strings.ToLower(strings.TrimSpace(prompt.Category))
+	if category == "" {
+		category = "travel"
+	}
+
+	goals := stubGoalsByCategory[category]
+	if len(goals) == 0 {
+		goals = stubGoalsByCategory["travel"]
+	}
+
+	switch strings.ToLower(strings.TrimSpace(prompt.Difficulty)) {
+	case "easy":
+		goals = rotateGoals(goals, 0)
+	case "medium":
+		goals = rotateGoals(goals, 8)
+	case "hard":
+		goals = rotateGoals(goals, 16)
+	default:
+		goals = rotateGoals(goals, 0)
+	}
+
+	return goals
+}
+
+var stubGoalsByCategory = map[string][]string{
+	"hobbies": {
+		"Sketch Sprint: Sketch a small object for five minutes.",
+		"Chord Drill: Practice three chords for ten minutes.",
+		"Origami Fold: Fold a simple paper crane.",
+		"Recipe Swap: Cook a new recipe from a cookbook.",
+		"Photo Study: Take five photos of textures.",
+		"Poem Prompt: Write a four-line poem.",
+		"Brush Practice: Paint a tiny color gradient.",
+		"Language Bite: Learn ten words in a new language.",
+		"Puzzle Break: Finish a small puzzle section.",
+		"Craft Fix: Repair or mend one small item.",
+		"Flavor Test: Taste two spices and compare notes.",
+		"Read Chapter: Read one chapter of a new book.",
+		"Beat Loop: Make a short rhythm pattern.",
+		"Knots Trial: Learn one useful knot.",
+		"Code Kata: Solve one tiny coding exercise.",
+		"Garden Check: Water and prune one plant.",
+		"Calligraphy Line: Write one line neatly by hand.",
+		"Design Doodle: Draw three logo ideas.",
+		"Memory Game: Memorize a short quote.",
+		"Board Setup: Set up a solo board game turn.",
+		"Color Palette: Pick a 5-color palette.",
+		"Clay Shape: Shape a small figure from clay.",
+		"Practice Loop: Repeat one skill for 15 minutes.",
+		"Creative Share: Share a creation with a friend.",
+	},
+	"health": {
+		"Hydration Check: Drink a full glass of water.",
+		"Stretch Break: Do a five-minute stretch.",
+		"Walk Loop: Take a ten-minute walk.",
+		"Breath Reset: Do ten slow breaths.",
+		"Veggie Add: Add one vegetable to a meal.",
+		"Posture Fix: Sit tall for five minutes.",
+		"Protein Pick: Add a protein snack today.",
+		"Sunlight Step: Get five minutes of daylight.",
+		"Screen Pause: Take a screen break for 15 minutes.",
+		"Mobility Flow: Do a quick mobility routine.",
+		"Sleep Plan: Set a bedtime alarm.",
+		"Mindful Bite: Eat one snack without distractions.",
+		"Core Minute: Hold a plank for 30 seconds.",
+		"Pulse Raise: Do 20 jumping jacks.",
+		"Food Log: Write down one meal.",
+		"Calm Walk: Walk slowly and notice sounds.",
+		"Neck Release: Roll shoulders ten times.",
+		"Gratitude Note: Write one health win.",
+		"Step Count: Add 1,000 steps today.",
+		"Balanced Plate: Build one colorful plate.",
+		"Water Swap: Choose water over soda once.",
+		"Warmup Set: Do a short warmup set.",
+		"Cooldown Breath: Do a one-minute cooldown.",
+		"Early Night: Go to bed 15 minutes earlier.",
+	},
+	"career": {
+		"Resume Tweak: Improve one bullet point.",
+		"Inbox Sweep: Delete ten old emails.",
+		"Skill Study: Learn one new shortcut.",
+		"Portfolio Pass: Add one example project.",
+		"Meeting Prep: Write an agenda in advance.",
+		"Doc Cleanup: Fix formatting in one document.",
+		"Network Note: Send one friendly check-in.",
+		"Job Scan: Save one interesting role.",
+		"Deep Work: Do 25 minutes focused work.",
+		"Goal Review: Write a weekly objective.",
+		"Task Trim: Remove one low-value task.",
+		"Read Article: Read one industry article.",
+		"Write Outline: Outline a small proposal.",
+		"Learn Tool: Watch one short tutorial.",
+		"PR Polish: Improve one pull request.",
+		"Bug Hunt: Fix one small issue.",
+		"Calendar Block: Block 30 minutes for learning.",
+		"Status Update: Send a clear progress note.",
+		"Template Build: Create one reusable template.",
+		"Feedback Ask: Request feedback on one thing.",
+		"Plan Sprint: Plan tomorrow’s top three tasks.",
+		"Note System: Organize one folder or notebook.",
+		"Practice Pitch: Say a 30-second intro aloud.",
+		"Celebrate Win: Record one accomplishment.",
+	},
+	"social": {
+		"Quick Call: Call a friend for ten minutes.",
+		"Invite Plan: Invite someone to coffee.",
+		"Kind Text: Send a thoughtful message.",
+		"Compliment Drop: Compliment someone sincerely.",
+		"Game Night: Suggest a game night date.",
+		"Photo Share: Share a favorite photo memory.",
+		"New Meetup: Browse one local event listing.",
+		"Group Note: Post a friendly group message.",
+		"Thank You: Write a short thank-you note.",
+		"Friend Walk: Ask someone to walk together.",
+		"Check-In: Ask a friend one good question.",
+		"Plan Lunch: Set a lunch plan for next week.",
+		"Introduce Two: Introduce two friends by message.",
+		"Listen First: Ask and listen without interrupting.",
+		"Community Hello: Say hi to a neighbor.",
+		"Share Link: Share one helpful resource.",
+		"Celebration: Congratulate someone on a win.",
+		"Memory Prompt: Ask about a childhood story.",
+		"New Contact: Save one new contact detail.",
+		"Support Offer: Offer help on one small task.",
+		"Host Idea: Draft a simple hosting plan.",
+		"RSVP: RSVP to one invitation.",
+		"Follow Up: Follow up with someone once.",
+		"Fun Plan: Plan one fun outing.",
+	},
+	"travel": {
+		"Sunrise Walk: Catch a sunrise at a nearby park.",
+		"Local Mural Hunt: Find and photograph a neighborhood mural.",
+		"Library Quest: Check out a book from a new genre.",
+		"Trail Snapshot: Take a photo at the closest nature trail.",
+		"City Stroll: Walk a new street and note one hidden gem.",
+		"Market Mission: Try a new snack from a local market.",
+		"Postcard Moment: Write a postcard to a friend.",
+		"Budget Adventure: Visit a free museum or gallery.",
+		"Coffee Crawl: Sample a drink from a new cafe.",
+		"Park Picnic: Pack a small picnic for a local park.",
+		"Sunset Watch: Watch the sunset from a scenic spot.",
+		"Photo Challenge: Capture three colors on a walk.",
+		"History Stop: Read a local history plaque.",
+		"Neighborhood Loop: Walk a loop without using a map.",
+		"Street Art Spot: Find a sticker or stencil piece.",
+		"Mini Hike: Hike a short trail within 30 minutes.",
+		"Creative Break: Sketch a scene for five minutes.",
+		"Music Moment: Listen to a new album start-to-finish.",
+		"Local Treat: Buy a dessert you have never tried.",
+		"Scenic Bench: Sit at a view and breathe for 10 minutes.",
+		"Fresh Air Goal: Spend 20 minutes outside today.",
+		"Kindness Note: Leave a nice note for someone.",
+		"Random Detour: Take a different route home once.",
+		"New Routine: Start a simple morning stretch.",
+	},
+	"mix": {
+		"Sunrise Walk: Catch a sunrise at a nearby park.",
+		"Stretch Break: Do a five-minute stretch.",
+		"Resume Tweak: Improve one bullet point.",
+		"Kind Text: Send a thoughtful message.",
+		"Recipe Swap: Cook a new recipe from a cookbook.",
+		"Walk Loop: Take a ten-minute walk.",
+		"Network Note: Send one friendly check-in.",
+		"Local Mural Hunt: Find and photograph a neighborhood mural.",
+		"Deep Work: Do 25 minutes focused work.",
+		"Veggie Add: Add one vegetable to a meal.",
+		"Invite Plan: Invite someone to coffee.",
+		"Photo Study: Take five photos of textures.",
+		"Puzzle Break: Finish a small puzzle section.",
+		"Hydration Check: Drink a full glass of water.",
+		"Read Chapter: Read one chapter of a new book.",
+		"Plan Lunch: Set a lunch plan for next week.",
+		"Mobility Flow: Do a quick mobility routine.",
+		"Doc Cleanup: Fix formatting in one document.",
+		"Flavor Test: Taste two spices and compare notes.",
+		"Sunset Watch: Watch the sunset from a scenic spot.",
+		"Breath Reset: Do ten slow breaths.",
+		"Status Update: Send a clear progress note.",
+		"Gratitude Note: Write one health win.",
+		"Fun Plan: Plan one fun outing.",
+	},
 }

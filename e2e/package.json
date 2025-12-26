@@ -1,0 +1,9 @@
+{
+  "name": "yearofbingo-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Playwright E2E tests for Year of Bingo",
+  "devDependencies": {
+    "@playwright/test": "1.49.0"
+  }
+}

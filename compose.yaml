@@ -27,6 +27,7 @@ services:
       - EMAIL_FROM_NAME=Year of Bingo
       - APP_BASE_URL=http://localhost:8080
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - AI_STUB=${AI_STUB}
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,6 +46,30 @@ services:
         - action: sync
           path: ./web
           target: /app/web
+
+  playwright:
+    build:
+      context: .
+      dockerfile: Containerfile.playwright
+    profiles:
+      - e2e
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      - PLAYWRIGHT_BASE_URL=${PLAYWRIGHT_BASE_URL:-http://app:8080}
+      - PLAYWRIGHT_HEADLESS=${PLAYWRIGHT_HEADLESS:-true}
+      - PLAYWRIGHT_BROWSERS=${PLAYWRIGHT_BROWSERS:-firefox}
+      - PLAYWRIGHT_WORKERS=${PLAYWRIGHT_WORKERS:-1}
+      - PWDEBUG=${PWDEBUG:-}
+      - PLAYWRIGHT_OUTPUT_DIR=${PLAYWRIGHT_OUTPUT_DIR:-/test-results}
+      - PLAYWRIGHT_REPORT_DIR=${PLAYWRIGHT_REPORT_DIR:-/playwright-report}
+    volumes:
+      - ./:/app:ro
+      - ./test-results:/test-results
+      - ./playwright-report:/playwright-report
+    working_dir: /app
+    shm_size: "1gb"
 
   postgres:
     image: docker.io/library/postgres:16-alpine

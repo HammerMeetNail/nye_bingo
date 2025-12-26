@@ -39,6 +39,7 @@ type RedisConfig struct {
 
 type AIConfig struct {
 	GeminiAPIKey string
+	Stub         bool
 }
 
 type EmailConfig struct {
@@ -96,6 +97,7 @@ func Load() (*Config, error) {
 		},
 		AI: AIConfig{
 			GeminiAPIKey: getEnv("GEMINI_API_KEY", ""),
+			Stub:         getEnvBool("AI_STUB", false),
 		},
 	}
 

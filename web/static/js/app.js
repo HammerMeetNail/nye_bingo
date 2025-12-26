@@ -1210,6 +1210,9 @@ const App = {
               <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
             </span>
             ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
+            <button class="btn btn-ghost btn-sm dashboard-delete-btn" style="color: var(--color-danger);" onclick="event.stopPropagation(); App.deleteCard('${card.id}')" aria-label="Delete card" title="Delete card">
+              <i class="fas fa-trash"></i>
+            </button>
           </div>
         </div>
         <a href="${cardLink}" style="text-decoration: none; display: block;">
@@ -1497,8 +1500,9 @@ const App = {
                 The AI Goal Wizard is available after you create an account.
               </div>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <a href="#register" class="btn btn-primary btn-sm">Create Account</a>
-                <a href="#login" class="btn btn-secondary btn-sm">Login</a>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="App.showAIAuthModal()" style="display: flex; align-items: center; gap: 0.35rem;">
+                  <span>✨</span> Generate with AI Wizard
+                </button>
               </div>
             </div>
           </div>

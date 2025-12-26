@@ -48,8 +48,13 @@ Thumbs.db
 # Generated hashed assets (built during container build)
 web/static/dist/
 
+# Playwright artifacts
+test-results/
+playwright-report/
+
 # Temporary files
 /tmp/
+temp/
 *.tmp
 *.temp
 .cache/

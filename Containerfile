@@ -16,8 +16,9 @@ COPY . .
 # Build hashed assets
 RUN chmod +x scripts/build-assets.sh && ./scripts/build-assets.sh
 
-# Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o server ./cmd/server
+# Build the application (keep Go build cache out of the final layer)
+RUN CGO_ENABLED=0 GOOS=linux GOCACHE=/tmp/go-build go build -ldflags="-w -s" -o server ./cmd/server \
+    && rm -rf /tmp/go-build
 
 # Runtime stage
 FROM docker.io/library/alpine:3.19

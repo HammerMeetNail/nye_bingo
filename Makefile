@@ -1,4 +1,4 @@
-.PHONY: local down build up logs test lint clean assets
+.PHONY: local down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend
 
 # Run full local rebuild: down, build assets, build container, up in background
 local: down assets build up
@@ -28,6 +28,14 @@ logs:
 test:
 	./scripts/test.sh
 
+# Run Go tests only
+test-backend:
+	./scripts/test.sh --go
+
+# Run JS tests only
+test-frontend:
+	./scripts/test.sh --js
+
 # Run linter
 lint:
 	@chmod -R u+w .cache 2>/dev/null || true
@@ -38,3 +46,15 @@ lint:
 # Clean up everything including volumes
 clean:
 	podman compose down -v
+
+# Run Playwright E2E tests (destructive: resets volumes)
+e2e:
+	./scripts/e2e.sh
+
+# Run Playwright E2E tests in headed mode
+e2e-headed:
+	HEADLESS=false ./scripts/e2e.sh
+
+# Run Playwright E2E tests with debug helpers
+e2e-debug:
+	HEADLESS=false PWDEBUG=1 ./scripts/e2e.sh

@@ -1,0 +1,10 @@
+FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+
+WORKDIR /opt/playwright
+COPY e2e/package.json ./
+RUN npm install
+
+ENV NODE_PATH=/opt/playwright/node_modules
+ENV PATH=/opt/playwright/node_modules/.bin:$PATH
+
+WORKDIR /app
