@@ -4,6 +4,8 @@
 
 The application version is displayed in the footer and must be updated with each release. The version number is located in `web/templates/index.html` in the footer element.
 
+The API spec version must also be kept in sync with releases and is located in `web/static/openapi.yaml` under `info.version`.
+
 **Version format**: Follow [Semantic Versioning](https://semver.org/) (MAJOR.MINOR.PATCH)
 - MAJOR: Breaking changes or significant new features
 - MINOR: New features, backwards compatible
@@ -18,10 +20,12 @@ The application version is displayed in the footer and must be updated with each
 
 When ready to release, follow these steps:
 
-1. **Update the version** in `web/templates/index.html` footer
+1. **Update the version**:
+   - `web/templates/index.html` footer link (uses `vX.Y.Z`)
+   - `web/static/openapi.yaml` `info.version` (uses `X.Y.Z`)
 2. **Commit the change**:
    ```bash
-   git add web/templates/index.html
+   git add web/templates/index.html web/static/openapi.yaml
    git commit -m "Release v1.0.5"
    ```
 3. **Create and push a version tag**:
@@ -30,6 +34,11 @@ When ready to release, follow these steps:
    git push origin main
    git push origin v1.0.5
    ```
+
+Alternatively, you can use the release helper:
+```bash
+make release 1.0.5
+```
 
 This triggers the CI pipeline which will:
 - Build and test the code
