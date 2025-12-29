@@ -1,0 +1,215 @@
+# AI Goal Assist in Card Editor (Post-Create) — Implementation Plan
+
+## Problem
+The AI Goal Wizard solves the “blank canvas” problem when creating a card, but users often get stuck on *1–2 remaining goals* during draft editing. This feature adds lightweight, in-context AI help inside the editor (without forcing a full wizard flow).
+
+## Goals
+- Generate 1–5 *candidate* goals that the user can pick from.
+- Refine an existing goal in-place while preserving its core meaning.
+- Add a new goal quickly (generate → pick → insert into the existing add/edit flows).
+- Keep AI access session-only, preserve unverified gating, rate limiting, and usage logging.
+
+## Non-Goals
+- Editing card metadata (title/category/grid/header/FREE) via AI.
+- Auto-writing multiple cells automatically (that’s the wizard/Fill workflow).
+- Persisting AI drafts/sessions to the database.
+
+## Constraints & Requirements
+- **Session-only** access (no API tokens): same rule as `/api/ai/generate`.
+- Preserve **verified-email gating** (5 free generations for unverified) and return `free_remaining` like the wizard.
+- Preserve Redis-backed **AI rate limiting** (same middleware as `/api/ai/generate`).
+- Preserve **AI usage logging** (`ai_generation_logs`) and do not store user prompt content.
+- Reuse existing **prompt-injection safeguards**: `sanitizeInput` + `escapeXMLTags` boundaries.
+- Deterministic behavior under `AI_STUB=1` for E2E.
+- TDD: new behavior ships with tests; coverage must not decrease.
+
+## UX (Editor)
+This plan avoids a “selected cell” concept (the current editor doesn’t have one for empty cells) and instead hooks AI into existing user actions:
+
+### 1) Refine in “Edit Goal” modal (MVP)
+Entry: click a filled cell → existing “Edit Goal” modal.
+- Add a compact “AI Assist” section below the textarea:
+  - Hint input (optional): “What should change?” (shorter, cheaper, more local, etc.)
+  - Button: “🧙 Refine with AI”
+  - Results: 3 clickable suggestions (radio/list buttons)
+  - Clicking a suggestion replaces the textarea content (user can still edit).
+  - Existing “Save” continues to call the current update-item flow.
+
+Why this helps: users already use this modal when they’re stuck; AI becomes a one-click rewrite tool.
+
+### 2) Generate a new goal into the existing input (MVP)
+Entry: in the editor’s “Suggestions” header (next to current `🧙 AI` and `✨ Fill`):
+- Add a new button: “🧙 AI (1)” (or “🧙 AI Goal”).
+- Clicking opens a small modal:
+  - Hint input (optional): “Theme / constraint”
+  - Button: “Generate”
+  - Shows 5 suggestions; clicking one copies it into the existing `#item-input` and focuses it.
+  - User clicks existing “Add” (same behavior as today).
+
+Why this helps: it accelerates “I need one more goal” without generating 10–24 items.
+
+### 3) (Optional follow-up) Add to a specific empty cell
+If users strongly want “fill this specific square”:
+- Clicking an empty cell opens an “Add Goal” modal (instead of doing nothing).
+- That modal includes the same “AI (new)” UI and uses the existing `POST /api/cards/{id}/items` `position` parameter to insert at that position.
+
+This is intentionally deferred until after MVP feedback (it’s more UI surface + more edge cases with FREE).
+
+## API Contract
+Add a new endpoint:
+- `POST /api/ai/guide` (OpenAPI path: `/ai/guide`)
+
+Request:
+- `mode`: `"refine"` | `"new"`
+- `current_goal`: string (required when `mode=refine`, otherwise omitted/empty)
+- `hint`: string (optional)
+- `count`: integer (optional; default: 3 for refine, 5 for new; max 5)
+- `avoid`: array of strings (optional; existing goal texts/titles to discourage duplicates; truncated server-side)
+
+Response:
+- `goals`: array of strings
+- `free_remaining`: integer (optional, only meaningful for unverified users)
+
+Example:
+```json
+{
+  "mode": "refine",
+  "current_goal": "Visit a local farmer's market",
+  "hint": "make it more budget-friendly",
+  "count": 3,
+  "avoid": ["Market Mission: ...", "Coffee Crawl: ..."]
+}
+```
+
+## Backend Plan (Go)
+
+### 1) Service: generate guide goals
+Implement in `internal/services/ai/gemini.go` following the existing `GenerateGoals` request/parse pattern (no new “generic request runner” required for MVP):
+
+- New types:
+  - `type GuidePrompt struct { Mode string; CurrentGoal string; Hint string; Count int; Avoid []string }`
+- New method:
+  - `GenerateGuideGoals(ctx, userID, prompt) ([]string, UsageStats, error)`
+
+Behavior:
+- Validate:
+  - `mode` must be `refine|new`
+  - `count` defaults by mode, clamp `1..5`
+  - `refine` requires non-empty `current_goal`
+- Sanitize user inputs:
+  - `current_goal`, `hint`, and each `avoid[]` item via `sanitizeInput` + `escapeXMLTags`
+  - Keep all goal text within the existing item limits (<= 500 chars).
+- Prompt rules (match the wizard’s tone and constraints):
+  - Impersonal imperative phrasing, no “you/your/you’re”
+  - Output JSON array of strings (exactly `count` items)
+  - For refine: “preserve meaning” and keep format similar to current goal (“Title: short description” when possible)
+  - For new: produce distinct options; discourage duplicates from `avoid`
+- Determinism under `AI_STUB=1`:
+  - Return stable strings based on `mode/current_goal/hint` and requested `count`.
+- Logging + safety:
+  - Use existing safety settings.
+  - Log usage via the same `logUsageWithTimeout` pattern used by `GenerateGoals`.
+
+### 2) Handler: `POST /api/ai/guide`
+Add `internal/handlers/ai_guide.go` (or extend `internal/handlers/ai.go`) with:
+- Strict JSON decoding (`MaxBytesReader`, `DisallowUnknownFields`)
+- Input limits aligned to item constraints:
+  - `current_goal` and `hint`: max 500 chars each (rune-aware if convenient, but consistent with existing patterns)
+  - `avoid`: max 24 items; each max ~100 chars after trimming (server-side truncate)
+- Authentication required (session-only enforced by middleware)
+- Unverified gating mirrors `AIHandler.Generate`:
+  - call `ConsumeUnverifiedFreeGeneration`
+  - return `403` with `free_remaining: 0` when exhausted
+  - refund on provider unavailable/not configured/rate limit errors (same refund logic)
+- Error mapping mirrors `AIHandler.Generate` (`ErrSafetyViolation`, `ErrRateLimitExceeded`, `ErrAINotConfigured`, `ErrAIProviderUnavailable`)
+
+### 3) Routing + middleware
+Register in `cmd/server/main.go` using the same chain as `/api/ai/generate`:
+- `requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Guide)))`
+
+### 4) OpenAPI
+Update `web/static/openapi.yaml`:
+- Add `/ai/guide` with `cookieAuth` security.
+- Document request/response, including `free_remaining`.
+
+## Frontend Plan (Vanilla JS)
+
+### 1) API client
+Extend `web/static/js/api.js`:
+- Add `API.ai.guide(mode, currentGoal, hint, count, avoid)` which calls `API.request('POST', '/api/ai/guide', ...)` with a long timeout (match wizard’s `100000`).
+
+### 2) Shared gating UI
+Reuse the existing gating UX from `web/static/js/ai-wizard.js`:
+- If `AIWizard.isVerificationRequiredForAI()` is true, show `AIWizard.showVerificationRequiredModal()`.
+- On success/failure, if response includes `free_remaining`, update `App.user.ai_free_generations_used` the same way the wizard does.
+
+### 3) Refine UI in edit modal (MVP)
+Modify `App.showItemOptions` in `web/static/js/app.js`:
+- Add hint input + “Refine with AI” button + a results list region.
+- `Generate` calls `API.ai.guide('refine', currentText, hint, 3, avoidList)` where `avoidList` can be derived from `App.currentCard.items` (trimmed).
+- Clicking a suggestion updates the existing textarea value.
+
+### 4) New-goal modal that feeds the existing input (MVP)
+Modify `App.renderCardEditor` in `web/static/js/app.js` to add an “🧙 AI (1)” button near the existing wizard button.
+- Implement `App.openAIGoalAssistModal()`:
+  - hint input
+  - `Generate` calls `API.ai.guide('new', '', hint, 5, avoidList)`
+  - selecting a suggestion populates `#item-input` and closes the modal (or leaves it open with a “Use this” button)
+
+### 5) Styles
+Prefer existing modal + button styles; add only small CSS if needed for the suggestions list layout.
+
+## Testing Plan
+
+### Backend unit tests (required)
+- `internal/services/ai/guide_test.go`
+  - validation: bad mode → `ErrInvalidInput`
+  - refine requires current goal
+  - stub: deterministic outputs with `count`
+  - request shaping: response parsing count enforcement + trimming
+- `internal/handlers/ai_guide_test.go` (mirror `internal/handlers/ai_test.go` structure)
+  - 401 when no user in context
+  - 400 for invalid body / invalid mode / missing current_goal / count out of bounds
+  - unverified gating returns `free_remaining`
+  - error mapping + refund behavior on retryable failures
+
+### Playwright E2E (required)
+Add `tests/e2e/ai-guide-editor.spec.js`:
+- Refine flow: open draft editor → click filled cell → “Refine with AI” → pick suggestion → Save → cell updates.
+- New-goal flow: click “🧙 AI (1)” → generate → pick suggestion → confirm it’s in `#item-input` → click “Add” → a new cell fills.
+
+Update coverage outline in `plans/playwright.md`.
+
+## Acceptance Criteria
+- Authenticated draft editor shows:
+  - “Refine with AI” controls in the “Edit Goal” modal and can insert a picked suggestion into the textarea.
+  - “🧙 AI (1)” opens a modal that can populate `#item-input` with a picked suggestion.
+- Anonymous draft editor does not call AI endpoints; clicking AI assist shows `App.showAIAuthModal()`.
+- `/api/ai/guide`:
+  - Rejects API-token auth (403) via `RequireSession` middleware, like `/api/ai/generate`.
+  - Enforces unverified gating and returns `free_remaining` on success and gating-related errors.
+  - Produces deterministic output when `AI_STUB=1` so E2E is stable.
+- New E2E spec passes under `AI_STUB=1` and exercises both refine + new-goal flows.
+
+## Implementation Notes (To Avoid Rework)
+- Avoid list construction (frontend): use `(App.currentCard.items || []).map(i => i.content)` excluding the currently-edited goal; trim each entry and cap to 24 items; cap each string to ~100 chars before sending.
+- UI state: keep AI-assist transient state in the modal DOM (IDs + event listeners) rather than in `App` global state, since the editor re-renders frequently.
+- Add stable selectors for E2E:
+  - Edit modal: `id="ai-refine-hint"`, `id="ai-refine-generate"`, `id="ai-refine-results"`
+  - New-goal modal: `id="ai-new-hint"`, `id="ai-new-generate"`, `id="ai-new-results"`
+  - Each suggestion button: `data-ai-suggestion="0|1|2|..."`.
+- Handler wiring: `internal/handlers/ai.go`’s `AIService` interface will need a new method; update `internal/handlers/ai_test.go` mock accordingly.
+- Error strings: mirror existing AI handler wording (“Invalid request body”, “Invalid mode”, “We couldn't generate safe goals for that topic. Please try rephrasing.”, etc.) to keep UX consistent and tests predictable.
+
+## Implementation Sequence
+1) Add service tests for guide generation (failing).
+2) Implement `GenerateGuideGoals` + stub output.
+3) Add handler tests (failing).
+4) Implement handler + route registration + OpenAPI update.
+5) Add Playwright spec (failing).
+6) Implement editor UI changes in `app.js` + API client in `api.js`.
+7) Run `./scripts/test.sh`, then `make e2e` (AI stub enabled).
+
+## Open Questions
+- Should MVP include `avoid` (duplicate suppression) or ship without it and iterate?
+- Preferred button label: “🧙 AI (1)” vs “🧙 AI Goal”?
