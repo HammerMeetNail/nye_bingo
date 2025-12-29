@@ -1,5 +1,10 @@
 # AI Goal Assist in Card Editor (Post-Create) — Implementation Plan
 
+## Status
+- Implemented (backend, frontend, tests, and E2E coverage)
+- Empty-cell clicks open the shared add/edit modal; AI assist lives in that modal
+- Removed the extra “AI (1)” button; AI assist remains in-editor only
+
 ## Problem
 The AI Goal Wizard solves the “blank canvas” problem when creating a card, but users often get stuck on *1–2 remaining goals* during draft editing. This feature adds lightweight, in-context AI help inside the editor (without forcing a full wizard flow).
 
@@ -24,7 +29,7 @@ The AI Goal Wizard solves the “blank canvas” problem when creating a card, b
 - TDD: new behavior ships with tests; coverage must not decrease.
 
 ## UX (Editor)
-This plan avoids a “selected cell” concept (the current editor doesn’t have one for empty cells) and instead hooks AI into existing user actions:
+This plan keeps AI in existing edit flows and adds empty-cell editing for draft cards.
 
 ### 1) Refine in “Edit Goal” modal (MVP)
 Entry: click a filled cell → existing “Edit Goal” modal.
@@ -37,23 +42,10 @@ Entry: click a filled cell → existing “Edit Goal” modal.
 
 Why this helps: users already use this modal when they’re stuck; AI becomes a one-click rewrite tool.
 
-### 2) Generate a new goal into the existing input (MVP)
-Entry: in the editor’s “Suggestions” header (next to current `🧙 AI` and `✨ Fill`):
-- Add a new button: “🧙 AI (1)” (or “🧙 AI Goal”).
-- Clicking opens a small modal:
-  - Hint input (optional): “Theme / constraint”
-  - Button: “Generate”
-  - Shows 5 suggestions; clicking one copies it into the existing `#item-input` and focuses it.
-  - User clicks existing “Add” (same behavior as today).
-
-Why this helps: it accelerates “I need one more goal” without generating 10–24 items.
-
-### 3) (Optional follow-up) Add to a specific empty cell
-If users strongly want “fill this specific square”:
-- Clicking an empty cell opens an “Add Goal” modal (instead of doing nothing).
-- That modal includes the same “AI (new)” UI and uses the existing `POST /api/cards/{id}/items` `position` parameter to insert at that position.
-
-This is intentionally deferred until after MVP feedback (it’s more UI surface + more edge cases with FREE).
+### 2) Add goal from an empty cell (MVP)
+Entry: click an empty draft cell.
+- Open the same modal used for editing goals (blank textarea).
+- “Save/Add” inserts the goal into the clicked position using `POST /api/cards/{id}/items` with `position`.
 
 ## API Contract
 Add a new endpoint:
@@ -149,12 +141,10 @@ Modify `App.showItemOptions` in `web/static/js/app.js`:
 - `Generate` calls `API.ai.guide('refine', currentText, hint, 3, avoidList)` where `avoidList` can be derived from `App.currentCard.items` (trimmed).
 - Clicking a suggestion updates the existing textarea value.
 
-### 4) New-goal modal that feeds the existing input (MVP)
-Modify `App.renderCardEditor` in `web/static/js/app.js` to add an “🧙 AI (1)” button near the existing wizard button.
-- Implement `App.openAIGoalAssistModal()`:
-  - hint input
-  - `Generate` calls `API.ai.guide('new', '', hint, 5, avoidList)`
-  - selecting a suggestion populates `#item-input` and closes the modal (or leaves it open with a “Use this” button)
+### 4) Empty cell add modal (MVP)
+Modify `App.showItemOptions` in `web/static/js/app.js` to allow empty-cell clicks.
+- Empty cell opens a blank goal modal.
+- Save adds the goal at the clicked position via `POST /api/cards/{id}/items` with `position`.
 
 ### 5) Styles
 Prefer existing modal + button styles; add only small CSS if needed for the suggestions list layout.
@@ -176,40 +166,38 @@ Prefer existing modal + button styles; add only small CSS if needed for the sugg
 ### Playwright E2E (required)
 Add `tests/e2e/ai-guide-editor.spec.js`:
 - Refine flow: open draft editor → click filled cell → “Refine with AI” → pick suggestion → Save → cell updates.
-- New-goal flow: click “🧙 AI (1)” → generate → pick suggestion → confirm it’s in `#item-input` → click “Add” → a new cell fills.
+- Empty-cell add flow: click empty cell → modal opens → add goal → cell updates.
 
 Update coverage outline in `plans/playwright.md`.
 
 ## Acceptance Criteria
 - Authenticated draft editor shows:
   - “Refine with AI” controls in the “Edit Goal” modal and can insert a picked suggestion into the textarea.
-  - “🧙 AI (1)” opens a modal that can populate `#item-input` with a picked suggestion.
+- Empty draft cell click opens a modal and can add a goal into that specific cell.
 - Anonymous draft editor does not call AI endpoints; clicking AI assist shows `App.showAIAuthModal()`.
 - `/api/ai/guide`:
   - Rejects API-token auth (403) via `RequireSession` middleware, like `/api/ai/generate`.
   - Enforces unverified gating and returns `free_remaining` on success and gating-related errors.
   - Produces deterministic output when `AI_STUB=1` so E2E is stable.
-- New E2E spec passes under `AI_STUB=1` and exercises both refine + new-goal flows.
+- New E2E spec passes under `AI_STUB=1` and exercises refine + empty-cell add flows.
 
 ## Implementation Notes (To Avoid Rework)
 - Avoid list construction (frontend): use `(App.currentCard.items || []).map(i => i.content)` excluding the currently-edited goal; trim each entry and cap to 24 items; cap each string to ~100 chars before sending.
 - UI state: keep AI-assist transient state in the modal DOM (IDs + event listeners) rather than in `App` global state, since the editor re-renders frequently.
 - Add stable selectors for E2E:
   - Edit modal: `id="ai-refine-hint"`, `id="ai-refine-generate"`, `id="ai-refine-results"`
-  - New-goal modal: `id="ai-new-hint"`, `id="ai-new-generate"`, `id="ai-new-results"`
   - Each suggestion button: `data-ai-suggestion="0|1|2|..."`.
 - Handler wiring: `internal/handlers/ai.go`’s `AIService` interface will need a new method; update `internal/handlers/ai_test.go` mock accordingly.
 - Error strings: mirror existing AI handler wording (“Invalid request body”, “Invalid mode”, “We couldn't generate safe goals for that topic. Please try rephrasing.”, etc.) to keep UX consistent and tests predictable.
 
 ## Implementation Sequence
-1) Add service tests for guide generation (failing).
-2) Implement `GenerateGuideGoals` + stub output.
-3) Add handler tests (failing).
-4) Implement handler + route registration + OpenAPI update.
-5) Add Playwright spec (failing).
-6) Implement editor UI changes in `app.js` + API client in `api.js`.
-7) Run `./scripts/test.sh`, then `make e2e` (AI stub enabled).
+1) [x] Add service tests for guide generation.
+2) [x] Implement `GenerateGuideGoals` + stub output.
+3) [x] Add handler tests.
+4) [x] Implement handler + route registration + OpenAPI update.
+5) [x] Add Playwright spec.
+6) [x] Implement editor UI changes in `app.js` + API client in `api.js`.
+7) [x] Run `./scripts/test.sh`, then `make e2e` (AI stub enabled).
 
 ## Open Questions
-- Should MVP include `avoid` (duplicate suppression) or ship without it and iterate?
-- Preferred button label: “🧙 AI (1)” vs “🧙 AI Goal”?
+- Resolved: include `avoid` to reduce duplicates in refine/new results.

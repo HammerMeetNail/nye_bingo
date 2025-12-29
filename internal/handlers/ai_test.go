@@ -18,12 +18,14 @@ import (
 
 // MockAIService implements AIService interface
 type MockAIService struct {
-	GenerateGoalsFunc func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
-	ConsumeFunc       func(ctx context.Context, userID uuid.UUID) (int, error)
-	RefundFunc        func(ctx context.Context, userID uuid.UUID) (bool, error)
-	GenerateCalls     int
-	ConsumeCalls      int
-	RefundCalls       int
+	GenerateGoalsFunc  func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
+	GenerateGuideFunc  func(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error)
+	ConsumeFunc        func(ctx context.Context, userID uuid.UUID) (int, error)
+	RefundFunc         func(ctx context.Context, userID uuid.UUID) (bool, error)
+	GenerateCalls      int
+	GenerateGuideCalls int
+	ConsumeCalls       int
+	RefundCalls        int
 }
 
 func (m *MockAIService) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -32,6 +34,14 @@ func (m *MockAIService) GenerateGoals(ctx context.Context, userID uuid.UUID, pro
 		return nil, ai.UsageStats{}, errors.New("GenerateGoalsFunc not set")
 	}
 	return m.GenerateGoalsFunc(ctx, userID, prompt)
+}
+
+func (m *MockAIService) GenerateGuideGoals(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error) {
+	m.GenerateGuideCalls++
+	if m.GenerateGuideFunc == nil {
+		return nil, ai.UsageStats{}, errors.New("GenerateGuideFunc not set")
+	}
+	return m.GenerateGuideFunc(ctx, userID, prompt)
 }
 
 func (m *MockAIService) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error) {

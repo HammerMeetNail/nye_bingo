@@ -90,6 +90,9 @@
 - `tests/e2e/ai-wizard.spec.js`
   - AI wizard generates goals and creates a card (stubbed).
   - Unverified users are prompted to verify after free generations are used.
+- `tests/e2e/ai-guide-editor.spec.js`
+  - AI guide refine flow updates a draft goal.
+  - Empty cell click opens add-goal modal and saves a new goal.
 
 ## Unit Test Separation
 - Add make targets:

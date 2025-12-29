@@ -423,6 +423,15 @@ const API = {
         count,
       }, { timeout: 100000 });
     },
+    async guide(mode, currentGoal, hint, count, avoid) {
+      return API.request('POST', '/api/ai/guide', {
+        mode,
+        current_goal: currentGoal,
+        hint,
+        count,
+        avoid,
+      }, { timeout: 100000 });
+    },
   },
 };
 

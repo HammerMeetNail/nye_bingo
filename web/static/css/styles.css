@@ -835,7 +835,7 @@ a:hover {
 .bingo-cell--empty {
   border-style: dashed;
   border-color: rgba(255, 255, 255, 0.1);
-  cursor: default;
+  cursor: pointer;
 }
 
 .bingo-cell--empty::after {
@@ -1008,6 +1008,25 @@ a:hover {
   opacity: 0.4;
   text-decoration: line-through;
   cursor: not-allowed;
+}
+
+/* AI Guide */
+.ai-guide-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.ai-guide-results {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.ai-guide-suggestion {
+  text-align: left;
+  white-space: normal;
+  width: 100%;
 }
 
 /* Input Area */

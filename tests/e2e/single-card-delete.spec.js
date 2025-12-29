@@ -7,10 +7,34 @@ test('single card can be deleted from dashboard', async ({ page }, testInfo) => 
 
   const title = `Delete Me ${Date.now()}`;
   await page.fill('#card-title', title);
-  await page.locator('#create-card-form button[type="submit"]').click();
-  await expectToast(page, 'created');
+  await Promise.all([
+    page.waitForResponse((response) => {
+      try {
+        const url = new URL(response.url());
+        return url.pathname === '/api/cards'
+          && response.request().method() === 'POST'
+          && response.status() === 201;
+      } catch {
+        return false;
+      }
+    }),
+    page.locator('#create-card-form button[type="submit"]').click(),
+  ]);
+  await expectToast(page, `${title} created!`);
+  await expect(page.locator('#item-input')).toBeVisible();
 
-  await page.goto('/#dashboard');
+  await Promise.all([
+    page.waitForResponse((response) => {
+      try {
+        const url = new URL(response.url());
+        return url.pathname === '/api/cards' && response.request().method() === 'GET';
+      } catch {
+        return false;
+      }
+    }),
+    page.goto('/#dashboard'),
+  ]);
+  await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
   const preview = page.locator('.dashboard-card-preview').filter({ hasText: title });
   await expect(preview).toBeVisible();
 

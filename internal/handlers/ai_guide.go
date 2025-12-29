@@ -5,49 +5,32 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
-
-	"github.com/google/uuid"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 )
 
-type AIService interface {
-	GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
-	GenerateGuideGoals(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error)
-	ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error)
-	RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (bool, error)
+type GuideRequest struct {
+	Mode        string   `json:"mode"`
+	CurrentGoal string   `json:"current_goal"`
+	Hint        string   `json:"hint"`
+	Count       int      `json:"count"`
+	Avoid       []string `json:"avoid"`
 }
 
-type AIHandler struct {
-	service AIService
-}
-
-func NewAIHandler(service AIService) *AIHandler {
-	return &AIHandler{service: service}
-}
-
-type GenerateRequest struct {
-	Category   string `json:"category"`
-	Focus      string `json:"focus"`
-	Difficulty string `json:"difficulty"`
-	Budget     string `json:"budget"`
-	Context    string `json:"context"`
-	Count      int    `json:"count"`
-}
-
-type GenerateResponse struct {
+type GuideResponse struct {
 	Goals         []string `json:"goals"`
 	FreeRemaining *int     `json:"free_remaining,omitempty"`
 }
 
-type GenerateErrorResponse struct {
+type GuideErrorResponse struct {
 	Error         string `json:"error"`
 	FreeRemaining *int   `json:"free_remaining,omitempty"`
 }
 
-func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
-	var req GenerateRequest
+func (h *AIHandler) Guide(w http.ResponseWriter, r *http.Request) {
+	var req GuideRequest
 	r.Body = http.MaxBytesReader(w, r.Body, 8*1024)
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
@@ -56,47 +39,45 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Category == "" || req.Difficulty == "" || req.Budget == "" {
+	mode := strings.ToLower(strings.TrimSpace(req.Mode))
+	if mode == "" {
 		writeError(w, http.StatusBadRequest, "Missing required fields")
 		return
 	}
-
-	// Input Validation
-	validCategories := map[string]bool{"hobbies": true, "health": true, "career": true, "social": true, "travel": true, "mix": true}
-	if !validCategories[req.Category] {
-		writeError(w, http.StatusBadRequest, "Invalid category")
+	if mode != "refine" && mode != "new" {
+		writeError(w, http.StatusBadRequest, "Invalid mode")
 		return
 	}
 
-	validDifficulties := map[string]bool{"easy": true, "medium": true, "hard": true}
-	if !validDifficulties[req.Difficulty] {
-		writeError(w, http.StatusBadRequest, "Invalid difficulty")
+	currentGoal := strings.TrimSpace(req.CurrentGoal)
+	hint := strings.TrimSpace(req.Hint)
+	if mode == "refine" && currentGoal == "" {
+		writeError(w, http.StatusBadRequest, "Current goal is required")
+		return
+	}
+	if len(currentGoal) > 500 {
+		writeError(w, http.StatusBadRequest, "Current goal is too long (max 500 chars)")
+		return
+	}
+	if len(hint) > 500 {
+		writeError(w, http.StatusBadRequest, "Hint is too long (max 500 chars)")
 		return
 	}
 
-	validBudgets := map[string]bool{"free": true, "low": true, "medium": true, "high": true}
-	if !validBudgets[req.Budget] {
-		writeError(w, http.StatusBadRequest, "Invalid budget")
+	count := req.Count
+	if count == 0 {
+		if mode == "refine" {
+			count = 3
+		} else {
+			count = 5
+		}
+	}
+	if count < 1 || count > 5 {
+		writeError(w, http.StatusBadRequest, "Count must be between 1 and 5")
 		return
 	}
 
-	if len(req.Focus) > 100 {
-		writeError(w, http.StatusBadRequest, "Focus is too long (max 100 chars)")
-		return
-	}
-
-	if len(req.Context) > 500 {
-		writeError(w, http.StatusBadRequest, "Context is too long (max 500 chars)")
-		return
-	}
-
-	if req.Count == 0 {
-		req.Count = 24
-	}
-	if req.Count < 1 || req.Count > 24 {
-		writeError(w, http.StatusBadRequest, "Count must be between 1 and 24")
-		return
-	}
+	avoid := normalizeGuideAvoidList(req.Avoid)
 
 	user := GetUserFromContext(r.Context())
 	if user == nil {
@@ -113,7 +94,7 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case errors.Is(err, ai.ErrEmailVerificationRequired):
 				zero := 0
-				writeJSON(w, http.StatusForbidden, GenerateErrorResponse{
+				writeJSON(w, http.StatusForbidden, GuideErrorResponse{
 					Error:         "You've used your 5 free AI generations. Verify your email to keep using AI.",
 					FreeRemaining: &zero,
 				})
@@ -131,21 +112,23 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		consumedFree = true
 	}
 
-	prompt := ai.GoalPrompt{
-		Category:   req.Category,
-		Focus:      req.Focus,
-		Difficulty: req.Difficulty,
-		Budget:     req.Budget,
-		Context:    req.Context,
-		Count:      req.Count,
+	prompt := ai.GuidePrompt{
+		Mode:        mode,
+		CurrentGoal: currentGoal,
+		Hint:        hint,
+		Count:       count,
+		Avoid:       avoid,
 	}
 
-	goals, _, err := h.service.GenerateGoals(r.Context(), user.ID, prompt)
+	goals, _, err := h.service.GenerateGuideGoals(r.Context(), user.ID, prompt)
 	if err != nil {
 		status := http.StatusInternalServerError
 		msg := "An unexpected error occurred."
 
 		switch {
+		case errors.Is(err, ai.ErrInvalidInput):
+			status = http.StatusBadRequest
+			msg = "Invalid AI request."
 		case errors.Is(err, ai.ErrSafetyViolation):
 			status = http.StatusBadRequest
 			msg = "We couldn't generate safe goals for that topic. Please try rephrasing."
@@ -168,15 +151,47 @@ func (h *AIHandler) Generate(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		writeJSON(w, status, GenerateErrorResponse{
+		writeJSON(w, status, GuideErrorResponse{
 			Error:         msg,
 			FreeRemaining: freeRemaining,
 		})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, GenerateResponse{
+	writeJSON(w, http.StatusOK, GuideResponse{
 		Goals:         goals,
 		FreeRemaining: freeRemaining,
 	})
+}
+
+func normalizeGuideAvoidList(items []string) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		clean := strings.TrimSpace(item)
+		if clean == "" {
+			continue
+		}
+		clean = truncateGuideRunes(clean, 100)
+		if clean == "" {
+			continue
+		}
+		out = append(out, clean)
+		if len(out) >= 24 {
+			break
+		}
+	}
+	return out
+}
+
+func truncateGuideRunes(input string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if len([]rune(input)) <= max {
+		return input
+	}
+	return string([]rune(input)[:max])
 }

@@ -15,6 +15,7 @@ A web application for creating and tracking annual Bingo cards. Create a Bingo c
 - **Drag and Drop**: Rearrange items on your card with drag and drop (desktop) or long-press and drag (mobile)
 - **Try Before Signing Up**: Create and customize a card anonymously, then sign up to save it
 - **AI Goal Wizard**: Generate goals with AI to fill your empty squares (requires an account; unverified users get 5 free generations, then must verify email)
+- **AI Assist in Editor**: Refine a goal or get options for a single empty cell without leaving the card editor (same AI gating as the wizard)
 - **Fill Empty Spaces**: Auto-fill empty card slots with random suggestions to get started quickly
 - **Quality of Life**: Clear all cells on an unfinalized card, and get a warning prompt if you try to leave a full but unfinalized card
 - **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
@@ -173,6 +174,7 @@ yearofbingo/
 ├── scripts/             # Development and testing scripts
 ├── compose.yaml         # Container orchestration
 ├── Containerfile        # Container build instructions
+├── Containerfile.test   # Test container build instructions
 └── AGENTS.md            # AI assistant guidance
 ```
 

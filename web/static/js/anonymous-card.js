@@ -90,7 +90,7 @@ const AnonymousCard = {
   },
 
   // Add an item to the anonymous card
-  addItem(text) {
+  addItem(text, position = null) {
     const card = this.get();
     if (!card) return null;
 
@@ -99,23 +99,30 @@ const AnonymousCard = {
     const hasFree = typeof card.has_free_space === 'boolean' ? card.has_free_space : true;
     const freePos = hasFree ? card.free_space_position : null;
 
-    // Find next available position (0..N^2-1, excluding FREE if enabled)
     const usedPositions = new Set(card.items.map(i => i.position));
-    let position = null;
-    for (let i = 0; i < totalSquares; i++) {
-      if (freePos !== null && i === freePos) continue;
-      if (!usedPositions.has(i)) {
-        position = i;
-        break;
+    let targetPosition = position;
+
+    if (targetPosition !== null) {
+      if (targetPosition < 0 || targetPosition >= totalSquares) return null;
+      if (freePos !== null && targetPosition === freePos) return null;
+      if (usedPositions.has(targetPosition)) return null;
+    } else {
+      // Find next available position (0..N^2-1, excluding FREE if enabled)
+      for (let i = 0; i < totalSquares; i++) {
+        if (freePos !== null && i === freePos) continue;
+        if (!usedPositions.has(i)) {
+          targetPosition = i;
+          break;
+        }
       }
     }
 
-    if (position === null) {
+    if (targetPosition === null) {
       return null; // Card is full
     }
 
     const item = {
-      position,
+      position: targetPosition,
       text,
       notes: '',
     };

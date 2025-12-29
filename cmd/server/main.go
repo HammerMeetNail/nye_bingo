@@ -221,6 +221,7 @@ func run() error {
 
 	// AI endpoint
 	mux.Handle("POST /api/ai/generate", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Generate))))
+	mux.Handle("POST /api/ai/guide", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Guide))))
 
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))

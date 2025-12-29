@@ -13,6 +13,7 @@ Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE s
 ## Core Workflow
 - **Start Dev**: `make local` (or `podman compose up`)
 - **Test**: `./scripts/test.sh` (Runs Go + JS tests in container)
+- **Test Image**: `Containerfile.test` is required for `./scripts/test.sh` to build the test container.
 - **Lint**: `make lint`
 - **E2E**: `make e2e` (Playwright runs in a container; uses Mailpit via SMTP for email flows)
 - **Debug Logs**: set `DEBUG=true` (local dev enables this in `compose.yaml`)
