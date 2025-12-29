@@ -21,6 +21,10 @@ func TestGuide(t *testing.T) {
 		"current_goal": "Visit a local farmer's market",
 		"hint":         "make it budget friendly",
 	}
+	validNewBody := map[string]any{
+		"mode": "new",
+		"hint": "weekends",
+	}
 
 	tests := []struct {
 		name           string
@@ -57,6 +61,32 @@ func TestGuide(t *testing.T) {
 			},
 			expectedStatus: http.StatusOK,
 			expectedGoals:  []string{"Goal 1", "Goal 2", "Goal 3"},
+			freeRemaining:  ptrToIntValue(4),
+			guideCalls:     1,
+			consumeCalls:   1,
+		},
+		{
+			name:        "Success (new mode defaults count to 5)",
+			requestBody: validNewBody,
+			user:        &models.User{ID: uuid.New(), EmailVerified: false},
+			mockSetup: func(t *testing.T) *MockAIService {
+				return &MockAIService{
+					ConsumeFunc: func(ctx context.Context, userID uuid.UUID) (int, error) {
+						return 4, nil
+					},
+					GenerateGuideFunc: func(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error) {
+						if prompt.Count != 5 {
+							t.Fatalf("expected count 5, got %d", prompt.Count)
+						}
+						if prompt.Mode != "new" {
+							t.Fatalf("expected mode new, got %q", prompt.Mode)
+						}
+						return []string{"Goal 1", "Goal 2", "Goal 3", "Goal 4", "Goal 5"}, ai.UsageStats{}, nil
+					},
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedGoals:  []string{"Goal 1", "Goal 2", "Goal 3", "Goal 4", "Goal 5"},
 			freeRemaining:  ptrToIntValue(4),
 			guideCalls:     1,
 			consumeCalls:   1,
@@ -256,10 +286,17 @@ func TestGuide(t *testing.T) {
 				if response["error"] != tt.expectedError {
 					t.Fatalf("expected error %q, got %q", tt.expectedError, response["error"])
 				}
-				if tt.freeRemaining != nil {
-					got := response["free_remaining"]
-					if got == nil {
-						t.Fatalf("expected free_remaining %d, got nil", *tt.freeRemaining)
+				if tt.freeRemaining == nil {
+					if _, ok := response["free_remaining"]; ok {
+						t.Fatalf("expected free_remaining to be omitted, got %v", response["free_remaining"])
+					}
+				} else {
+					got, ok := response["free_remaining"]
+					if !ok {
+						t.Fatal("expected free_remaining in response")
+					}
+					if int(got.(float64)) != *tt.freeRemaining {
+						t.Fatalf("expected free_remaining %d, got %v", *tt.freeRemaining, got)
 					}
 				}
 			}

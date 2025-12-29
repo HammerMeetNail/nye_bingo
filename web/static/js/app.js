@@ -2282,7 +2282,7 @@ const App = {
     // Drag and drop
     this.setupDragAndDrop();
 
-    // Cell click to remove (before finalized)
+    // Cell click to add/edit (before finalized)
     document.getElementById('bingo-grid').addEventListener('click', (e) => {
       const cell = e.target.closest('.bingo-cell');
       if (cell && !cell.classList.contains('bingo-cell--free')) {
@@ -2627,303 +2627,310 @@ const App = {
     });
   },
 
-	  showItemOptions(cell) {
-	    const position = parseInt(cell.dataset.position, 10);
-	    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
-	    const isEmpty = cell.classList.contains('bingo-cell--empty');
-	    const modalTitle = isEmpty ? 'Add Goal' : 'Edit Goal';
-	    const aiSection = `
-	        <div class="form-group ai-guide-section">
-	          <label class="form-label">AI Assist</label>
-	          <input type="text" id="ai-refine-hint" class="form-input form-input--sm" placeholder="What should change? (optional)" maxlength="500">
-	          <button type="button" class="btn btn-secondary btn-sm" id="ai-refine-generate" onclick="App.handleAIRefine(${position})">
-	            🧙 Refine with AI
-	          </button>
-	          <div id="ai-refine-results" class="ai-guide-results"></div>
-	        </div>
-	    `;
-	    const removeButton = `
-	          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : `onclick="App.removeItem(${position})"`}>
-	            Remove
-	          </button>
-	    `;
-	    const saveLabel = 'Save';
+  showItemOptions(cell) {
+    const position = parseInt(cell.dataset.position, 10);
+    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
+    const isEmpty = cell.classList.contains('bingo-cell--empty');
+    const modalTitle = isEmpty ? 'Add Goal' : 'Edit Goal';
+    const aiButtonLabel = isEmpty ? '🧙 Suggest with AI' : '🧙 Refine with AI';
+    const aiHintPlaceholder = isEmpty ? 'Theme or constraint (optional)' : 'What should change? (optional)';
 
-	    this.openModal(modalTitle, `
-	      <form onsubmit="App.saveItemEdit(event, ${position})">
-	        <div class="form-group">
-	          <label class="form-label" for="edit-item-content-${position}">Goal</label>
-	          <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
-	        </div>
-	        ${aiSection}
-	        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-	          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
-	            Cancel
-	          </button>
-	          ${removeButton}
-	          <button type="submit" class="btn btn-primary" style="flex: 1;">
-	            ${saveLabel}
-	          </button>
-	        </div>
-	      </form>
-	    `);
-	  },
+    const aiSection = `
+        <div class="form-group ai-guide-section">
+          <label class="form-label">AI Assist</label>
+          <input type="text" id="ai-refine-hint" class="form-input form-input--sm" placeholder="${aiHintPlaceholder}" maxlength="500">
+          <button type="button" class="btn btn-secondary btn-sm" id="ai-refine-generate" onclick="App.handleAIRefine(${position})">
+            ${aiButtonLabel}
+          </button>
+          <div id="ai-refine-results" class="ai-guide-results"></div>
+        </div>
+    `;
+    const removeButton = `
+          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : `onclick="App.removeItem(${position})"`}>
+            Remove
+          </button>
+    `;
 
-	  buildAIGuideAvoidList(excludeText = '') {
-	    const excludeKey = (excludeText || '').trim().toLowerCase();
-	    const avoid = [];
-	    const seen = new Set();
-	    const items = this.currentCard?.items || [];
-	    for (const item of items) {
-	      const content = (item.content || '').trim();
-	      if (!content) continue;
-	      const key = content.toLowerCase();
-	      if (excludeKey && key === excludeKey) continue;
-	      if (seen.has(key)) continue;
-	      seen.add(key);
-	      avoid.push(content.length > 100 ? content.slice(0, 100) : content);
-	      if (avoid.length >= 24) break;
-	    }
-	    return avoid;
-	  },
+    this.openModal(modalTitle, `
+      <form onsubmit="App.saveItemEdit(event, ${position})">
+        <div class="form-group">
+          <label class="form-label" for="edit-item-content-${position}">Goal</label>
+          <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
+        </div>
+        ${aiSection}
+        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+            Cancel
+          </button>
+          ${removeButton}
+          <button type="submit" class="btn btn-primary" style="flex: 1;">
+            Save
+          </button>
+        </div>
+      </form>
+    `);
+  },
 
-	  renderAIGuideResults(resultsEl, goals, onSelect) {
-	    if (!resultsEl) return;
-	    if (!Array.isArray(goals) || goals.length === 0) {
-	      resultsEl.innerHTML = '<p class="text-muted">No suggestions yet.</p>';
-	      return;
-	    }
-	    resultsEl.innerHTML = goals.map((goal, index) => `
-	      <button type="button" class="btn btn-secondary btn-sm ai-guide-suggestion" data-ai-suggestion="${index}">
-	        ${this.escapeHtml(goal)}
-	      </button>
-	    `).join('');
-	    resultsEl.querySelectorAll('[data-ai-suggestion]').forEach((button, index) => {
-	      button.addEventListener('click', () => {
-	        if (typeof onSelect === 'function') {
-	          onSelect(goals[index]);
-	        }
-	      });
-	    });
-	  },
+  buildAIGuideAvoidList(excludeText = '') {
+    const excludeKey = (excludeText || '').trim().toLowerCase();
+    const avoid = [];
+    const seen = new Set();
+    const items = this.currentCard?.items || [];
+    for (const item of items) {
+      const content = (item.content || '').trim();
+      if (!content) continue;
+      const key = content.toLowerCase();
+      if (excludeKey && key === excludeKey) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      avoid.push(content.length > 100 ? content.slice(0, 100) : content);
+      if (avoid.length >= 24) break;
+    }
+    return avoid;
+  },
 
-	  async handleAIRefine(position) {
-	    if (this.isAnonymousMode || !this.user) {
-	      this.showAIAuthModal();
-	      return;
-	    }
-	    if (AIWizard.isVerificationRequiredForAI()) {
-	      AIWizard.showVerificationRequiredModal();
-	      return;
-	    }
+  renderAIGuideResults(resultsEl, goals, onSelect) {
+    if (!resultsEl) return;
+    if (!Array.isArray(goals) || goals.length === 0) {
+      resultsEl.innerHTML = '<p class="text-muted">No suggestions yet.</p>';
+      return;
+    }
+    resultsEl.innerHTML = goals.map((goal, index) => `
+      <button type="button" class="btn btn-secondary btn-sm ai-guide-suggestion" data-ai-suggestion="${index}">
+        ${this.escapeHtml(goal)}
+      </button>
+    `).join('');
+    resultsEl.querySelectorAll('[data-ai-suggestion]').forEach((button, index) => {
+      button.addEventListener('click', () => {
+        if (typeof onSelect === 'function') {
+          onSelect(goals[index]);
+        }
+      });
+    });
+  },
 
-	    const textarea = document.getElementById(`edit-item-content-${position}`);
-	    if (!textarea) return;
-	    const currentGoal = textarea.value.trim();
-	    const mode = currentGoal ? 'refine' : 'new';
-	    if (currentGoal && currentGoal.length > 500) {
-	      this.toast('Goal must be 500 characters or less', 'error');
-	      return;
-	    }
+  async handleAIRefine(position) {
+    if (this.isAnonymousMode || !this.user) {
+      this.showAIAuthModal();
+      return;
+    }
+    if (AIWizard.isVerificationRequiredForAI()) {
+      AIWizard.showVerificationRequiredModal();
+      return;
+    }
 
-	    const hint = document.getElementById('ai-refine-hint')?.value.trim() || '';
-	    const resultsEl = document.getElementById('ai-refine-results');
-	    const button = document.getElementById('ai-refine-generate');
-	    const originalLabel = button ? button.textContent : '';
-	    if (button) {
-	      button.disabled = true;
-	      button.textContent = 'Generating...';
-	    }
-	    if (resultsEl) {
-	      resultsEl.innerHTML = '<p class="text-muted">Generating suggestions...</p>';
-	    }
+    const textarea = document.getElementById(`edit-item-content-${position}`);
+    if (!textarea) return;
+    const currentGoal = textarea.value.trim();
+    const mode = currentGoal ? 'refine' : 'new';
+    const count = mode === 'new' ? 5 : 3;
+    if (currentGoal && currentGoal.length > 500) {
+      this.toast('Goal must be 500 characters or less', 'error');
+      return;
+    }
 
-	    try {
-	      const avoid = this.buildAIGuideAvoidList(currentGoal);
-	      const response = await API.ai.guide(mode, currentGoal, hint, 3, avoid);
-	      if (this.user && !this.user.email_verified && typeof response?.free_remaining === 'number') {
-	        this.user.ai_free_generations_used = Math.max(0, 5 - response.free_remaining);
-	      }
-	      this.renderAIGuideResults(resultsEl, response?.goals || [], (goal) => {
-	        textarea.value = goal;
-	        textarea.focus();
-	      });
-	    } catch (error) {
-	      if (this.user && !this.user.email_verified && typeof error?.data?.free_remaining === 'number') {
-	        this.user.ai_free_generations_used = Math.max(0, 5 - error.data.free_remaining);
-	      }
-	      if (error?.status === 403 && this.user && !this.user.email_verified) {
-	        if (AIWizard.isVerificationRequiredForAI() || error?.data?.free_remaining === 0) {
-	          AIWizard.showVerificationRequiredModal();
-	          return;
-	        }
-	      }
-	      this.toast(error.message, 'error');
-	    } finally {
-	      if (button) {
-	        button.disabled = false;
-	        button.textContent = originalLabel || '🧙 Refine with AI';
-	      }
-	    }
-	  },
-	
-	  updateUsedSuggestionsForContentChange(position, oldContent, newContent) {
-	    const oldKey = (oldContent || '').toLowerCase();
-	    const newKey = (newContent || '').toLowerCase();
-	    if (!oldKey || !newKey || oldKey === newKey) return;
-	
-	    const stillUsesOld = (this.currentCard.items || []).some(
-	      i => i.position !== position && (i.content || '').toLowerCase() === oldKey
-	    );
-	    if (!stillUsesOld) {
-	      this.usedSuggestions.delete(oldKey);
-	    }
-	    this.usedSuggestions.add(newKey);
-	  },
+    const hint = document.getElementById('ai-refine-hint')?.value.trim() || '';
+    const resultsEl = document.getElementById('ai-refine-results');
+    const button = document.getElementById('ai-refine-generate');
+    const originalLabel = button ? button.textContent.trim() : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Generating...';
+    }
+    if (resultsEl) {
+      resultsEl.innerHTML = '<p class="text-muted">Generating suggestions...</p>';
+    }
 
-	  async addItemAtPosition(position, content) {
-	    const items = this.currentCard?.items || [];
-	    if (items.some(i => i.position === position)) {
-	      this.toast('That cell already has a goal', 'error');
-	      return;
-	    }
+    try {
+      const avoid = this.buildAIGuideAvoidList(currentGoal);
+      const response = await API.ai.guide(mode, currentGoal, hint, count, avoid);
+      if (this.user && !this.user.email_verified && typeof response?.free_remaining === 'number') {
+        this.user.ai_free_generations_used = Math.max(0, 5 - response.free_remaining);
+      }
+      this.renderAIGuideResults(resultsEl, response?.goals || [], (goal) => {
+        textarea.value = goal;
+        textarea.focus();
+      });
+    } catch (error) {
+      if (this.user && !this.user.email_verified && typeof error?.data?.free_remaining === 'number') {
+        this.user.ai_free_generations_used = Math.max(0, 5 - error.data.free_remaining);
+      }
+      if (error?.status === 403 && this.user && !this.user.email_verified) {
+        if (AIWizard.isVerificationRequiredForAI() || error?.data?.free_remaining === 0) {
+          AIWizard.showVerificationRequiredModal();
+          return;
+        }
+      }
+      this.toast(error.message, 'error');
+    } finally {
+      const fallbackLabel = mode === 'new' ? '🧙 Suggest with AI' : '🧙 Refine with AI';
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || fallbackLabel;
+      }
+    }
+  },
 
-	    const capacity = this.getCardCapacity(this.currentCard);
-	    if (items.length >= capacity) {
-	      this.toast('Card is full', 'error');
-	      return;
-	    }
+  updateUsedSuggestionsForContentChange(position, oldContent, newContent) {
+    const oldKey = (oldContent || '').toLowerCase();
+    const newKey = (newContent || '').toLowerCase();
+    if (!oldKey || !newKey || oldKey === newKey) return;
 
-	    try {
-	      let newItem;
+    const stillUsesOld = (this.currentCard.items || []).some(
+      i => i.position !== position && (i.content || '').toLowerCase() === oldKey
+    );
+    if (!stillUsesOld) {
+      this.usedSuggestions.delete(oldKey);
+    }
+    this.usedSuggestions.add(newKey);
+  },
 
-	      if (this.isAnonymousMode) {
-	        const item = AnonymousCard.addItem(content, position);
-	        if (!item) {
-	          throw new Error('Failed to add goal');
-	        }
-	        newItem = {
-	          id: `anon-${item.position}`,
-	          position: item.position,
-	          content: content,
-	          notes: '',
-	          is_completed: false,
-	        };
-	      } else {
-	        const response = await API.cards.addItem(this.currentCard.id, content, position);
-	        newItem = response.item;
-	      }
+  async addItemAtPosition(position, content) {
+    const items = this.currentCard?.items || [];
+    if (items.some(i => i.position === position)) {
+      this.toast('That cell already has a goal', 'error');
+      return;
+    }
 
-	      if (!this.currentCard.items) this.currentCard.items = [];
-	      this.currentCard.items.push(newItem);
-	      this.usedSuggestions.add(content.toLowerCase());
+    const capacity = this.getCardCapacity(this.currentCard);
+    if (items.length >= capacity) {
+      this.toast('Card is full', 'error');
+      return;
+    }
 
-	      const cell = document.querySelector(`[data-position="${position}"]`);
-	      if (cell) {
-	        cell.classList.remove('bingo-cell--empty');
-	        cell.classList.add('bingo-cell--appearing');
-	        cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : newItem.id;
-	        cell.draggable = true;
-	        cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(content)}</span>`;
-	      }
+    try {
+      let newItem;
 
-	      const itemCount = this.currentCard.items.length;
-	      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-	      document.querySelector('.progress-fill').style.width = `${progress}%`;
-	      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+      if (this.isAnonymousMode) {
+        const item = AnonymousCard.addItem(content, position);
+        if (!item) {
+          throw new Error('Failed to add goal');
+        }
+        newItem = {
+          id: `anon-${item.position}`,
+          position: item.position,
+          content: content,
+          notes: '',
+          is_completed: false,
+        };
+      } else {
+        const response = await API.cards.addItem(this.currentCard.id, content, position);
+        newItem = response.item;
+      }
 
-	      const isFull = itemCount >= capacity;
-	      const input = document.getElementById('item-input');
-	      if (input) input.disabled = isFull;
-	      const addBtn = document.getElementById('add-btn');
-	      if (addBtn) addBtn.disabled = isFull;
-	      const fillBtn = document.getElementById('fill-empty-btn');
-	      if (fillBtn) fillBtn.disabled = isFull;
-	      const aiBtn = document.getElementById('ai-btn');
-	      if (aiBtn) aiBtn.disabled = isFull;
-	      const clearBtn = document.getElementById('clear-btn');
-	      if (clearBtn) clearBtn.disabled = itemCount === 0;
-	      document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
-	      document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
+      if (!this.currentCard.items) this.currentCard.items = [];
+      this.currentCard.items.push(newItem);
+      this.usedSuggestions.add(content.toLowerCase());
 
-	      const activeTab = document.querySelector('.category-tab--active');
-	      if (activeTab) {
-	        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-	      }
+      const cell = document.querySelector(`[data-position="${position}"]`);
+      if (cell) {
+        const shortText = this.truncateText(content, 50);
+        cell.classList.remove('bingo-cell--empty');
+        cell.classList.add('bingo-cell--appearing');
+        cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : newItem.id;
+        cell.dataset.content = content;
+        cell.title = content;
+        cell.draggable = true;
+        cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>`;
+      }
 
-	      this.closeModal();
-	      this.toast('Goal added', 'success');
-	      this.confetti();
-	    } catch (error) {
-	      this.toast(error.message, 'error');
-	    }
-	  },
-	
-	  async saveItemEdit(event, position) {
-	    event.preventDefault();
-	
-	    const textarea = document.getElementById(`edit-item-content-${position}`);
-	    if (!textarea) return;
-	
-	    const newContent = textarea.value.trim();
-	    if (!newContent) {
-	      this.toast('Goal cannot be empty', 'error');
-	      return;
-	    }
-	    if (newContent.length > 500) {
-	      this.toast('Goal must be 500 characters or less', 'error');
-	      return;
-	    }
-	
-	    const item = this.currentCard.items?.find(i => i.position === position);
-	    if (!item) {
-	      await this.addItemAtPosition(position, newContent);
-	      return;
-	    }
-	    const oldContent = item.content || '';
-	
-	    if (newContent === oldContent) {
-	      this.closeModal();
-	      return;
-	    }
-	
-	    try {
-	      if (this.isAnonymousMode) {
-	        const ok = AnonymousCard.updateItem(position, newContent);
-	        if (!ok) throw new Error('Failed to update goal');
-	        item.content = newContent;
-	      } else {
-	        const response = await API.cards.updateItem(this.currentCard.id, position, { content: newContent });
-	        if (response?.item) {
-	          Object.assign(item, response.item);
-	        } else {
-	          item.content = newContent;
-	        }
-	      }
-	
-	      this.updateUsedSuggestionsForContentChange(position, oldContent, item.content);
-	
-	      const cell = document.querySelector(`.bingo-cell[data-position="${position}"]`);
-	      if (cell) {
-	        cell.dataset.content = item.content;
-	        cell.title = item.content;
-	        const contentEl = cell.querySelector('.bingo-cell-content');
-	        if (contentEl) {
-	          contentEl.textContent = this.truncateText(item.content, 50);
-	        }
-	      }
-	
-	      const activeTab = document.querySelector('.category-tab--active');
-	      if (activeTab) {
-	        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-	      }
-	
-	      this.closeModal();
-	      this.toast('Goal updated', 'success');
-	    } catch (error) {
-	      this.toast(error.message, 'error');
-	    }
-	  },
+      const itemCount = this.currentCard.items.length;
+      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
+      document.querySelector('.progress-fill').style.width = `${progress}%`;
+      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+
+      const isFull = itemCount >= capacity;
+      const input = document.getElementById('item-input');
+      if (input) input.disabled = isFull;
+      const addBtn = document.getElementById('add-btn');
+      if (addBtn) addBtn.disabled = isFull;
+      const fillBtn = document.getElementById('fill-empty-btn');
+      if (fillBtn) fillBtn.disabled = isFull;
+      const aiBtn = document.getElementById('ai-btn');
+      if (aiBtn) aiBtn.disabled = isFull;
+      const clearBtn = document.getElementById('clear-btn');
+      if (clearBtn) clearBtn.disabled = itemCount === 0;
+      document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
+      document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
+
+      const activeTab = document.querySelector('.category-tab--active');
+      if (activeTab) {
+        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
+      }
+
+      this.closeModal();
+      this.toast('Goal added', 'success');
+      this.confetti();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async saveItemEdit(event, position) {
+    event.preventDefault();
+
+    const textarea = document.getElementById(`edit-item-content-${position}`);
+    if (!textarea) return;
+
+    const newContent = textarea.value.trim();
+    if (!newContent) {
+      this.toast('Goal cannot be empty', 'error');
+      return;
+    }
+    if (newContent.length > 500) {
+      this.toast('Goal must be 500 characters or less', 'error');
+      return;
+    }
+
+    const item = this.currentCard.items?.find(i => i.position === position);
+    if (!item) {
+      await this.addItemAtPosition(position, newContent);
+      return;
+    }
+    const oldContent = item.content || '';
+
+    if (newContent === oldContent) {
+      this.closeModal();
+      return;
+    }
+
+    try {
+      if (this.isAnonymousMode) {
+        const ok = AnonymousCard.updateItem(position, newContent);
+        if (!ok) throw new Error('Failed to update goal');
+        item.content = newContent;
+      } else {
+        const response = await API.cards.updateItem(this.currentCard.id, position, { content: newContent });
+        if (response?.item) {
+          Object.assign(item, response.item);
+        } else {
+          item.content = newContent;
+        }
+      }
+
+      this.updateUsedSuggestionsForContentChange(position, oldContent, item.content);
+
+      const cell = document.querySelector(`.bingo-cell[data-position="${position}"]`);
+      if (cell) {
+        cell.dataset.content = item.content;
+        cell.title = item.content;
+        const contentEl = cell.querySelector('.bingo-cell-content');
+        if (contentEl) {
+          contentEl.textContent = this.truncateText(item.content, 50);
+        }
+      }
+
+      const activeTab = document.querySelector('.category-tab--active');
+      if (activeTab) {
+        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
+      }
+
+      this.closeModal();
+      this.toast('Goal updated', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
 
   async addItem() {
     const input = document.getElementById('item-input');
@@ -2973,8 +2980,10 @@ const App = {
       cell.classList.remove('bingo-cell--empty');
       cell.classList.add('bingo-cell--appearing');
       cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : this.currentCard.items[this.currentCard.items.length - 1].id;
+      cell.dataset.content = content;
+      cell.title = content;
       cell.draggable = true;
-      cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(content)}</span>`;
+      cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(this.truncateText(content, 50))}</span>`;
 
       // Update progress
       const itemCount = this.currentCard.items.length;
@@ -3136,15 +3145,15 @@ const App = {
         await API.cards.removeItem(this.currentCard.id, position);
       }
 
-	      // Update local state
-	      this.currentCard.items = this.currentCard.items.filter(i => i.position !== position);
-	      if (item) {
-	        const key = (item.content || '').toLowerCase();
-	        if (key) {
-	          const stillUsed = this.currentCard.items.some(i => (i.content || '').toLowerCase() === key);
-	          if (!stillUsed) this.usedSuggestions.delete(key);
-	        }
-	      }
+      // Update local state
+      this.currentCard.items = this.currentCard.items.filter(i => i.position !== position);
+      if (item) {
+        const key = (item.content || '').toLowerCase();
+        if (key) {
+          const stillUsed = this.currentCard.items.some(i => (i.content || '').toLowerCase() === key);
+          if (!stillUsed) this.usedSuggestions.delete(key);
+        }
+      }
 
       // Update grid
       const cell = document.querySelector(`[data-position="${position}"]`);
