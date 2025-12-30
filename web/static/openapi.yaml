@@ -216,6 +216,15 @@ paths:
                 properties:
                   error:
                     type: string
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
     post:
       summary: Block a user
       security:
@@ -356,6 +365,7 @@ paths:
                 expires_in_days:
                   type: integer
                   minimum: 1
+                  maximum: 365
       responses:
         '201':
           description: Invite created
@@ -379,6 +389,15 @@ paths:
                     type: string
         '401':
           description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '409':
+          description: Invite limit reached
           content:
             application/json:
               schema:

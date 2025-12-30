@@ -576,13 +576,13 @@ const App = {
 
   storePendingInviteToken(token) {
     if (!token) return;
-    localStorage.setItem('pendingInviteToken', token);
+    sessionStorage.setItem('pendingInviteToken', token);
   },
 
   consumePendingInviteToken() {
-    const token = localStorage.getItem('pendingInviteToken');
+    const token = sessionStorage.getItem('pendingInviteToken');
     if (!token) return null;
-    localStorage.removeItem('pendingInviteToken');
+    sessionStorage.removeItem('pendingInviteToken');
     return token;
   },
 
@@ -4961,6 +4961,7 @@ const App = {
       await API.auth.logout();
       this.user = null;
       this.setupNavigation();
+      sessionStorage.removeItem('pendingInviteToken');
       this._allowNextHashRoute = true;
       window.location.hash = '#home';
       this.toast('Logged out successfully', 'success');

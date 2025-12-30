@@ -17,13 +17,19 @@ func TestFriendInviteService_CreateInvite_Success(t *testing.T) {
 	now := time.Now()
 
 	var gotArgs []any
+	callCount := 0
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			if !strings.Contains(sql, "INSERT INTO friend_invites") {
-				t.Fatalf("unexpected sql: %q", sql)
+			callCount++
+			if strings.Contains(sql, "COUNT") {
+				return rowFromValues(0)
 			}
-			gotArgs = args
-			return rowFromValues(inviteID, inviterID, &now, nil, nil, nil, now)
+			if strings.Contains(sql, "INSERT INTO friend_invites") {
+				gotArgs = args
+				return rowFromValues(inviteID, inviterID, &now, nil, nil, nil, now)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
 		},
 	}
 
@@ -31,6 +37,9 @@ func TestFriendInviteService_CreateInvite_Success(t *testing.T) {
 	invite, token, err := svc.CreateInvite(context.Background(), inviterID, 7)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 2 {
+		t.Fatalf("expected 2 query calls, got %d", callCount)
 	}
 	if token == "" {
 		t.Fatal("expected invite token")
@@ -49,6 +58,44 @@ func TestFriendInviteService_CreateInvite_Success(t *testing.T) {
 	}
 	if gotArgs[2] == nil {
 		t.Fatal("expected expires_at arg")
+	}
+}
+
+func TestFriendInviteService_CreateInvite_InvalidExpiry(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			t.Fatal("expected no database calls for invalid expiry")
+			return rowFromValues()
+		},
+	}
+
+	svc := NewFriendInviteService(db)
+	_, _, err := svc.CreateInvite(context.Background(), uuid.New(), InviteExpiryMaxDays+1)
+	if !errors.Is(err, ErrInviteExpiryOutOfRange) {
+		t.Fatalf("expected ErrInviteExpiryOutOfRange, got %v", err)
+	}
+}
+
+func TestFriendInviteService_CreateInvite_LimitReached(t *testing.T) {
+	inviterID := uuid.New()
+	callCount := 0
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			callCount++
+			if !strings.Contains(sql, "COUNT") {
+				t.Fatalf("unexpected sql: %q", sql)
+			}
+			return rowFromValues(InviteMaxActive)
+		},
+	}
+
+	svc := NewFriendInviteService(db)
+	_, _, err := svc.CreateInvite(context.Background(), inviterID, 7)
+	if !errors.Is(err, ErrInviteLimitReached) {
+		t.Fatalf("expected ErrInviteLimitReached, got %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected 1 query call, got %d", callCount)
 	}
 }
 

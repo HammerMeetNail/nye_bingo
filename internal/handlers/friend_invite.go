@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -29,9 +30,9 @@ type AcceptInviteRequest struct {
 }
 
 type InviteResponse struct {
-	Invite  models.FriendInvite `json:"invite"`
-	URL     string              `json:"url,omitempty"`
-	Message string              `json:"message,omitempty"`
+	Invite  *models.FriendInvite `json:"invite,omitempty"`
+	URL     string               `json:"url,omitempty"`
+	Message string               `json:"message,omitempty"`
 }
 
 type InviteListResponse struct {
@@ -57,11 +58,23 @@ func (h *FriendInviteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresInDays := req.ExpiresInDays
-	if expiresInDays <= 0 {
-		expiresInDays = 14
+	if expiresInDays == 0 {
+		expiresInDays = services.InviteExpiryDefaultDays
+	}
+	if expiresInDays < services.InviteExpiryMinDays || expiresInDays > services.InviteExpiryMaxDays {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("expires_in_days must be between %d and %d", services.InviteExpiryMinDays, services.InviteExpiryMaxDays))
+		return
 	}
 
 	invite, token, err := h.inviteService.CreateInvite(r.Context(), user.ID, expiresInDays)
+	if errors.Is(err, services.ErrInviteExpiryOutOfRange) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("expires_in_days must be between %d and %d", services.InviteExpiryMinDays, services.InviteExpiryMaxDays))
+		return
+	}
+	if errors.Is(err, services.ErrInviteLimitReached) {
+		writeError(w, http.StatusConflict, fmt.Sprintf("Invite limit reached (max %d active)", services.InviteMaxActive))
+		return
+	}
 	if err != nil {
 		log.Printf("Error creating invite: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
@@ -69,7 +82,7 @@ func (h *FriendInviteHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	url := "#friend-invite/" + token
-	writeJSON(w, http.StatusCreated, InviteResponse{Invite: *invite, URL: url})
+	writeJSON(w, http.StatusCreated, InviteResponse{Invite: invite, URL: url})
 }
 
 func (h *FriendInviteHandler) List(w http.ResponseWriter, r *http.Request) {

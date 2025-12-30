@@ -53,6 +53,10 @@ func (h *BlockHandler) Block(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Cannot block yourself")
 		return
 	}
+	if errors.Is(err, services.ErrBlockedUserNotFound) {
+		writeError(w, http.StatusNotFound, "User not found")
+		return
+	}
 	if errors.Is(err, services.ErrBlockExists) {
 		writeError(w, http.StatusConflict, "User already blocked")
 		return

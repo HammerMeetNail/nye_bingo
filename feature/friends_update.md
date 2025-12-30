@@ -266,6 +266,7 @@ Implementation approach:
 - Use Redis (already in stack) for token-bucket/counter with TTL.
 - Key by `userID` where available, plus `IP` as backstop.
 - Return 429 with a generic message.
+- Cap active invites per user to limit invite spam.
 
 ### Response shaping / privacy-by-default
 

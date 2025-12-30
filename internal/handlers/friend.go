@@ -337,7 +337,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 	// Get friend's username from the friendship list
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting friends list: %v", err)
+		log.Printf("Error getting friends list for cards: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

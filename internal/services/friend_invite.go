@@ -17,7 +17,16 @@ import (
 )
 
 var (
-	ErrInviteNotFound = errors.New("invite not found")
+	ErrInviteNotFound         = errors.New("invite not found")
+	ErrInviteExpiryOutOfRange = errors.New("invite expiry out of range")
+	ErrInviteLimitReached     = errors.New("invite limit reached")
+)
+
+const (
+	InviteExpiryMinDays     = 1
+	InviteExpiryMaxDays     = 365
+	InviteExpiryDefaultDays = 14
+	InviteMaxActive         = 5
 )
 
 type FriendInviteService struct {
@@ -29,6 +38,13 @@ func NewFriendInviteService(db DB) *FriendInviteService {
 }
 
 func (s *FriendInviteService) CreateInvite(ctx context.Context, inviterID uuid.UUID, expiresInDays int) (*models.FriendInvite, string, error) {
+	if err := validateInviteExpiryDays(expiresInDays); err != nil {
+		return nil, "", err
+	}
+	if err := s.ensureInviteLimit(ctx, inviterID); err != nil {
+		return nil, "", err
+	}
+
 	token, err := generateInviteToken()
 	if err != nil {
 		return nil, "", err
@@ -83,6 +99,26 @@ func (s *FriendInviteService) ListInvites(ctx context.Context, inviterID uuid.UU
 		invites = []models.FriendInvite{}
 	}
 	return invites, nil
+}
+
+func (s *FriendInviteService) ensureInviteLimit(ctx context.Context, inviterID uuid.UUID) error {
+	var activeCount int
+	err := s.db.QueryRow(ctx,
+		`SELECT COUNT(*)
+		 FROM friend_invites
+		 WHERE inviter_user_id = $1
+		   AND revoked_at IS NULL
+		   AND accepted_at IS NULL
+		   AND (expires_at IS NULL OR expires_at > NOW())`,
+		inviterID,
+	).Scan(&activeCount)
+	if err != nil {
+		return fmt.Errorf("count invites: %w", err)
+	}
+	if activeCount >= InviteMaxActive {
+		return ErrInviteLimitReached
+	}
+	return nil
 }
 
 func (s *FriendInviteService) RevokeInvite(ctx context.Context, inviterID, inviteID uuid.UUID) error {
@@ -211,4 +247,11 @@ func generateInviteToken() (string, error) {
 func hashInviteToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(hash[:])
+}
+
+func validateInviteExpiryDays(expiresInDays int) error {
+	if expiresInDays < InviteExpiryMinDays || expiresInDays > InviteExpiryMaxDays {
+		return ErrInviteExpiryOutOfRange
+	}
+	return nil
 }

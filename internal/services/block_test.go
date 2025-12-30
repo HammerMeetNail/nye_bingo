@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestBlockService_Block_Self(t *testing.T) {
@@ -55,6 +56,23 @@ func TestBlockService_Block_AlreadyBlocked(t *testing.T) {
 	}
 	if !rolledBack {
 		t.Fatal("expected rollback on duplicate block")
+	}
+}
+
+func TestBlockService_Block_UserNotFound(t *testing.T) {
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{}, &pgconn.PgError{Code: "23503"}
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+	svc := NewBlockService(db)
+	if err := svc.Block(context.Background(), uuid.New(), uuid.New()); !errors.Is(err, ErrBlockedUserNotFound) {
+		t.Fatalf("expected ErrBlockedUserNotFound, got %v", err)
 	}
 }
 

@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -70,6 +72,36 @@ func TestFriendInviteHandler_Create_Success(t *testing.T) {
 	}
 }
 
+func TestFriendInviteHandler_Create_InvalidExpiresInDays(t *testing.T) {
+	handler := NewFriendInviteHandler(&mockInviteService{
+		CreateInviteFunc: func(ctx context.Context, inviterID uuid.UUID, expiresInDays int) (*models.FriendInvite, string, error) {
+			t.Fatal("CreateInvite should not be called for invalid expires_in_days")
+			return nil, "", nil
+		},
+	})
+
+	payload := fmt.Sprintf(`{"expires_in_days":%d}`, services.InviteExpiryMaxDays+1)
+	req := httptest.NewRequest(http.MethodPost, "/api/friends/invites", bytes.NewBufferString(payload))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.Create(rr, req)
+	assertErrorResponse(t, rr, http.StatusBadRequest, fmt.Sprintf("expires_in_days must be between %d and %d", services.InviteExpiryMinDays, services.InviteExpiryMaxDays))
+}
+
+func TestFriendInviteHandler_Create_LimitReached(t *testing.T) {
+	handler := NewFriendInviteHandler(&mockInviteService{
+		CreateInviteFunc: func(ctx context.Context, inviterID uuid.UUID, expiresInDays int) (*models.FriendInvite, string, error) {
+			return nil, "", services.ErrInviteLimitReached
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/friends/invites", bytes.NewBufferString(`{"expires_in_days":7}`))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.Create(rr, req)
+	assertErrorResponse(t, rr, http.StatusConflict, fmt.Sprintf("Invite limit reached (max %d active)", services.InviteMaxActive))
+}
+
 func TestFriendInviteHandler_List_Success(t *testing.T) {
 	handler := NewFriendInviteHandler(&mockInviteService{
 		ListInvitesFunc: func(ctx context.Context, inviterID uuid.UUID) ([]models.FriendInvite, error) {
@@ -110,6 +142,22 @@ func TestFriendInviteHandler_Revoke_NotFound(t *testing.T) {
 	rr := httptest.NewRecorder()
 	handler.Revoke(rr, req)
 	assertErrorResponse(t, rr, http.StatusNotFound, "Invite not found")
+}
+
+func TestFriendInviteHandler_Revoke_DoesNotReturnInvite(t *testing.T) {
+	handler := NewFriendInviteHandler(&mockInviteService{})
+	inviteID := uuid.New().String()
+	req := httptest.NewRequest(http.MethodDelete, "/api/friends/invites/"+inviteID+"/revoke", nil)
+	req.SetPathValue("id", inviteID)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.Revoke(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if strings.Contains(rr.Body.String(), "\"invite\"") {
+		t.Fatalf("expected revoke response to omit invite, got: %s", rr.Body.String())
+	}
 }
 
 func TestFriendInviteHandler_Accept_InvalidBody(t *testing.T) {

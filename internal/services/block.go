@@ -6,14 +6,16 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
 var (
-	ErrCannotBlockSelf = errors.New("cannot block yourself")
-	ErrBlockExists     = errors.New("user is already blocked")
-	ErrBlockNotFound   = errors.New("block not found")
+	ErrCannotBlockSelf     = errors.New("cannot block yourself")
+	ErrBlockExists         = errors.New("user is already blocked")
+	ErrBlockNotFound       = errors.New("block not found")
+	ErrBlockedUserNotFound = errors.New("blocked user not found")
 )
 
 type BlockService struct {
@@ -48,6 +50,10 @@ func (s *BlockService) Block(ctx context.Context, blockerID, blockedID uuid.UUID
 		blockerID, blockedID,
 	)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23503" {
+			return ErrBlockedUserNotFound
+		}
 		return fmt.Errorf("insert block: %w", err)
 	}
 	if result.RowsAffected() == 0 {

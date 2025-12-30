@@ -97,6 +97,20 @@ func TestBlockHandler_Block_Exists(t *testing.T) {
 	assertErrorResponse(t, rr, http.StatusConflict, "User already blocked")
 }
 
+func TestBlockHandler_Block_UserNotFound(t *testing.T) {
+	handler := NewBlockHandler(&mockBlockService{
+		BlockFunc: func(ctx context.Context, blockerID, blockedID uuid.UUID) error {
+			return services.ErrBlockedUserNotFound
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/blocks", bytes.NewBufferString(`{"user_id":"`+uuid.New().String()+`"}`))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: uuid.New()}))
+	rr := httptest.NewRecorder()
+	handler.Block(rr, req)
+	assertErrorResponse(t, rr, http.StatusNotFound, "User not found")
+}
+
 func TestBlockHandler_Block_Error(t *testing.T) {
 	handler := NewBlockHandler(&mockBlockService{
 		BlockFunc: func(ctx context.Context, blockerID, blockedID uuid.UUID) error {
