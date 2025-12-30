@@ -216,15 +216,6 @@ paths:
                 properties:
                   error:
                     type: string
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
     post:
       summary: Block a user
       security:
@@ -260,6 +251,15 @@ paths:
                     type: string
         '401':
           description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: User not found
           content:
             application/json:
               schema:
