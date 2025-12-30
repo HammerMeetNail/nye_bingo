@@ -11,7 +11,9 @@ Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `POST /api/cards/{id}/swap`, `P
 
 Suggestions: `GET /api/suggestions`, `GET /api/suggestions/categories`
 
-Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/request`, `PUT /api/friends/{id}/{accept,reject}`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`, `GET /api/friends/{id}/cards`
+Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/requests`, `PUT /api/friends/requests/{id}/{accept,reject}`, `DELETE /api/friends/requests/{id}/cancel`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`, `GET /api/friends/{id}/cards`
+Friend Invites: `GET/POST /api/friends/invites`, `POST /api/friends/invites/accept`, `DELETE /api/friends/invites/{id}/revoke`
+Blocks: `GET/POST /api/blocks`, `DELETE /api/blocks/{id}`
 
 Reactions: `POST/DELETE /api/items/{id}/react`, `GET /api/items/{id}/reactions`, `GET /api/reactions/emojis`
 

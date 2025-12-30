@@ -85,6 +85,22 @@ type FriendChecker interface {
 	IsFriend(ctx context.Context, userID, otherUserID uuid.UUID) (bool, error)
 }
 
+// BlockServiceInterface defines the contract for blocking operations.
+type BlockServiceInterface interface {
+	Block(ctx context.Context, blockerID, blockedID uuid.UUID) error
+	Unblock(ctx context.Context, blockerID, blockedID uuid.UUID) error
+	IsBlocked(ctx context.Context, userID, otherUserID uuid.UUID) (bool, error)
+	ListBlocked(ctx context.Context, blockerID uuid.UUID) ([]models.BlockedUser, error)
+}
+
+// FriendInviteServiceInterface defines the contract for friend invite operations.
+type FriendInviteServiceInterface interface {
+	CreateInvite(ctx context.Context, inviterID uuid.UUID, expiresInDays int) (*models.FriendInvite, string, error)
+	ListInvites(ctx context.Context, inviterID uuid.UUID) ([]models.FriendInvite, error)
+	RevokeInvite(ctx context.Context, inviterID, inviteID uuid.UUID) error
+	AcceptInvite(ctx context.Context, recipientID uuid.UUID, token string) (*models.UserSearchResult, error)
+}
+
 // ReactionServiceInterface defines the contract for reaction operations.
 type ReactionServiceInterface interface {
 	AddReaction(ctx context.Context, userID, itemID uuid.UUID, emoji string) (*models.Reaction, error)

@@ -68,6 +68,9 @@
 - `tests/e2e/friend-management.spec.js`
   - Cancel sent friend requests, reject incoming requests.
   - Remove an existing friend.
+- `tests/e2e/friend-invites.spec.js`
+  - Invite link acceptance connects friends.
+  - Blocking removes friendships and hides search results.
 - `tests/e2e/profile-settings.spec.js`
   - Searchable toggle gates friend search visibility.
   - Password change validation and re-login with new password.

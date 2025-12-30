@@ -25,13 +25,11 @@ type Friendship struct {
 type FriendWithUser struct {
 	Friendship
 	FriendUsername string `json:"friend_username"`
-	FriendEmail    string `json:"friend_email,omitempty"`
 }
 
 type FriendRequest struct {
 	Friendship
 	RequesterUsername string `json:"requester_username"`
-	RequesterEmail    string `json:"requester_email,omitempty"`
 }
 
 type UserSearchResult struct {

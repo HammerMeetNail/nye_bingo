@@ -331,9 +331,11 @@ PUT  /api/cards/:id/items/:pos/notes      - Update notes/proof
 ### 6.4 API Endpoints
 ```
 GET    /api/friends              - List friends
-POST   /api/friends/request      - Send request
-PUT    /api/friends/:id/accept   - Accept request
-DELETE /api/friends/:id          - Remove/reject
+POST   /api/friends/requests     - Send request
+PUT    /api/friends/requests/:id/accept - Accept request
+PUT    /api/friends/requests/:id/reject - Reject request
+DELETE /api/friends/requests/:id/cancel - Cancel request
+DELETE /api/friends/:id          - Remove friend
 GET    /api/friends/:id/card     - View friend's card
 POST   /api/items/:id/react      - Add/change reaction
 DELETE /api/items/:id/react      - Remove reaction
@@ -598,8 +600,10 @@ FROM alpine:3.19
 | PUT | /api/cards/:id/items/:pos/notes | Add notes |
 | GET | /api/suggestions | Get suggestions |
 | GET | /api/friends | List friends |
-| POST | /api/friends/request | Send request |
-| PUT | /api/friends/:id/accept | Accept request |
+| POST | /api/friends/requests | Send request |
+| PUT | /api/friends/requests/:id/accept | Accept request |
+| PUT | /api/friends/requests/:id/reject | Reject request |
+| DELETE | /api/friends/requests/:id/cancel | Cancel request |
 | DELETE | /api/friends/:id | Remove friend |
 | GET | /api/friends/:id/card | View friend's card |
 | POST | /api/items/:id/react | React to item |

@@ -30,8 +30,10 @@ func TestFriendService_SearchUsers_ShortQuery(t *testing.T) {
 
 func TestFriendService_SearchUsers_ReturnsRows(t *testing.T) {
 	userID := uuid.New()
+	var gotSQL string
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			gotSQL = sql
 			return &fakeRows{rows: [][]any{{userID, "alice"}}}, nil
 		},
 	}
@@ -46,6 +48,9 @@ func TestFriendService_SearchUsers_ReturnsRows(t *testing.T) {
 	}
 	if results[0].ID != userID || results[0].Username != "alice" {
 		t.Fatalf("unexpected result: %+v", results[0])
+	}
+	if !strings.Contains(gotSQL, "user_blocks") {
+		t.Fatalf("expected search to exclude blocked users, got sql: %q", gotSQL)
 	}
 }
 
@@ -87,19 +92,31 @@ func TestFriendService_SendRequest_Self(t *testing.T) {
 }
 
 func TestFriendService_SendRequest_AlreadyExists(t *testing.T) {
-	calls := 0
 	userID := uuid.New()
 	friendID := uuid.New()
-	db := &fakeDB{
+	var rolledBack bool
+	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			calls++
-			if !strings.Contains(sql, "SELECT EXISTS") || !strings.Contains(sql, "FROM friendships") {
-				t.Fatalf("unexpected existence sql: %q", sql)
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
 			}
-			if len(args) != 2 || args[0] != userID || args[1] != friendID {
-				t.Fatalf("unexpected existence args: %v", args)
+			if strings.Contains(sql, "FROM user_blocks") {
+				return rowFromValues(false)
 			}
-			return rowFromValues(true)
+			if strings.Contains(sql, "SELECT EXISTS") && strings.Contains(sql, "FROM friendships") {
+				return rowFromValues(true)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
 		},
 	}
 
@@ -108,17 +125,73 @@ func TestFriendService_SendRequest_AlreadyExists(t *testing.T) {
 	if !errors.Is(err, ErrFriendshipExists) {
 		t.Fatalf("expected ErrFriendshipExists, got %v", err)
 	}
-	if calls != 1 {
-		t.Fatalf("expected single existence check, got %d", calls)
+	if !rolledBack {
+		t.Fatal("expected rollback")
+	}
+}
+
+func TestFriendService_SendRequest_Blocked(t *testing.T) {
+	userID := uuid.New()
+	friendID := uuid.New()
+	var rolledBack bool
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
+				return rowFromValues(true)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+
+	svc := NewFriendService(db)
+	_, err := svc.SendRequest(context.Background(), userID, friendID)
+	if !errors.Is(err, ErrUserBlocked) {
+		t.Fatalf("expected ErrUserBlocked, got %v", err)
+	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
 	}
 }
 
 func TestFriendService_SendRequest_ExistenceError(t *testing.T) {
-	db := &fakeDB{
+	var rolledBack bool
+	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			return fakeRow{scanFunc: func(dest ...any) error {
-				return errors.New("boom")
-			}}
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
+				return rowFromValues(false)
+			}
+			if strings.Contains(sql, "FROM friendships") {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("boom")
+				}}
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
 		},
 	}
 
@@ -127,32 +200,44 @@ func TestFriendService_SendRequest_ExistenceError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
+	}
 }
 
 func TestFriendService_SendRequest_Success(t *testing.T) {
 	userID := uuid.New()
 	friendID := uuid.New()
 	friendshipID := uuid.New()
-	call := 0
-	db := &fakeDB{
+	var committed bool
+	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			call++
-			if call == 1 {
-				if !strings.Contains(sql, "SELECT EXISTS") || !strings.Contains(sql, "FROM friendships") {
-					t.Fatalf("unexpected existence sql: %q", sql)
-				}
-				if len(args) != 2 || args[0] != userID || args[1] != friendID {
-					t.Fatalf("unexpected existence args: %v", args)
-				}
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
 				return rowFromValues(false)
 			}
-			if !strings.Contains(sql, "INSERT INTO friendships") || !strings.Contains(sql, "RETURNING id, user_id, friend_id, status, created_at") {
-				t.Fatalf("unexpected insert sql: %q", sql)
+			if strings.Contains(sql, "SELECT EXISTS") && strings.Contains(sql, "FROM friendships") {
+				return rowFromValues(false)
 			}
-			if len(args) != 2 || args[0] != userID || args[1] != friendID {
-				t.Fatalf("unexpected insert args: %v", args)
+			if strings.Contains(sql, "INSERT INTO friendships") {
+				if len(args) != 2 || args[0] != userID || args[1] != friendID {
+					t.Fatalf("unexpected insert args: %v", args)
+				}
+				return rowFromValues(friendshipRowValues(friendshipID, userID, friendID, models.FriendshipStatusPending)...)
 			}
-			return rowFromValues(friendshipRowValues(friendshipID, userID, friendID, models.FriendshipStatusPending)...)
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		CommitFunc: func(ctx context.Context) error {
+			committed = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
 		},
 	}
 
@@ -164,21 +249,42 @@ func TestFriendService_SendRequest_Success(t *testing.T) {
 	if friendship.ID != friendshipID {
 		t.Fatalf("expected friendship %v, got %v", friendshipID, friendship.ID)
 	}
+	if !committed {
+		t.Fatal("expected commit")
+	}
 }
 
 func TestFriendService_SendRequest_InsertError(t *testing.T) {
 	userID := uuid.New()
 	friendID := uuid.New()
-	call := 0
-	db := &fakeDB{
+	var rolledBack bool
+	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			call++
-			if call == 1 {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
 				return rowFromValues(false)
 			}
-			return fakeRow{scanFunc: func(dest ...any) error {
-				return errors.New("boom")
-			}}
+			if strings.Contains(sql, "FROM friendships") && strings.Contains(sql, "SELECT EXISTS") {
+				return rowFromValues(false)
+			}
+			if strings.Contains(sql, "INSERT INTO friendships") {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("boom")
+				}}
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
 		},
 	}
 
@@ -186,6 +292,55 @@ func TestFriendService_SendRequest_InsertError(t *testing.T) {
 	_, err := svc.SendRequest(context.Background(), userID, friendID)
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
+	}
+}
+
+func TestFriendService_SendRequest_CommitError(t *testing.T) {
+	userID := uuid.New()
+	friendID := uuid.New()
+
+	var rolledBack bool
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
+				return rowFromValues(false)
+			}
+			if strings.Contains(sql, "FROM friendships") && strings.Contains(sql, "SELECT EXISTS") {
+				return rowFromValues(false)
+			}
+			if strings.Contains(sql, "INSERT INTO friendships") {
+				return rowFromValues(friendshipRowValues(uuid.New(), userID, friendID, models.FriendshipStatusPending)...)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return errors.New("boom")
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+
+	svc := NewFriendService(db)
+	_, err := svc.SendRequest(context.Background(), userID, friendID)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
 	}
 }
 
@@ -553,7 +708,7 @@ func TestFriendService_ListFriends_ReturnsRows(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
 			return &fakeRows{rows: [][]any{
-				{friendshipID, userID, friendID, models.FriendshipStatusAccepted, time.Now(), "friend", "friend@example.com"},
+				{friendshipID, userID, friendID, models.FriendshipStatusAccepted, time.Now(), "friend"},
 			}}, nil
 		},
 	}
@@ -620,7 +775,7 @@ func TestFriendService_ListPendingRequests_ReturnsRows(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
 			return &fakeRows{rows: [][]any{
-				{friendshipID, friendID, userID, models.FriendshipStatusPending, time.Now(), "sender", "sender@example.com"},
+				{friendshipID, friendID, userID, models.FriendshipStatusPending, time.Now(), "sender"},
 			}}, nil
 		},
 	}
@@ -687,7 +842,7 @@ func TestFriendService_ListSentRequests_ReturnsRows(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
 			return &fakeRows{rows: [][]any{
-				{friendshipID, userID, friendID, models.FriendshipStatusPending, time.Now(), "friend", "friend@example.com"},
+				{friendshipID, userID, friendID, models.FriendshipStatusPending, time.Now(), "friend"},
 			}}, nil
 		},
 	}

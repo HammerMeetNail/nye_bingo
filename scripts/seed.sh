@@ -165,7 +165,7 @@ send_friend_request() {
     local csrf=$(get_csrf)
 
     curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-        -X POST "$BASE_URL/api/friends/request" \
+        -X POST "$BASE_URL/api/friends/requests" \
         -H "Content-Type: application/json" \
         -H "X-CSRF-Token: $csrf" \
         -d "{\"friend_id\":\"$friend_id\"}" > /dev/null
@@ -179,7 +179,7 @@ accept_friend_request() {
     local csrf=$(get_csrf)
 
     curl -s -c "$COOKIE_JAR" -b "$COOKIE_JAR" \
-        -X PUT "$BASE_URL/api/friends/$friendship_id/accept" \
+        -X PUT "$BASE_URL/api/friends/requests/$friendship_id/accept" \
         -H "X-CSRF-Token: $csrf" > /dev/null
 
     log_info "Accepted friend request"

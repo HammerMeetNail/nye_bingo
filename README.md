@@ -259,12 +259,24 @@ Set `DEBUG=true` to enable debug-level logs. In `APP_ENV=development`, this also
 ### Friends
 - `GET /api/friends` - List friends and requests
 - `GET /api/friends/search?q=` - Search users by username (only shows users who opted in)
-- `POST /api/friends/request` - Send friend request
-- `PUT /api/friends/{id}/accept` - Accept request
-- `PUT /api/friends/{id}/reject` - Reject request
+- `POST /api/friends/requests` - Send friend request
+- `PUT /api/friends/requests/{id}/accept` - Accept request
+- `PUT /api/friends/requests/{id}/reject` - Reject request
+- `DELETE /api/friends/requests/{id}/cancel` - Cancel pending request
 - `DELETE /api/friends/{id}` - Remove friend
 - `GET /api/friends/{id}/card` - View friend's current card
 - `GET /api/friends/{id}/cards` - View all friend's cards (with year selector)
+
+### Friend Invites
+- `GET /api/friends/invites` - List active invites
+- `POST /api/friends/invites` - Create invite link
+- `POST /api/friends/invites/accept` - Accept invite link
+- `DELETE /api/friends/invites/{id}/revoke` - Revoke invite
+
+### Blocks
+- `GET /api/blocks` - List blocked users
+- `POST /api/blocks` - Block a user
+- `DELETE /api/blocks/{id}` - Unblock a user
 
 ### Reactions
 - `POST /api/items/{id}/react` - React to completed item

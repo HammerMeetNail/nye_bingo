@@ -334,15 +334,15 @@ const API = {
     },
 
     async sendRequest(friendId) {
-      return API.request('POST', '/api/friends/request', { friend_id: friendId });
+      return API.request('POST', '/api/friends/requests', { friend_id: friendId });
     },
 
     async acceptRequest(friendshipId) {
-      return API.request('PUT', `/api/friends/${friendshipId}/accept`);
+      return API.request('PUT', `/api/friends/requests/${friendshipId}/accept`);
     },
 
     async rejectRequest(friendshipId) {
-      return API.request('PUT', `/api/friends/${friendshipId}/reject`);
+      return API.request('PUT', `/api/friends/requests/${friendshipId}/reject`);
     },
 
     async remove(friendshipId) {
@@ -350,7 +350,7 @@ const API = {
     },
 
     async cancelRequest(friendshipId) {
-      return API.request('DELETE', `/api/friends/${friendshipId}/cancel`);
+      return API.request('DELETE', `/api/friends/requests/${friendshipId}/cancel`);
     },
 
     async getCard(friendshipId) {
@@ -359,6 +359,34 @@ const API = {
 
     async getCards(friendshipId) {
       return API.request('GET', `/api/friends/${friendshipId}/cards`);
+    },
+
+    async block(userId) {
+      return API.request('POST', '/api/blocks', { user_id: userId });
+    },
+
+    async unblock(userId) {
+      return API.request('DELETE', `/api/blocks/${userId}`);
+    },
+
+    async listBlocked() {
+      return API.request('GET', '/api/blocks');
+    },
+
+    async createInvite(expiresInDays) {
+      return API.request('POST', '/api/friends/invites', { expires_in_days: expiresInDays });
+    },
+
+    async listInvites() {
+      return API.request('GET', '/api/friends/invites');
+    },
+
+    async revokeInvite(inviteId) {
+      return API.request('DELETE', `/api/friends/invites/${inviteId}/revoke`);
+    },
+
+    async acceptInvite(token) {
+      return API.request('POST', '/api/friends/invites/accept', { token });
     },
   },
 

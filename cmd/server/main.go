@@ -96,6 +96,8 @@ func run() error {
 	friendService := services.NewFriendService(dbAdapter)
 	reactionService := services.NewReactionService(dbAdapter, friendService)
 	apiTokenService := services.NewApiTokenService(dbAdapter)
+	blockService := services.NewBlockService(dbAdapter)
+	inviteService := services.NewFriendInviteService(dbAdapter)
 	aiService := ai.NewService(cfg, dbAdapter)
 
 	// Initialize handlers
@@ -107,6 +109,8 @@ func run() error {
 	reactionHandler := handlers.NewReactionHandler(reactionService)
 	supportHandler := handlers.NewSupportHandler(emailService, redisDB.Client)
 	apiTokenHandler := handlers.NewApiTokenHandler(apiTokenService)
+	blockHandler := handlers.NewBlockHandler(blockService)
+	inviteHandler := handlers.NewFriendInviteHandler(inviteService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
@@ -202,13 +206,20 @@ func run() error {
 	// Friend endpoints
 	mux.Handle("GET /api/friends", requireSession(http.HandlerFunc(friendHandler.List)))
 	mux.Handle("GET /api/friends/search", requireSession(http.HandlerFunc(friendHandler.Search)))
-	mux.Handle("POST /api/friends/request", requireSession(http.HandlerFunc(friendHandler.SendRequest)))
-	mux.Handle("PUT /api/friends/{id}/accept", requireSession(http.HandlerFunc(friendHandler.AcceptRequest)))
-	mux.Handle("PUT /api/friends/{id}/reject", requireSession(http.HandlerFunc(friendHandler.RejectRequest)))
+	mux.Handle("POST /api/friends/requests", requireSession(http.HandlerFunc(friendHandler.SendRequest)))
+	mux.Handle("PUT /api/friends/requests/{id}/accept", requireSession(http.HandlerFunc(friendHandler.AcceptRequest)))
+	mux.Handle("PUT /api/friends/requests/{id}/reject", requireSession(http.HandlerFunc(friendHandler.RejectRequest)))
 	mux.Handle("DELETE /api/friends/{id}", requireSession(http.HandlerFunc(friendHandler.Remove)))
-	mux.Handle("DELETE /api/friends/{id}/cancel", requireSession(http.HandlerFunc(friendHandler.CancelRequest)))
+	mux.Handle("DELETE /api/friends/requests/{id}/cancel", requireSession(http.HandlerFunc(friendHandler.CancelRequest)))
 	mux.Handle("GET /api/friends/{id}/card", requireSession(http.HandlerFunc(friendHandler.GetFriendCard)))
 	mux.Handle("GET /api/friends/{id}/cards", requireSession(http.HandlerFunc(friendHandler.GetFriendCards)))
+	mux.Handle("POST /api/blocks", requireSession(http.HandlerFunc(blockHandler.Block)))
+	mux.Handle("DELETE /api/blocks/{id}", requireSession(http.HandlerFunc(blockHandler.Unblock)))
+	mux.Handle("GET /api/blocks", requireSession(http.HandlerFunc(blockHandler.List)))
+	mux.Handle("POST /api/friends/invites", requireSession(http.HandlerFunc(inviteHandler.Create)))
+	mux.Handle("GET /api/friends/invites", requireSession(http.HandlerFunc(inviteHandler.List)))
+	mux.Handle("DELETE /api/friends/invites/{id}/revoke", requireSession(http.HandlerFunc(inviteHandler.Revoke)))
+	mux.Handle("POST /api/friends/invites/accept", requireSession(http.HandlerFunc(inviteHandler.Accept)))
 
 	// Reaction endpoints
 	mux.Handle("POST /api/items/{id}/react", requireSession(http.HandlerFunc(reactionHandler.AddReaction)))
