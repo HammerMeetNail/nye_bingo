@@ -57,3 +57,10 @@ You are **REQUIRED** to read the specific documentation below if your task invol
 ## Universal Conventions
 - **Style**: Mimic existing Go (idiomatic, no frameworks) and JS (vanilla, ES6 modules) code.
 - **Safety**: Never commit secrets. Explain destructive shell commands before running.
+
+## Security Conventions (Required)
+- **No inline execution**: Do not add inline `<script>` blocks or HTML event handler attributes (`onclick=`, `onsubmit=`, etc.). Use external JS files plus the existing `data-action` event delegation pattern in `web/static/js/app.js`.
+- **Treat server/user data as untrusted**: When building HTML strings, escape untrusted values (use `App.escapeHtml`) or prefer DOM APIs (`textContent`, `createElement`, `setAttribute`) instead of `innerHTML`.
+- **Prefer whitelists for tokens**: For values used in class names, `data-*` attributes, or routing decisions, prefer a whitelist/mapping (enums) over “escaping”.
+- **Preserve strict CSP**: Do not re-introduce `unsafe-inline` / `unsafe-hashes` into `Content-Security-Policy`. If adding new third-party resources, update CSP intentionally and add/adjust tests to cover the change.
+- **Add XSS regressions with features**: When a feature renders user-controlled content, add/extend Playwright coverage with an XSS payload (e.g., `"<img src=x onerror=alert(1)>"`) and assert it renders as text and does not create DOM nodes.

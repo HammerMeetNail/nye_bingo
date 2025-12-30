@@ -17,6 +17,7 @@ const App = {
   async init() {
     await API.init();
     await this.checkAuth();
+    this.setupActionDelegation();
     this.setupNavigation();
     this.setupModal();
     this.setupOfflineDetection();
@@ -31,6 +32,339 @@ const App = {
       e.preventDefault();
       e.returnValue = '';
     });
+  },
+
+  qs(id) {
+    return document.getElementById(id);
+  },
+
+  setText(el, text) {
+    if (!el) return;
+    el.textContent = text ?? '';
+  },
+
+  setupActionDelegation() {
+    document.addEventListener('click', (event) => {
+      const stopEl = event.target.closest ? event.target.closest('[data-stop-propagation]') : null;
+      if (stopEl) event.stopPropagation();
+
+      const actionEl = event.target.closest ? event.target.closest('[data-action]') : null;
+      if (!actionEl) return;
+      if (actionEl.classList.contains('dropdown-item--disabled')) return;
+      const ariaDisabled = actionEl.getAttribute('aria-disabled');
+      const ariaDisabledProp = actionEl.ariaDisabled;
+      if (actionEl.disabled || ariaDisabled === 'true' || ariaDisabledProp === 'true') return;
+      const action = actionEl.dataset.action;
+      if (!action) return;
+      this.handleActionClick(action, actionEl, event);
+    });
+
+    document.addEventListener('submit', (event) => {
+      const form = event.target.closest ? event.target.closest('form[data-action]') : null;
+      if (!form) return;
+      const action = form.dataset.action;
+      if (!action) return;
+      this.handleActionSubmit(action, form, event);
+    });
+
+    document.addEventListener('change', (event) => {
+      const target = event.target.closest ? event.target.closest('[data-change-action]') : null;
+      if (!target) return;
+      const action = target.dataset.changeAction;
+      if (!action) return;
+      this.handleActionChange(action, target, event);
+    });
+  },
+
+  handleActionClick(action, target, event) {
+    switch (action) {
+      case 'close-modal':
+        this.closeModal();
+        break;
+      case 'proceed-pending-navigation':
+        this.proceedPendingNavigation();
+        break;
+      case 'open-finalize-from-navigation-warning':
+        this.openFinalizeFromNavigationWarning();
+        break;
+      case 'toggle-mobile-menu':
+        this.toggleMobileMenu();
+        break;
+      case 'logout':
+        this.logout();
+        break;
+      case 'confirmed-logout':
+        this.confirmedLogout();
+        break;
+      case 'open-ai-wizard': {
+        const cardId = target.dataset.cardId || null;
+        const desiredCount = target.dataset.desiredCount;
+        AIWizard.open(cardId || null, desiredCount ? parseInt(desiredCount, 10) : null);
+        break;
+      }
+      case 'open-ai-wizard-from-modal':
+        this.closeModal();
+        AIWizard.open();
+        break;
+      case 'ai-create-card':
+        AIWizard.createCard();
+        break;
+      case 'ai-add-to-card':
+        AIWizard.addToCard();
+        break;
+      case 'show-create-card-modal':
+        this.showCreateCardModal();
+        break;
+      case 'resend-verification':
+        this.resendVerification();
+        break;
+      case 'resend-verification-and-route':
+        this.resendVerification();
+        window.location.hash = `#check-email?type=verification&email=${encodeURIComponent(this.user?.email || '')}`;
+        break;
+      case 'select-all-cards':
+        this.selectAllCards();
+        break;
+      case 'deselect-all-cards':
+        this.deselectAllCards();
+        break;
+      case 'bulk-archive':
+        this.bulkSetArchive(true);
+        break;
+      case 'bulk-unarchive':
+        this.bulkSetArchive(false);
+        break;
+      case 'bulk-visible':
+        this.bulkSetVisibility(true);
+        break;
+      case 'bulk-private':
+        this.bulkSetVisibility(false);
+        break;
+      case 'bulk-delete':
+        this.bulkDeleteCards();
+        break;
+      case 'export-cards':
+        this.exportSelectedCards();
+        break;
+      case 'delete-card':
+        if (target.dataset.cardId) this.deleteCard(target.dataset.cardId);
+        break;
+      case 'show-ai-auth-modal':
+        this.showAIAuthModal();
+        break;
+      case 'edit-card-meta':
+        if (this.isAnonymousMode) {
+          this.showEditAnonymousCardMetaModal();
+        } else {
+          this.showEditCardMetaModal();
+        }
+        break;
+      case 'toggle-card-visibility': {
+        const cardId = target.dataset.cardId;
+        const visible = target.dataset.visible === 'true';
+        if (cardId) this.toggleCardVisibility(cardId, visible);
+        break;
+      }
+      case 'confirm-clear-card-items':
+        this.confirmClearCardItems();
+        break;
+      case 'shuffle-card':
+        this.shuffleCard();
+        break;
+      case 'show-clone-card-modal':
+        this.showCloneCardModal();
+        break;
+      case 'finalize-card':
+        this.finalizeCard();
+        break;
+      case 'fill-empty-spaces':
+        this.fillEmptySpaces();
+        break;
+      case 'confirm-delete-anonymous-card':
+        this.confirmDeleteAnonymousCard();
+        break;
+      case 'clear-card-items':
+        this.clearCardItems();
+        break;
+      case 'add-suggestion':
+        this.addSuggestion(target);
+        break;
+      case 'uncomplete-item': {
+        const position = parseInt(target.dataset.position, 10);
+        if (!Number.isNaN(position)) this.uncompleteItem(position);
+        break;
+      }
+      case 'ai-refine': {
+        const position = parseInt(target.dataset.position, 10);
+        if (!Number.isNaN(position)) this.handleAIRefine(position);
+        break;
+      }
+      case 'remove-item': {
+        const position = parseInt(target.dataset.position, 10);
+        if (!Number.isNaN(position)) this.removeItem(position);
+        break;
+      }
+      case 'confirm-finalize':
+        this.confirmFinalize();
+        break;
+      case 'show-finalize-register-form':
+        this.showFinalizeRegisterForm();
+        break;
+      case 'show-finalize-login-form':
+        this.showFinalizeLoginForm();
+        break;
+      case 'show-finalize-auth-modal':
+        this.showFinalizeAuthModal();
+        break;
+      case 'conflict-keep-existing':
+        if (target.dataset.cardId) this.handleConflictKeepExisting(target.dataset.cardId);
+        break;
+      case 'conflict-save-as-new':
+        this.handleConflictSaveAsNew();
+        break;
+      case 'conflict-replace':
+        if (target.dataset.cardId) this.handleConflictReplace(target.dataset.cardId);
+        break;
+      case 'import-anonymous-card':
+        this.importAnonymousCard();
+        break;
+      case 'create-conflict-go-to-existing':
+        if (target.dataset.cardId) this.handleCreateConflictGoToExisting(target.dataset.cardId);
+        break;
+      case 'create-conflict-save-as-new':
+        this.handleCreateConflictSaveAsNew();
+        break;
+      case 'create-conflict-replace':
+        if (target.dataset.cardId) this.handleCreateConflictReplace(target.dataset.cardId);
+        break;
+      case 'send-friend-request':
+        if (target.dataset.userId) this.sendFriendRequest(target.dataset.userId);
+        break;
+      case 'copy-invite-link': {
+        const input = document.getElementById('invite-link-input');
+        if (input?.value) this.copyInviteLink(input.value);
+        break;
+      }
+      case 'revoke-invite':
+        if (target.dataset.inviteId) this.revokeInvite(target.dataset.inviteId);
+        break;
+      case 'accept-request':
+        if (target.dataset.requestId) this.acceptRequest(target.dataset.requestId);
+        break;
+      case 'reject-request':
+        if (target.dataset.requestId) this.rejectRequest(target.dataset.requestId);
+        break;
+      case 'cancel-request':
+        if (target.dataset.requestId) this.cancelRequest(target.dataset.requestId);
+        break;
+      case 'remove-friend': {
+        const friendName = target.closest('.friend-item')?.querySelector('strong')?.textContent?.trim() || 'this user';
+        if (target.dataset.friendshipId) this.removeFriend(target.dataset.friendshipId, friendName);
+        break;
+      }
+      case 'block-user': {
+        const friendName = target.closest('.friend-item')?.querySelector('strong')?.textContent?.trim() || 'this user';
+        if (target.dataset.otherUserId) this.blockUser(target.dataset.otherUserId, friendName);
+        break;
+      }
+      case 'unblock-user': {
+        const friendName = target.closest('.friend-item')?.querySelector('strong')?.textContent?.trim() || 'this user';
+        if (target.dataset.userId) this.unblockUser(target.dataset.userId, friendName);
+        break;
+      }
+      case 'react-item':
+        if (target.dataset.itemId && target.dataset.emoji) {
+          this.reactToItem(target.dataset.itemId, target.dataset.emoji);
+        }
+        break;
+      case 'remove-reaction':
+        if (target.dataset.itemId) this.removeReaction(target.dataset.itemId);
+        break;
+      case 'show-create-token-modal':
+        this.showCreateTokenModal();
+        break;
+      case 'delete-token':
+        if (target.dataset.tokenId) this.deleteToken(target.dataset.tokenId);
+        break;
+      case 'revoke-all-tokens':
+        this.revokeAllTokens();
+        break;
+      case 'copy-new-token': {
+        const tokenEl = document.getElementById('new-token');
+        if (tokenEl?.textContent) this.copyToClipboard(tokenEl.textContent);
+        break;
+      }
+      case 'token-modal-done':
+        this.closeModal();
+        this.loadApiTokens();
+        break;
+      default:
+        break;
+    }
+  },
+
+  handleActionSubmit(action, form, event) {
+    switch (action) {
+      case 'create-card-modal':
+        this.handleCreateCardModal(event);
+        break;
+      case 'save-card-meta':
+        this.saveCardMeta(event);
+        break;
+      case 'save-anon-card-meta':
+        this.saveAnonymousCardMeta(event);
+        break;
+      case 'create-card-anon':
+        this.handleAnonymousCreateCard(event);
+        break;
+      case 'create-card':
+        this.handleCreateCard(event);
+        break;
+      case 'save-item-edit': {
+        const position = parseInt(form.dataset.position, 10);
+        if (!Number.isNaN(position)) this.saveItemEdit(event, position);
+        break;
+      }
+      case 'clone-card':
+        this.handleCloneCard(event);
+        break;
+      case 'finalize-register':
+        this.handleFinalizeRegister(event);
+        break;
+      case 'finalize-login':
+        this.handleFinalizeLogin(event);
+        break;
+      case 'conflict-save-as-new-submit':
+        this.handleConflictSaveAsNewSubmit(event);
+        break;
+      case 'create-conflict-save-as-new-submit':
+        this.handleCreateConflictSaveAsNewSubmit(event);
+        break;
+      case 'create-token':
+        this.handleCreateToken(event);
+        break;
+      case 'ai-generate':
+        AIWizard.handleGenerate(event);
+        break;
+      default:
+        break;
+    }
+  },
+
+  handleActionChange(action, target, event) {
+    switch (action) {
+      case 'dashboard-sort':
+        this.changeDashboardSort(target.value);
+        break;
+      case 'dashboard-selection':
+        this.updateDashboardSelection();
+        break;
+      case 'friend-card-select':
+        this.switchFriendCard(target.value);
+        break;
+      default:
+        break;
+    }
   },
 
   shouldWarnUnfinalizedCardNavigation() {
@@ -77,9 +411,9 @@ const App = {
           Your card is full, but it hasn't been finalized yet. Finalizing locks the layout so you can start tracking completion.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
-          <button class="btn btn-ghost" onclick="App.closeModal()">Stay</button>
-          <button class="btn btn-secondary" onclick="App.proceedPendingNavigation()">Leave Anyway</button>
-          <button class="btn btn-primary" onclick="App.openFinalizeFromNavigationWarning()">Finalize Card</button>
+          <button class="btn btn-ghost" data-action="close-modal">Stay</button>
+          <button class="btn btn-secondary" data-action="proceed-pending-navigation">Leave Anyway</button>
+          <button class="btn btn-primary" data-action="open-finalize-from-navigation-warning">Finalize Card</button>
         </div>
       </div>
     `);
@@ -162,7 +496,7 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="#dashboard" class="nav-link nav-link--primary">My Cards</a>
-        <button class="nav-hamburger" onclick="App.toggleMobileMenu()" aria-label="Toggle menu" aria-expanded="false">
+        <button class="nav-hamburger" data-action="toggle-mobile-menu" aria-label="Toggle menu" aria-expanded="false">
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
@@ -171,12 +505,12 @@ const App = {
           <a href="#profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
           <a href="#friends" class="nav-link">Friends</a>
           <a href="#faq" class="nav-link">FAQ</a>
-          <button class="btn btn-ghost" onclick="App.logout()">Logout</button>
+          <button class="btn btn-ghost" data-action="logout">Logout</button>
         </div>
       `;
     } else {
       nav.innerHTML = `
-        <button class="nav-hamburger" onclick="App.toggleMobileMenu()" aria-label="Toggle menu" aria-expanded="false">
+        <button class="nav-hamburger" data-action="toggle-mobile-menu" aria-label="Toggle menu" aria-expanded="false">
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
@@ -271,13 +605,13 @@ const App = {
 
     this.openModal('Create New Card', `
       <div class="text-center mb-lg" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
-        <button class="btn btn-secondary btn-lg" onclick="App.closeModal(); AIWizard.open()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+        <button class="btn btn-secondary btn-lg" data-action="open-ai-wizard-from-modal" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
             <span>✨</span> Generate with AI Wizard
         </button>
         <p class="text-muted mt-sm" style="font-size: 0.9rem;">Let AI create a custom card for you!</p>
       </div>
 
-      <form onsubmit="App.handleCreateCardModal(event)">
+      <form data-action="create-card-modal">
         <div class="form-group">
           <label for="modal-card-year">Year</label>
           <select id="modal-card-year" class="form-input" required>
@@ -330,7 +664,7 @@ const App = {
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">Create Card</button>
         </div>
       </form>
@@ -418,11 +752,10 @@ const App = {
     }).join('');
 
     this.openModal('Edit Card', `
-      <form onsubmit="App.saveCardMeta(event)">
+      <form data-action="save-card-meta">
         <div class="form-group">
           <label for="edit-card-title">Title</label>
           <input type="text" id="edit-card-title" class="form-input"
-                 value="${this.escapeHtml(currentTitle)}"
                  placeholder="e.g., Life Goals, Foods to Try"
                  maxlength="100">
           <small class="text-muted">Leave blank for default "${this.currentCard.year} Bingo Card"</small>
@@ -437,11 +770,13 @@ const App = {
         </div>
 
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
     `);
+    const titleInput = document.getElementById('edit-card-title');
+    if (titleInput) titleInput.value = currentTitle;
   },
 
   async saveCardMeta(event) {
@@ -609,7 +944,7 @@ const App = {
         ${this.user ? `
           <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
             <a href="#dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
-            <button class="btn btn-secondary btn-lg" onclick="App.showCreateCardModal()">Create New Card</button>
+            <button class="btn btn-secondary btn-lg" data-action="show-create-card-modal">Create New Card</button>
           </div>
         ` : `
           ${AnonymousCard.exists() ? `
@@ -1009,15 +1344,17 @@ const App = {
           <div class="card auth-card text-center">
             <div style="font-size: 4rem; margin-bottom: 1rem;">✗</div>
             <h2>Verification Failed</h2>
-            <p class="text-muted">${this.escapeHtml(error.message)}</p>
+            <p class="text-muted" id="verify-error-message"></p>
             ${this.user ? `
-              <button class="btn btn-primary" style="margin-top: 1rem;" onclick="App.resendVerification()">
+              <button class="btn btn-primary" style="margin-top: 1rem;" data-action="resend-verification">
                 Resend Verification Email
               </button>
             ` : `<a href="#login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
           </div>
         </div>
       `;
+      const errorEl = document.getElementById('verify-error-message');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -1087,7 +1424,7 @@ const App = {
             AI Goal Wizard: <strong>${remaining}</strong> free generations left before verification is required.
           </div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="App.resendVerification()">
+        <button class="btn btn-secondary btn-sm" data-action="resend-verification">
           Resend verification email
         </button>
       </div>
@@ -1146,7 +1483,7 @@ const App = {
       <div class="dashboard-controls">
         <div class="dashboard-sort">
           <label for="sort-select" class="text-muted" style="font-size: 0.875rem;">Sort:</label>
-          <select id="sort-select" class="form-input form-input--sm" onchange="App.changeDashboardSort(this.value)">
+          <select id="sort-select" class="form-input form-input--sm" data-change-action="dashboard-sort">
             <option value="updated" ${this.dashboardSortKey === 'updated' ? 'selected' : ''}>Recently Updated</option>
             <option value="year-desc" ${this.dashboardSortKey === 'year-desc' ? 'selected' : ''}>Year (newest)</option>
             <option value="year-asc" ${this.dashboardSortKey === 'year-asc' ? 'selected' : ''}>Year (oldest)</option>
@@ -1157,8 +1494,8 @@ const App = {
           </select>
         </div>
         <div class="dashboard-selection">
-          <button class="btn btn-ghost btn-sm" onclick="App.selectAllCards()">Select All</button>
-          <button class="btn btn-ghost btn-sm" onclick="App.deselectAllCards()">Deselect All</button>
+          <button class="btn btn-ghost btn-sm" data-action="select-all-cards">Select All</button>
+          <button class="btn btn-ghost btn-sm" data-action="deselect-all-cards">Deselect All</button>
           <span id="selected-count" class="text-muted">${this.selectedCards.length} selected</span>
         </div>
         <div class="dashboard-actions">
@@ -1167,30 +1504,30 @@ const App = {
               Actions
             </button>
             <div class="dropdown-menu" role="menu">
-              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetArchive(true)" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="bulk-archive" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-archive"></i> Archive
               </button>
-              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetArchive(false)" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="bulk-unarchive" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-box-open"></i> Unarchive
               </button>
               <div class="dropdown-divider"></div>
-              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetVisibility(true)" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="bulk-visible" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-eye"></i> Make Visible
               </button>
-              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkSetVisibility(false)" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="bulk-private" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-eye-slash"></i> Make Private
               </button>
               <div class="dropdown-divider"></div>
-              <button class="dropdown-item dropdown-item--danger ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.bulkDeleteCards()" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item dropdown-item--danger ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="bulk-delete" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-trash"></i> Delete
               </button>
               <div class="dropdown-divider"></div>
-              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" onclick="App.exportSelectedCards()" ${hasSelection ? '' : 'title="Select cards first"'}>
+              <button class="dropdown-item ${hasSelection ? '' : 'dropdown-item--disabled'}" role="menuitem" data-action="export-cards" ${hasSelection ? '' : 'title="Select cards first"'}>
                 <i class="fas fa-download"></i> Export Cards
               </button>
             </div>
           </div>
-          <button class="btn btn-primary" onclick="App.showCreateCardModal()">+ Card</button>
+          <button class="btn btn-primary" data-action="show-create-card-modal">+ Card</button>
         </div>
       </div>
       <div class="dashboard-cards-list">
@@ -1217,8 +1554,8 @@ const App = {
       <div class="card dashboard-card-preview" style="margin-bottom: 1rem;">
         <div class="dashboard-card-preview-header">
           <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
-            <label class="dashboard-checkbox-label" onclick="event.stopPropagation();">
-              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} onchange="App.updateDashboardSelection()">
+            <label class="dashboard-checkbox-label" data-stop-propagation="true">
+              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
             </label>
             <a href="${cardLink}" style="text-decoration: none; flex: 1;">
               <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
@@ -1238,7 +1575,7 @@ const App = {
               <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
             </span>
             ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
-            <button class="btn btn-ghost btn-sm dashboard-delete-btn" style="color: var(--color-danger);" onclick="event.stopPropagation(); App.deleteCard('${card.id}')" aria-label="Delete card" title="Delete card">
+            <button class="btn btn-ghost btn-sm dashboard-delete-btn" style="color: var(--color-danger);" data-action="delete-card" data-card-id="${card.id}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -1528,7 +1865,7 @@ const App = {
                 The AI Goal Wizard is available after you create an account.
               </div>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="App.showAIAuthModal()" style="display: flex; align-items: center; gap: 0.35rem;">
+                <button type="button" class="btn btn-secondary btn-sm" data-action="show-ai-auth-modal" style="display: flex; align-items: center; gap: 0.35rem;">
                   <span>✨</span> Generate with AI Wizard
                 </button>
               </div>
@@ -1536,7 +1873,7 @@ const App = {
           </div>
         </div>
 
-        <form id="create-card-form" onsubmit="App.handleAnonymousCreateCard(event)">
+        <form id="create-card-form" data-action="create-card-anon">
           <div class="form-group">
             <label for="card-year">Year</label>
             <select id="card-year" class="form-input" required>
@@ -1700,7 +2037,7 @@ const App = {
     container.innerHTML = `
       <div class="card" style="max-width: 500px; margin: 2rem auto;">
         <div class="text-center mb-lg" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
-            <button class="btn btn-secondary btn-lg" onclick="AIWizard.open()" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+            <button class="btn btn-secondary btn-lg" data-action="open-ai-wizard" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                 <span>✨</span> Generate with AI Wizard
             </button>
             <p class="text-muted mt-sm" style="font-size: 0.9rem;">Let AI create a custom card for you!</p>
@@ -1710,7 +2047,7 @@ const App = {
           <h2 class="card-title">Create New Card</h2>
           <p class="card-subtitle">Set up your bingo card</p>
         </div>
-        <form id="create-card-form" onsubmit="App.handleCreateCard(event)">
+        <form id="create-card-form" data-action="create-card">
           <div class="form-group">
             <label for="card-year">Year</label>
             <select id="card-year" class="form-input" required>
@@ -1807,10 +2144,12 @@ const App = {
       container.innerHTML = `
         <div class="card text-center" style="padding: 3rem;">
           <h3>Card not found</h3>
-          <p class="text-muted mb-lg">${error.message}</p>
+          <p class="text-muted mb-lg" id="card-error-message"></p>
           <a href="#dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
       `;
+      const errorEl = document.getElementById('card-error-message');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -1845,10 +2184,10 @@ const App = {
           <h2 style="margin: 0;">${displayName}</h2>
           <span class="year-badge">${this.currentCard.year}</span>
           ${categoryBadge}
-          <button class="btn btn-ghost btn-sm" onclick="App.${isAnon ? 'showEditAnonymousCardMetaModal' : 'showEditCardMetaModal'}()" title="Edit card name">✏️</button>
+          <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         </div>
         ${!isAnon ? `
-          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})">
+          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}">
             <i class="fas fa-${this.currentCard.visible_to_friends ? 'eye' : 'eye-slash'}"></i>
             <span>${this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private'}</span>
           </button>
@@ -1876,7 +2215,7 @@ const App = {
           <div class="card-config-panel" style="margin-top: 0.75rem;">
             <div class="form-group" style="margin-bottom: 0.75rem;">
               <label class="form-label">Header</label>
-              <input type="text" id="card-header-input" class="form-input" maxlength="${gridSize}" value="${this.escapeHtml(this.getHeaderText(this.currentCard))}">
+              <input type="text" id="card-header-input" class="form-input" maxlength="${gridSize}">
               <small class="text-muted">1-${gridSize} characters.</small>
             </div>
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
@@ -1886,18 +2225,18 @@ const App = {
           </div>
 
           <div class="action-bar action-bar--side editor-actions">
-            <button class="btn btn-secondary btn-danger-outline" id="clear-btn" onclick="App.confirmClearCardItems()" ${itemCount === 0 ? 'disabled' : ''}>
+            <button class="btn btn-secondary btn-danger-outline" id="clear-btn" data-action="confirm-clear-card-items" ${itemCount === 0 ? 'disabled' : ''}>
               🧹 Clear
             </button>
-            <button class="btn btn-secondary" onclick="App.shuffleCard()" ${itemCount === 0 ? 'disabled' : ''}>
+            <button class="btn btn-secondary" id="shuffle-btn" data-action="shuffle-card" ${itemCount === 0 ? 'disabled' : ''}>
               🔀 Shuffle
             </button>
             ${!isAnon ? `
-              <button class="btn btn-secondary" onclick="App.showCloneCardModal()">
+              <button class="btn btn-secondary" data-action="show-clone-card-modal">
                 📄 Clone
               </button>
             ` : ''}
-            <button class="btn btn-primary" onclick="App.finalizeCard()" ${itemCount < capacity ? 'disabled' : ''}>
+            <button class="btn btn-primary" id="finalize-btn" data-action="finalize-card" ${itemCount < capacity ? 'disabled' : ''}>
               ✓ Finalize Card
             </button>
           </div>
@@ -1907,34 +2246,34 @@ const App = {
               <h3 class="suggestions-title">Suggestions</h3>
               <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 ${isAnon ? `
-                  <button class="btn btn-secondary btn-sm" onclick="App.showAIAuthModal()" title="Create an account to use AI features">
+                  <button class="btn btn-secondary btn-sm" data-action="show-ai-auth-modal" title="Create an account to use AI features">
                     🧙 AI
                   </button>
                 ` : `
-                  <button class="btn btn-secondary btn-sm" id="ai-btn" onclick="AIWizard.open('${App.escapeHtml(this.currentCard.id)}', ${capacity - itemCount})" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
+                  <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.currentCard.id}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
                     🧙 AI
                   </button>
                 `}
-                <button class="btn btn-secondary btn-sm" id="fill-empty-btn" onclick="App.fillEmptySpaces()" ${itemCount >= capacity ? 'disabled' : ''}>
+                <button class="btn btn-secondary btn-sm" id="fill-empty-btn" data-action="fill-empty-spaces" ${itemCount >= capacity ? 'disabled' : ''}>
                   ✨ Fill
                 </button>
               </div>
             </div>
             <div class="suggestions-categories" id="category-tabs">
               ${this.suggestions.map((cat, i) => `
-                <button class="category-tab ${i === 0 ? 'category-tab--active' : ''}" data-category="${cat.category}">
-                  ${cat.category.split(' ')[0]}
+                <button class="category-tab ${i === 0 ? 'category-tab--active' : ''}" data-index="${i}">
+                  ${this.escapeHtml(cat.category.split(' ')[0])}
                 </button>
               `).join('')}
             </div>
             <div class="suggestions-list" id="suggestions-list">
-              ${this.renderSuggestions(this.suggestions[0]?.category)}
+              ${this.renderSuggestions(0)}
             </div>
           </div>
 
           ${isAnon ? `
             <div class="editor-delete">
-              <button class="btn btn-ghost" style="color: var(--color-danger);" onclick="App.confirmDeleteAnonymousCard()">
+              <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="confirm-delete-anonymous-card">
                 Delete Card
               </button>
             </div>
@@ -1942,6 +2281,9 @@ const App = {
         </div>
       </div>
     `;
+
+    const headerInput = document.getElementById('card-header-input');
+    if (headerInput) headerInput.value = this.getHeaderText(this.currentCard);
 
     this.setupEditorEvents();
   },
@@ -1956,8 +2298,8 @@ const App = {
           Clear all ${itemCount} items from this card? This can't be undone.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
-          <button class="btn btn-primary" style="background: var(--color-danger); border-color: var(--color-danger);" onclick="App.clearCardItems()">Clear All</button>
+          <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
+          <button class="btn btn-primary" style="background: var(--color-danger); border-color: var(--color-danger);" data-action="clear-card-items">Clear All</button>
         </div>
       </div>
     `);
@@ -2060,11 +2402,10 @@ const App = {
     }).join('');
 
     this.openModal('Edit Card', `
-      <form onsubmit="App.saveAnonymousCardMeta(event)">
+      <form data-action="save-anon-card-meta">
         <div class="form-group">
           <label for="edit-card-title">Title</label>
           <input type="text" id="edit-card-title" class="form-input"
-                 value="${this.escapeHtml(currentTitle)}"
                  placeholder="e.g., Life Goals, Foods to Try"
                  maxlength="100">
           <small class="text-muted">Leave blank for default "${card.year} Bingo Card"</small>
@@ -2079,11 +2420,13 @@ const App = {
         </div>
 
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
       </form>
     `);
+    const titleInput = document.getElementById('edit-card-title');
+    if (titleInput) titleInput.value = currentTitle;
   },
 
   saveAnonymousCardMeta(event) {
@@ -2134,9 +2477,9 @@ const App = {
             ${categoryBadge}
           </div>
           <div class="card-header-actions">
-            <button class="btn btn-ghost btn-sm" onclick="App.showEditCardMetaModal()" title="Edit card name">✏️</button>
-            <button class="btn btn-ghost btn-sm" onclick="App.showCloneCardModal()" title="Clone card">📄</button>
-            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
+            <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
+            <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
             </button>
@@ -2230,9 +2573,8 @@ const App = {
             <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
                  data-position="${i}"
                  data-item-id="${item.id}"
-                 data-content="${this.escapeHtml(item.content)}"
                  ${!finalized ? 'draggable="true"' : ''}
-                 title="${this.escapeHtml(item.content)}">
+                 >
               <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
             </div>
           `);
@@ -2258,20 +2600,39 @@ const App = {
     return truncated + '…';
   },
 
-  renderSuggestions(category) {
-    const categoryData = this.suggestions.find(c => c.category === category);
+  renderSuggestions(categoryIndex = 0) {
+    const categoryData = this.suggestions[categoryIndex];
     if (!categoryData) return '<p class="text-muted">No suggestions available</p>';
 
     return categoryData.suggestions.map(suggestion => {
       const isUsed = this.usedSuggestions.has(suggestion.content.toLowerCase());
+      const actionAttr = isUsed ? '' : 'data-action="add-suggestion"';
+      const disabledAttr = isUsed ? 'aria-disabled="true"' : '';
       return `
         <div class="suggestion-item ${isUsed ? 'suggestion-item--used' : ''}"
-             data-content="${this.escapeHtml(suggestion.content)}"
-             ${isUsed ? '' : 'onclick="App.addSuggestion(this)"'}>
+             ${actionAttr} ${disabledAttr}>
           ${this.escapeHtml(suggestion.content)}
         </div>
       `;
     }).join('');
+  },
+
+  getActiveSuggestionIndex() {
+    const activeTab = document.querySelector('.category-tab--active');
+    if (!activeTab) return 0;
+    const rawIndex = parseInt(activeTab.dataset.index, 10);
+    const count = Array.isArray(this.suggestions) ? this.suggestions.length : 0;
+    if (count === 0) return 0;
+    let index = Number.isNaN(rawIndex) ? 0 : rawIndex;
+    if (index < 0) index = 0;
+    if (index >= count) index = count - 1;
+    return index;
+  },
+
+  refreshSuggestionsList() {
+    const list = document.getElementById('suggestions-list');
+    if (!list) return;
+    list.innerHTML = this.renderSuggestions(this.getActiveSuggestionIndex());
   },
 
   setupEditorEvents() {
@@ -2289,7 +2650,11 @@ const App = {
       if (e.target.classList.contains('category-tab')) {
         document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('category-tab--active'));
         e.target.classList.add('category-tab--active');
-        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(e.target.dataset.category);
+        const rawIndex = parseInt(e.target.dataset.index, 10);
+        const count = Array.isArray(this.suggestions) ? this.suggestions.length : 0;
+        let index = Number.isNaN(rawIndex) ? 0 : rawIndex;
+        if (index < 0 || index >= count) index = 0;
+        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(index);
       }
     });
 
@@ -2325,7 +2690,8 @@ const App = {
       if (!cell || cell.classList.contains('bingo-cell--free')) return;
 
       const position = parseInt(cell.dataset.position);
-      const content = cell.dataset.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
+      const item = this.currentCard.items?.find(i => i.position === position);
+      const content = item?.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
       const isCompleted = cell.classList.contains('bingo-cell--completed');
 
       // Show item detail modal
@@ -2344,10 +2710,10 @@ const App = {
           ${notes ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
         </div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
             Close
           </button>
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.uncompleteItem(${position})">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="uncomplete-item" data-position="${position}">
             Mark Incomplete
           </button>
         </div>
@@ -2363,7 +2729,7 @@ const App = {
             <textarea id="complete-notes" class="form-input" rows="3" placeholder="How did you accomplish this?"></textarea>
           </div>
           <div style="display: flex; gap: 1rem;">
-            <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+            <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
               Cancel
             </button>
             <button type="submit" class="btn btn-primary" style="flex: 1;">
@@ -2657,7 +3023,8 @@ const App = {
 
   showItemOptions(cell) {
     const position = parseInt(cell.dataset.position, 10);
-    const content = cell.dataset.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
+    const item = this.currentCard.items?.find(i => i.position === position);
+    const content = item?.content || '';
     const isEmpty = cell.classList.contains('bingo-cell--empty');
     const modalTitle = isEmpty ? 'Add Goal' : 'Edit Goal';
     const aiButtonLabel = isEmpty ? '🧙 Suggest with AI' : '🧙 Refine with AI';
@@ -2667,27 +3034,27 @@ const App = {
         <div class="form-group ai-guide-section">
           <label class="form-label">AI Assist</label>
           <input type="text" id="ai-refine-hint" class="form-input form-input--sm" placeholder="${aiHintPlaceholder}" maxlength="500">
-          <button type="button" class="btn btn-secondary btn-sm" id="ai-refine-generate" onclick="App.handleAIRefine(${position})">
+          <button type="button" class="btn btn-secondary btn-sm" id="ai-refine-generate" data-action="ai-refine" data-position="${position}">
             ${aiButtonLabel}
           </button>
           <div id="ai-refine-results" class="ai-guide-results"></div>
         </div>
     `;
     const removeButton = `
-          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : `onclick="App.removeItem(${position})"`}>
+          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" data-action="remove-item" data-position="${position}" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : ''}>
             Remove
           </button>
     `;
 
     this.openModal(modalTitle, `
-      <form onsubmit="App.saveItemEdit(event, ${position})">
+      <form data-action="save-item-edit" data-position="${position}">
         <div class="form-group">
           <label class="form-label" for="edit-item-content-${position}">Goal</label>
           <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
         </div>
         ${aiSection}
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="App.closeModal()">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
             Cancel
           </button>
           ${removeButton}
@@ -2856,10 +3223,13 @@ const App = {
         cell.classList.remove('bingo-cell--empty');
         cell.classList.add('bingo-cell--appearing');
         cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : newItem.id;
-        cell.dataset.content = content;
         cell.title = content;
         cell.draggable = true;
-        cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>`;
+        cell.innerHTML = '';
+        const contentEl = document.createElement('span');
+        contentEl.className = 'bingo-cell-content';
+        contentEl.textContent = shortText;
+        cell.appendChild(contentEl);
       }
 
       const itemCount = this.currentCard.items.length;
@@ -2878,13 +3248,12 @@ const App = {
       if (aiBtn) aiBtn.disabled = isFull;
       const clearBtn = document.getElementById('clear-btn');
       if (clearBtn) clearBtn.disabled = itemCount === 0;
-      document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
-      document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
+      const shuffleBtn = document.getElementById('shuffle-btn');
+      if (shuffleBtn) shuffleBtn.disabled = itemCount === 0;
+      const finalizeBtn = document.getElementById('finalize-btn');
+      if (finalizeBtn) finalizeBtn.disabled = itemCount < capacity;
 
-      const activeTab = document.querySelector('.category-tab--active');
-      if (activeTab) {
-        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-      }
+      this.refreshSuggestionsList();
 
       this.closeModal();
       this.toast('Goal added', 'success');
@@ -2940,7 +3309,6 @@ const App = {
 
       const cell = document.querySelector(`.bingo-cell[data-position="${position}"]`);
       if (cell) {
-        cell.dataset.content = item.content;
         cell.title = item.content;
         const contentEl = cell.querySelector('.bingo-cell-content');
         if (contentEl) {
@@ -2948,10 +3316,7 @@ const App = {
         }
       }
 
-      const activeTab = document.querySelector('.category-tab--active');
-      if (activeTab) {
-        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-      }
+      this.refreshSuggestionsList();
 
       this.closeModal();
       this.toast('Goal updated', 'success');
@@ -3008,10 +3373,13 @@ const App = {
       cell.classList.remove('bingo-cell--empty');
       cell.classList.add('bingo-cell--appearing');
       cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : this.currentCard.items[this.currentCard.items.length - 1].id;
-      cell.dataset.content = content;
       cell.title = content;
       cell.draggable = true;
-      cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(this.truncateText(content, 50))}</span>`;
+      cell.innerHTML = '';
+      const contentEl = document.createElement('span');
+      contentEl.className = 'bingo-cell-content';
+      contentEl.textContent = this.truncateText(content, 50);
+      cell.appendChild(contentEl);
 
       // Update progress
       const itemCount = this.currentCard.items.length;
@@ -3025,19 +3393,18 @@ const App = {
         input.disabled = true;
         document.getElementById('add-btn').disabled = true;
         document.getElementById('fill-empty-btn').disabled = true;
-        document.querySelector('[onclick="App.finalizeCard()"]').disabled = false;
+        const finalizeBtn = document.getElementById('finalize-btn');
+        if (finalizeBtn) finalizeBtn.disabled = false;
       }
       const clearBtn = document.getElementById('clear-btn');
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
       if (aiBtn) aiBtn.disabled = itemCount >= capacity;
-      document.querySelector('[onclick="App.shuffleCard()"]').disabled = false;
+      const shuffleBtn = document.getElementById('shuffle-btn');
+      if (shuffleBtn) shuffleBtn.disabled = false;
 
       // Update suggestions
-      const activeTab = document.querySelector('.category-tab--active');
-      if (activeTab) {
-        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-      }
+      this.refreshSuggestionsList();
 
       this.confetti();
     } catch (error) {
@@ -3046,7 +3413,9 @@ const App = {
   },
 
   addSuggestion(element) {
-    const content = element.dataset.content;
+    if (!element || element.classList.contains('suggestion-item--used')) return;
+    const content = element.textContent?.trim() || '';
+    if (!content) return;
     document.getElementById('item-input').value = content;
     this.addItem();
   },
@@ -3122,10 +3491,13 @@ const App = {
         cell.classList.remove('bingo-cell--empty');
         cell.classList.add('bingo-cell--appearing');
         cell.dataset.itemId = this.isAnonymousMode ? `anon-${position}` : this.currentCard.items[this.currentCard.items.length - 1].id;
-        cell.dataset.content = this.escapeHtml(content);
         cell.draggable = true;
         cell.title = content;
-        cell.innerHTML = `<span class="bingo-cell-content">${this.escapeHtml(this.truncateText(content, 50))}</span>`;
+        cell.innerHTML = '';
+        const contentEl = document.createElement('span');
+        contentEl.className = 'bingo-cell-content';
+        contentEl.textContent = this.truncateText(content, 50);
+        cell.appendChild(contentEl);
 
         added++;
       } catch (error) {
@@ -3149,14 +3521,13 @@ const App = {
     if (clearBtn) clearBtn.disabled = itemCount === 0;
     const aiBtn = document.getElementById('ai-btn');
     if (aiBtn) aiBtn.disabled = isFull;
-    document.querySelector('[onclick="App.shuffleCard()"]').disabled = itemCount === 0;
-    document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
+    const shuffleBtn = document.getElementById('shuffle-btn');
+    if (shuffleBtn) shuffleBtn.disabled = itemCount === 0;
+    const finalizeBtn = document.getElementById('finalize-btn');
+    if (finalizeBtn) finalizeBtn.disabled = itemCount < capacity;
 
     // Update suggestions panel
-    const activeTab = document.querySelector('.category-tab--active');
-    if (activeTab) {
-      document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-    }
+    this.refreshSuggestionsList();
 
     this.toast(`Added ${added} item${added !== 1 ? 's' : ''} to your card`, 'success');
   },
@@ -3205,16 +3576,15 @@ const App = {
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
       if (aiBtn) aiBtn.disabled = itemCount >= capacity;
-      document.querySelector('[onclick="App.finalizeCard()"]').disabled = itemCount < capacity;
+      const finalizeBtn = document.getElementById('finalize-btn');
+      if (finalizeBtn) finalizeBtn.disabled = itemCount < capacity;
       if (itemCount === 0) {
-        document.querySelector('[onclick="App.shuffleCard()"]').disabled = true;
+        const shuffleBtn = document.getElementById('shuffle-btn');
+        if (shuffleBtn) shuffleBtn.disabled = true;
       }
 
       // Update suggestions
-      const activeTab = document.querySelector('.category-tab--active');
-      if (activeTab) {
-        document.getElementById('suggestions-list').innerHTML = this.renderSuggestions(activeTab.dataset.category);
-      }
+      this.refreshSuggestionsList();
 
       this.closeModal();
       this.toast('Item removed', 'success');
@@ -3320,7 +3690,7 @@ const App = {
     const hasFree = this.getHasFreeSpace(this.currentCard);
 
     this.openModal('Clone Card', `
-      <form onsubmit="App.handleCloneCard(event)">
+      <form data-action="clone-card">
         <div class="form-group">
           <label for="clone-card-year">Year</label>
           <select id="clone-card-year" class="form-input" required>
@@ -3334,7 +3704,6 @@ const App = {
             Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
           </label>
           <input type="text" id="clone-card-title" class="form-input"
-                 value="${this.escapeHtml(defaultTitle)}"
                  maxlength="100">
         </div>
 
@@ -3368,12 +3737,12 @@ const App = {
 
         <div class="form-group">
           <label for="clone-card-header">Header</label>
-          <input type="text" id="clone-card-header" class="form-input" maxlength="${gridSize}" value="${this.escapeHtml(headerText)}" required>
+          <input type="text" id="clone-card-header" class="form-input" maxlength="${gridSize}" required>
           <small class="text-muted" id="clone-card-header-help">1-${gridSize} characters.</small>
         </div>
 
         <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">Clone</button>
         </div>
       </form>
@@ -3382,6 +3751,9 @@ const App = {
     const gridSizeEl = document.getElementById('clone-card-grid-size');
     const headerEl = document.getElementById('clone-card-header');
     const headerHelpEl = document.getElementById('clone-card-header-help');
+    const titleEl = document.getElementById('clone-card-title');
+    if (titleEl) titleEl.value = defaultTitle;
+    if (headerEl) headerEl.value = headerText;
     if (gridSizeEl && headerEl) {
       const apply = () => {
         const n = parseInt(gridSizeEl.value, 10) || 5;
@@ -3462,8 +3834,8 @@ const App = {
           </p>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="App.confirmFinalize()">Finalize Card</button>
+          <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
+          <button class="btn btn-primary" data-action="confirm-finalize">Finalize Card</button>
         </div>
       </div>
     `);
@@ -3493,13 +3865,13 @@ const App = {
           Your bingo card is ready! Create an account to save and finalize it.
         </p>
         <div style="display: flex; flex-direction: column; gap: 1rem;">
-          <button class="btn btn-primary btn-lg" onclick="App.showFinalizeRegisterForm()">
+          <button class="btn btn-primary btn-lg" data-action="show-finalize-register-form">
             Create Account
           </button>
-          <button class="btn btn-secondary btn-lg" onclick="App.showFinalizeLoginForm()">
+          <button class="btn btn-secondary btn-lg" data-action="show-finalize-login-form">
             I Already Have an Account
           </button>
-          <button class="btn btn-ghost" onclick="App.closeModal()">
+          <button class="btn btn-ghost" data-action="close-modal">
             Cancel
           </button>
         </div>
@@ -3515,13 +3887,13 @@ const App = {
           This helps prevent abuse and keeps AI costs under control.
         </p>
         <div style="display: flex; flex-direction: column; gap: 1rem;">
-          <a class="btn btn-primary btn-lg" href="#register" onclick="App.closeModal()">
+          <a class="btn btn-primary btn-lg" href="#register" data-action="close-modal">
             Create Account
           </a>
-          <a class="btn btn-secondary btn-lg" href="#login" onclick="App.closeModal()">
+          <a class="btn btn-secondary btn-lg" href="#login" data-action="close-modal">
             I Already Have an Account
           </a>
-          <button class="btn btn-ghost" onclick="App.closeModal()">
+          <button class="btn btn-ghost" data-action="close-modal">
             Cancel
           </button>
         </div>
@@ -3533,7 +3905,7 @@ const App = {
   showFinalizeRegisterForm() {
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
-      <form id="finalize-register-form" onsubmit="App.handleFinalizeRegister(event)">
+      <form id="finalize-register-form" data-action="finalize-register">
         <div class="form-group">
           <label class="form-label" for="finalize-username">Username</label>
           <input type="text" id="finalize-username" class="form-input" required minlength="2" maxlength="100">
@@ -3556,7 +3928,7 @@ const App = {
         </div>
         <div id="finalize-register-error" class="form-error hidden"></div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.showFinalizeAuthModal()">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="show-finalize-auth-modal">
             Back
           </button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">
@@ -3595,7 +3967,7 @@ const App = {
   showFinalizeLoginForm() {
     const modalBody = document.getElementById('modal-body');
     modalBody.innerHTML = `
-      <form id="finalize-login-form" onsubmit="App.handleFinalizeLogin(event)">
+      <form id="finalize-login-form" data-action="finalize-login">
         <div class="form-group">
           <label class="form-label" for="finalize-login-email">Email</label>
           <input type="email" id="finalize-login-email" class="form-input" required autocomplete="email">
@@ -3606,7 +3978,7 @@ const App = {
         </div>
         <div id="finalize-login-error" class="form-error hidden"></div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.showFinalizeAuthModal()">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="show-finalize-auth-modal">
             Back
           </button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">
@@ -3689,16 +4061,16 @@ const App = {
         </div>
         <p style="margin-bottom: 1.5rem;">What would you like to do?</p>
         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <button class="btn btn-secondary" onclick="App.handleConflictKeepExisting('${existingCard.id}')">
+          <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${existingCard.id}">
             Keep Existing Card
           </button>
-          <button class="btn btn-primary" onclick="App.handleConflictSaveAsNew()">
+          <button class="btn btn-primary" data-action="conflict-save-as-new">
             Save as New Card (with different title)
           </button>
-          <button class="btn btn-ghost" style="color: var(--color-danger);" onclick="App.handleConflictReplace('${existingCard.id}')">
+          <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="conflict-replace" data-card-id="${existingCard.id}">
             Replace Existing Card
           </button>
-          <button class="btn btn-ghost" onclick="App.closeModal()">
+          <button class="btn btn-ghost" data-action="close-modal">
             Cancel
           </button>
         </div>
@@ -3721,17 +4093,16 @@ const App = {
     const currentTitle = anonCard.title || `${anonCard.year} Bingo Card`;
 
     this.openModal('Save with New Title', `
-      <form id="conflict-new-title-form" onsubmit="App.handleConflictSaveAsNewSubmit(event)">
+      <form id="conflict-new-title-form" data-action="conflict-save-as-new-submit">
         <div class="form-group">
           <label class="form-label" for="conflict-new-title">New Title</label>
           <input type="text" id="conflict-new-title" class="form-input" required
-                 value="${this.escapeHtml(currentTitle)} (2)"
                  maxlength="100">
           <small class="text-muted">Choose a different title for your new card</small>
         </div>
         <div id="conflict-new-title-error" class="form-error hidden"></div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.importAnonymousCard()">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="import-anonymous-card">
             Back
           </button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">
@@ -3740,6 +4111,8 @@ const App = {
         </div>
       </form>
     `);
+    const titleInput = document.getElementById('conflict-new-title');
+    if (titleInput) titleInput.value = `${currentTitle} (2)`;
   },
 
   async handleConflictSaveAsNewSubmit(event) {
@@ -3819,23 +4192,23 @@ const App = {
     this.createConflictContext = { year, category };
 
     let buttons = `
-      <button class="btn btn-secondary" onclick="App.handleCreateConflictGoToExisting('${existingCard.id}')">
+      <button class="btn btn-secondary" data-action="create-conflict-go-to-existing" data-card-id="${existingCard.id}">
         Go to Existing Card
       </button>
-      <button class="btn btn-primary" onclick="App.handleCreateConflictSaveAsNew()">
+      <button class="btn btn-primary" data-action="create-conflict-save-as-new">
         Create with Different Title
       </button>`;
 
     // Only offer replace for unfinalized cards
     if (!existingCard.is_finalized) {
       buttons += `
-        <button class="btn btn-ghost" style="color: var(--color-danger);" onclick="App.handleCreateConflictReplace('${existingCard.id}')">
+        <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="create-conflict-replace" data-card-id="${existingCard.id}">
           Delete &amp; Create New
         </button>`;
     }
 
     buttons += `
-      <button class="btn btn-ghost" onclick="App.closeModal()">
+      <button class="btn btn-ghost" data-action="close-modal">
         Cancel
       </button>`;
 
@@ -3870,17 +4243,16 @@ const App = {
     const suggestedTitle = `${ctx.year} Bingo Card (2)`;
 
     this.openModal('Create with New Title', `
-      <form id="create-conflict-title-form" onsubmit="App.handleCreateConflictSaveAsNewSubmit(event)">
+      <form id="create-conflict-title-form" data-action="create-conflict-save-as-new-submit">
         <div class="form-group">
           <label class="form-label" for="create-conflict-title">Card Title</label>
           <input type="text" id="create-conflict-title" class="form-input" required
-                 value="${this.escapeHtml(suggestedTitle)}"
                  maxlength="100">
           <small class="text-muted">Choose a unique title for your new card</small>
         </div>
         <div id="create-conflict-error" class="form-error hidden"></div>
         <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" onclick="App.closeModal()">
+          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">
             Cancel
           </button>
           <button type="submit" class="btn btn-primary" style="flex: 1;">
@@ -3889,6 +4261,8 @@ const App = {
         </div>
       </form>
     `);
+    const titleInput = document.getElementById('create-conflict-title');
+    if (titleInput) titleInput.value = suggestedTitle;
   },
 
   async handleCreateConflictSaveAsNewSubmit(event) {
@@ -4047,10 +4421,12 @@ const App = {
       container.innerHTML = `
         <div class="card text-center" style="padding: 3rem;">
           <h3>Invite Error</h3>
-          <p class="text-muted mb-lg">${this.escapeHtml(error.message)}</p>
+          <p class="text-muted mb-lg" id="invite-accept-error"></p>
           <a href="#friends" class="btn btn-primary">Back to Friends</a>
         </div>
       `;
+      const errorEl = document.getElementById('invite-accept-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4134,36 +4510,6 @@ const App = {
     });
 
     createInviteBtn.addEventListener('click', () => this.createFriendInvite());
-    this.setupFriendsActionHandlers();
-  },
-
-  setupFriendsActionHandlers() {
-    const friendsListEl = document.getElementById('friends-list');
-    if (friendsListEl) {
-      friendsListEl.addEventListener('click', (event) => {
-        const button = event.target.closest ? event.target.closest('button[data-action]') : null;
-        if (!button) return;
-        const action = button.dataset.action;
-        const friendName = button.dataset.friendName || 'this user';
-        if (action === 'remove' && button.dataset.friendshipId) {
-          this.removeFriend(button.dataset.friendshipId, friendName);
-        } else if (action === 'block' && button.dataset.otherUserId) {
-          this.blockUser(button.dataset.otherUserId, friendName);
-        }
-      });
-    }
-
-    const blockedListEl = document.getElementById('blocked-list');
-    if (blockedListEl) {
-      blockedListEl.addEventListener('click', (event) => {
-        const button = event.target.closest ? event.target.closest('button[data-action="unblock"]') : null;
-        if (!button) return;
-        const friendName = button.dataset.username || 'this user';
-        if (button.dataset.userId) {
-          this.unblockUser(button.dataset.userId, friendName);
-        }
-      });
-    }
   },
 
   async searchFriends() {
@@ -4187,14 +4533,16 @@ const App = {
             <div>
               <strong>${this.escapeHtml(user.username)}</strong>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="App.sendFriendRequest('${user.id}')">
+            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${user.id}">
               Add Friend
             </button>
           </div>
         `).join('');
       }
     } catch (error) {
-      resultsEl.innerHTML = `<p class="text-muted">${error.message}</p>`;
+      resultsEl.innerHTML = '<p class="text-muted" id="friend-search-error"></p>';
+      const errorEl = document.getElementById('friend-search-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4210,15 +4558,19 @@ const App = {
           <div class="form-group" style="margin-bottom: 0;">
             <label class="form-label">Invite Link</label>
             <div class="search-input-group">
-              <input type="text" class="form-input" readonly value="${this.escapeHtml(inviteURL)}">
-              <button class="btn btn-secondary" onclick="App.copyInviteLink('${this.escapeHtml(inviteURL)}')">Copy</button>
+              <input type="text" class="form-input" id="invite-link-input" readonly>
+              <button class="btn btn-secondary" data-action="copy-invite-link">Copy</button>
             </div>
           </div>
         </div>
       `;
+      const inviteInput = document.getElementById('invite-link-input');
+      if (inviteInput) inviteInput.value = inviteURL;
       await this.loadInvites();
     } catch (error) {
-      resultEl.innerHTML = `<p class="text-muted">${this.escapeHtml(error.message)}</p>`;
+      resultEl.innerHTML = '<p class="text-muted" id="invite-error"></p>';
+      const errorEl = document.getElementById('invite-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4249,11 +4601,13 @@ const App = {
               ${invite.expires_at ? `Expires ${new Date(invite.expires_at).toLocaleDateString()}` : 'No expiration'}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="App.revokeInvite('${invite.id}')">Revoke</button>
+          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${invite.id}">Revoke</button>
         </div>
       `).join('');
     } catch (error) {
-      listEl.innerHTML = `<p class="text-muted">${this.escapeHtml(error.message)}</p>`;
+      listEl.innerHTML = '<p class="text-muted" id="invite-list-error"></p>';
+      const errorEl = document.getElementById('invite-list-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4284,12 +4638,14 @@ const App = {
           <div>
             <strong>${this.escapeHtml(user.username)}</strong>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="unblock" data-user-id="${user.id}" data-username="${this.escapeHtml(user.username)}">Unblock</button>
+          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${user.id}">Unblock</button>
         </div>
       `).join('');
     } catch (error) {
       blockedEl.style.display = 'block';
-      blockedListEl.innerHTML = `<p class="text-muted">${this.escapeHtml(error.message)}</p>`;
+      blockedListEl.innerHTML = '<p class="text-muted" id="blocked-error"></p>';
+      const errorEl = document.getElementById('blocked-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4321,8 +4677,8 @@ const App = {
               <strong>${this.escapeHtml(req.requester_username)}</strong>
             </div>
             <div class="friend-actions">
-              <button class="btn btn-primary btn-sm" onclick="App.acceptRequest('${req.id}')">Accept</button>
-              <button class="btn btn-ghost btn-sm" onclick="App.rejectRequest('${req.id}')">Reject</button>
+              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${req.id}">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>
             </div>
           </div>
         `).join('');
@@ -4340,7 +4696,7 @@ const App = {
             <div>
               <strong>${this.escapeHtml(req.friend_username)}</strong>
             </div>
-            <button class="btn btn-ghost btn-sm" onclick="App.cancelRequest('${req.id}')">Cancel</button>
+            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${req.id}">Cancel</button>
           </div>
         `).join('');
       } else {
@@ -4360,8 +4716,8 @@ const App = {
               </div>
               <div class="friend-actions">
                 <a href="#friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-                <button class="btn btn-ghost btn-sm" data-action="remove" data-friendship-id="${friend.id}" data-friend-name="${friendName}">Remove</button>
-                <button class="btn btn-ghost btn-sm" data-action="block" data-other-user-id="${otherUserId}" data-friend-name="${friendName}">Block</button>
+                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${friend.id}">Remove</button>
+                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${otherUserId}">Block</button>
               </div>
             </div>
           `;
@@ -4483,10 +4839,12 @@ const App = {
       container.innerHTML = `
         <div class="card text-center" style="padding: 3rem;">
           <h3>Error</h3>
-          <p class="text-muted mb-lg">${error.message}</p>
+          <p class="text-muted mb-lg" id="friend-card-error"></p>
           <a href="#friends" class="btn btn-primary">Back to Friends</a>
         </div>
       `;
+      const errorEl = document.getElementById('friend-card-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4510,7 +4868,7 @@ const App = {
         return `<option value="${card.id}" ${selected}>${cardName} (${card.year})${archived}</option>`;
       }).join('');
       cardSelector = `
-        <select id="friend-card-select" class="year-selector" onchange="App.switchFriendCard(this.value)">
+        <select id="friend-card-select" class="year-selector" data-change-action="friend-card-select">
           ${cardOptions}
         </select>
       `;
@@ -4579,7 +4937,8 @@ const App = {
       if (!cell || cell.classList.contains('bingo-cell--free') || cell.classList.contains('bingo-cell--empty')) return;
 
       const itemId = cell.dataset.itemId;
-      const content = cell.dataset.content;
+      const item = this.currentCard.items?.find(i => i.id === itemId);
+      const content = item?.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
       const isCompleted = cell.classList.contains('bingo-cell--completed');
 
       this.showFriendItemModal(itemId, content, isCompleted);
@@ -4619,9 +4978,9 @@ const App = {
         <div class="emoji-buttons">
           ${this.allowedEmojis.map(emoji => `
             <button class="emoji-btn ${userReaction?.emoji === emoji ? 'emoji-btn--selected' : ''}"
-                    onclick="App.reactToItem('${itemId}', '${emoji}')">${emoji}</button>
+                    data-action="react-item" data-item-id="${itemId}" data-emoji="${emoji}">${emoji}</button>
           `).join('')}
-          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" onclick="App.removeReaction('${itemId}')">✕</button>` : ''}
+          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${itemId}">✕</button>` : ''}
         </div>
       </div>
     ` : '';
@@ -4635,7 +4994,7 @@ const App = {
         ${!isCompleted ? '<p class="text-muted" style="margin-top: 1rem;">This goal hasn\'t been completed yet.</p>' : ''}
       </div>
       <div style="margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
           Close
         </button>
       </div>
@@ -4682,7 +5041,7 @@ const App = {
       : `
         <div class="profile-alert">
           <p><strong>Your email is not verified.</strong> Please check your inbox for the verification email.</p>
-          <button class="btn btn-secondary btn-sm" onclick="App.resendVerification()">Resend verification email</button>
+          <button class="btn btn-secondary btn-sm" data-action="resend-verification">Resend verification email</button>
         </div>
       `;
 
@@ -4754,7 +5113,7 @@ const App = {
                 Create API tokens to access your data programmatically.
                 <a href="/api/docs" target="_blank">View API Documentation</a>
               </p>
-              <button class="btn btn-secondary btn-sm" onclick="App.showCreateTokenModal()">Create New Token</button>
+              <button class="btn btn-secondary btn-sm" data-action="show-create-token-modal">Create New Token</button>
               <div id="api-tokens-list" class="tokens-list">
                 <div class="text-center"><div class="spinner spinner--small"></div></div>
               </div>
@@ -4764,7 +5123,7 @@ const App = {
           <div class="card profile-section">
             <h3>Account Actions</h3>
             <div class="profile-actions">
-              <button class="btn btn-ghost" onclick="App.logout()">Sign Out</button>
+              <button class="btn btn-ghost" data-action="logout">Sign Out</button>
             </div>
           </div>
         </div>
@@ -4843,10 +5202,12 @@ const App = {
       container.innerHTML = `
         <div class="card text-center" style="padding: 3rem;">
           <h3>Card not found</h3>
-          <p class="text-muted mb-lg">${error.message}</p>
+          <p class="text-muted mb-lg" id="archive-card-error"></p>
           <a href="#dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
       `;
+      const errorEl = document.getElementById('archive-card-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -4871,8 +5232,8 @@ const App = {
             ${categoryBadge}
           </div>
           <div class="card-header-actions">
-            <button class="btn btn-ghost btn-sm" onclick="App.showCloneCardModal()" title="Clone card">📄</button>
-            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" onclick="App.toggleCardVisibility('${this.currentCard.id}', ${!this.currentCard.visible_to_friends})" title="${visibilityLabel}">
+            <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
             </button>
@@ -4932,7 +5293,8 @@ const App = {
       if (!cell || cell.classList.contains('bingo-cell--free') || cell.classList.contains('bingo-cell--empty')) return;
 
       const position = parseInt(cell.dataset.position);
-      const content = cell.dataset.content;
+      const item = this.currentCard.items?.find(i => i.position === position);
+      const content = item?.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
       const isCompleted = cell.classList.contains('bingo-cell--completed');
 
       this.showArchiveItemModal(position, content, isCompleted);
@@ -4955,7 +5317,7 @@ const App = {
         `}
       </div>
       <div style="margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" style="width: 100%;" onclick="App.closeModal()">
+        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
           Close
         </button>
       </div>
@@ -4977,9 +5339,9 @@ const App = {
           Your card is full, but it hasn't been finalized yet. If you log out now, you might lose track of this card.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
-          <button class="btn btn-ghost" onclick="App.closeModal()">Stay</button>
-          <button class="btn btn-secondary" onclick="App.confirmedLogout()">Log Out Anyway</button>
-          <button class="btn btn-primary" onclick="App.openFinalizeFromNavigationWarning()">Finalize Card</button>
+          <button class="btn btn-ghost" data-action="close-modal">Stay</button>
+          <button class="btn btn-secondary" data-action="confirmed-logout">Log Out Anyway</button>
+          <button class="btn btn-primary" data-action="open-finalize-from-navigation-warning">Finalize Card</button>
         </div>
       </div>
     `);
@@ -5156,7 +5518,7 @@ const App = {
               Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="App.deleteToken('${token.id}')" title="Revoke Token">
+          <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -5166,18 +5528,20 @@ const App = {
       if (tokens.length > 1) {
           listEl.innerHTML += `
             <div style="margin-top: 1rem; text-align: right;">
-                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" onclick="App.revokeAllTokens()">Revoke All Tokens</button>
+                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" data-action="revoke-all-tokens">Revoke All Tokens</button>
             </div>
           `;
       }
     } catch (error) {
-      listEl.innerHTML = `<p class="text-muted text-danger">Failed to load tokens: ${this.escapeHtml(error.message)}</p>`;
+      listEl.innerHTML = '<p class="text-muted text-danger" id="tokens-error"></p>';
+      const errorEl = document.getElementById('tokens-error');
+      if (errorEl) errorEl.textContent = `Failed to load tokens: ${error.message}`;
     }
   },
 
   showCreateTokenModal() {
     this.openModal('Create API Token', `
-      <form onsubmit="App.handleCreateToken(event)">
+      <form data-action="create-token">
         <div class="form-group">
           <label for="token-name">Name</label>
           <input type="text" id="token-name" class="form-input" required placeholder="e.g., Backup Script" maxlength="100">
@@ -5201,7 +5565,7 @@ const App = {
           </select>
         </div>
         <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Generate Token</button>
         </div>
       </form>
@@ -5230,7 +5594,7 @@ const App = {
         <p><strong>Save this token now!</strong> You won't be able to see it again.</p>
         <div class="token-display" style="background: var(--surface-2); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
           <code id="new-token" style="word-break: break-all;">${this.escapeHtml(token)}</code>
-          <button class="btn btn-secondary btn-sm" onclick="App.copyToClipboard('${this.escapeHtml(token)}')">Copy</button>
+          <button class="btn btn-secondary btn-sm" data-action="copy-new-token">Copy</button>
         </div>
         <p class="text-muted" style="margin-top: 1rem; font-size: 0.9rem;">
           Use this token in the <code>Authorization</code> header:
@@ -5238,7 +5602,7 @@ const App = {
           <code style="display: block; background: var(--surface-2); padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.25rem;">Authorization: Bearer ${this.escapeHtml(token.substring(0, 10))}...</code>
         </p>
         <div style="margin-top: 1.5rem; text-align: right;">
-          <button class="btn btn-primary" onclick="App.closeModal(); App.loadApiTokens();">Done</button>
+          <button class="btn btn-primary" data-action="token-modal-done">Done</button>
         </div>
       </div>
     `);
@@ -5909,7 +6273,6 @@ const App = {
                 class="form-input"
                 required
                 placeholder="your@email.com"
-                value="${this.escapeHtml(userEmail)}"
               >
             </div>
 
@@ -5945,6 +6308,9 @@ const App = {
         </div>
       </div>
     `;
+
+    const emailInput = document.getElementById('support-email');
+    if (emailInput) emailInput.value = userEmail;
 
     document.getElementById('support-form').addEventListener('submit', async (e) => {
       e.preventDefault();

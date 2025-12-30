@@ -34,7 +34,7 @@ func (s *SecurityHeaders) Apply(next http.Handler) http.Handler {
 
 		// Content Security Policy
 		csp := "default-src 'self'; " +
-			"script-src 'self' 'unsafe-inline' 'unsafe-hashes' https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; " +
+			"script-src 'self' https://static.cloudflareinsights.com https://cdnjs.cloudflare.com; " +
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com https://cdnjs.cloudflare.com; " +
 			"font-src 'self' https://fonts.gstatic.com https://fonts.cdnfonts.com https://cdnjs.cloudflare.com data:; " +
 			"img-src 'self' data:; " +

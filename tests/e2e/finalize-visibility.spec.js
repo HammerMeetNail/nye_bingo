@@ -30,6 +30,7 @@ test('finalize modal visibility checkbox controls friend access', async ({ brows
   const results = pageB.locator('#search-results');
   await expect(results).toContainText(userA.username);
   await results.getByRole('button', { name: 'Add Friend' }).click();
+  await expectToast(pageB, 'Friend request sent!');
 
   await pageA.goto('/#friends');
   await expect(pageA.locator('#friend-requests')).toBeVisible();
@@ -45,4 +46,3 @@ test('finalize modal visibility checkbox controls friend access', async ({ brows
   await contextA.close();
   await contextB.close();
 });
-
