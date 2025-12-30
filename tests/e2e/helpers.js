@@ -3,7 +3,7 @@ const { expect } = require('@playwright/test');
 const MAILPIT_BASE_URL = process.env.MAILPIT_BASE_URL || 'http://mailpit:8025';
 const MAILPIT_WAIT_TIMEOUT_MS = Number.parseInt(process.env.MAILPIT_WAIT_TIMEOUT_MS || '30000', 10);
 
-function buildUser(testInfo, prefix) {
+function buildUser(testInfo, prefix, options = {}) {
   const baseId = testInfo && testInfo.testId
     ? testInfo.testId.slice(-6)
     : Date.now().toString().slice(-6);
@@ -13,9 +13,9 @@ function buildUser(testInfo, prefix) {
     .slice(0, 10) || 'user';
   const base = `${safePrefix}${baseId}`;
   return {
-    username: base,
-    email: `${base}@test.com`,
-    password: 'Password1',
+    username: options.username || base,
+    email: options.email || `${base}@test.com`,
+    password: options.password || 'Password1',
   };
 }
 

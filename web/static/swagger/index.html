@@ -14,18 +14,6 @@
   <div id="swagger-ui"></div>
   <script src="./swagger-ui-bundle.js"></script>
   <script src="./swagger-ui-standalone-preset.js"></script>
-  <script>
-    window.onload = () => {
-      window.ui = SwaggerUIBundle({
-        url: '/static/openapi.yaml',
-        dom_id: '#swagger-ui',
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        layout: "StandaloneLayout",
-      });
-    };
-  </script>
+  <script src="./swagger-init.js"></script>
   </body>
 </html>

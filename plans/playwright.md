@@ -96,6 +96,9 @@
 - `tests/e2e/ai-guide-editor.spec.js`
   - AI guide refine flow updates a draft goal.
   - Empty cell click opens add-goal modal and saves a new goal.
+- `tests/e2e/xss-hardening.spec.js`
+  - XSS-style usernames render as literal text in friends UI.
+  - Friend actions (remove/block/unblock) and invite copy/revoke still work.
 
 ## Unit Test Separation
 - Add make targets:

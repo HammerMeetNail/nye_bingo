@@ -62,8 +62,8 @@ const AIWizard = {
           A verification email was sent to <strong>${email}</strong>.
         </p>
         <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
-          <button class="btn btn-ghost" onclick="App.closeModal()">Close</button>
-          <button class="btn btn-primary" onclick="App.resendVerification(); window.location.hash = '#check-email?type=verification&email=${encodeURIComponent(App.user?.email || '')}'">
+          <button class="btn btn-ghost" data-action="close-modal">Close</button>
+          <button class="btn btn-primary" data-action="resend-verification-and-route">
             Resend Verification Email
           </button>
         </div>
@@ -138,7 +138,7 @@ const AIWizard = {
           Free AI generations left before verification is required: <strong>${remaining}</strong>
         </div>
       ` : ''}
-      <form id="ai-wizard-form" onsubmit="AIWizard.handleGenerate(event)">
+      <form id="ai-wizard-form" data-action="ai-generate">
         <div class="form-group">
             <label class="form-label">What area of life is this for?</label>
             <select id="ai-category" class="form-input" required>
@@ -216,7 +216,7 @@ const AIWizard = {
         </div>
 
         <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="button" class="btn btn-ghost" onclick="App.closeModal()">Cancel</button>
+            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
             <button type="submit" class="btn btn-primary" style="flex: 1;">Generate Goals ✨</button>
         </div>
       </form>
@@ -332,7 +332,8 @@ const AIWizard = {
     `).join('');
 
     const actionButtonText = this.state.mode === 'append' ? 'Add to Card →' : 'Create Card →';
-    const actionFunction = this.state.mode === 'append' ? 'AIWizard.addToCard()' : 'AIWizard.createCard()';
+    const actionType = this.state.mode === 'append' ? 'ai-add-to-card' : 'ai-create-card';
+    const startOverCardId = App.escapeHtml(this.state.targetCardId || '');
 
     return `
       <p class="text-muted">Review and edit your generated goals.</p>
@@ -342,8 +343,8 @@ const AIWizard = {
       </div>
 
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" onclick="AIWizard.open('${App.escapeHtml(this.state.targetCardId || '')}')">Start Over</button>
-        <button type="button" class="btn btn-primary" style="flex: 1;" onclick="${actionFunction}">${actionButtonText}</button>
+        <button type="button" class="btn btn-secondary" data-action="open-ai-wizard" data-card-id="${startOverCardId}">Start Over</button>
+        <button type="button" class="btn btn-primary" style="flex: 1;" data-action="${actionType}">${actionButtonText}</button>
       </div>
     `;
   },
