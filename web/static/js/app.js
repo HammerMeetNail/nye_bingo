@@ -2604,9 +2604,11 @@ const App = {
 
     return categoryData.suggestions.map(suggestion => {
       const isUsed = this.usedSuggestions.has(suggestion.content.toLowerCase());
+      const actionAttr = isUsed ? '' : 'data-action="add-suggestion"';
+      const disabledAttr = isUsed ? 'aria-disabled="true"' : '';
       return `
         <div class="suggestion-item ${isUsed ? 'suggestion-item--used' : ''}"
-             data-action="add-suggestion">
+             ${actionAttr} ${disabledAttr}>
           ${this.escapeHtml(suggestion.content)}
         </div>
       `;

@@ -51,9 +51,6 @@
     currentSuiteEl.appendChild(testDiv);
   }
 
-  // Alias
-  const it = test;
-
   function expect(actual) {
     return {
       toBe(expected) {
@@ -382,8 +379,14 @@
 
   // Auto-run on load if running via file://
   if (window.location.protocol === 'file:') {
-    window.addEventListener('load', runTests);
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      runTests();
+    } else {
+      document.addEventListener('DOMContentLoaded', runTests, { once: true });
+    }
   }
 
-  window.runTests = runTests;
+  if (!window.runTests) {
+    window.runTests = runTests;
+  }
 })();
