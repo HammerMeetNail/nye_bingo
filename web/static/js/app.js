@@ -4134,6 +4134,36 @@ const App = {
     });
 
     createInviteBtn.addEventListener('click', () => this.createFriendInvite());
+    this.setupFriendsActionHandlers();
+  },
+
+  setupFriendsActionHandlers() {
+    const friendsListEl = document.getElementById('friends-list');
+    if (friendsListEl) {
+      friendsListEl.addEventListener('click', (event) => {
+        const button = event.target.closest ? event.target.closest('button[data-action]') : null;
+        if (!button) return;
+        const action = button.dataset.action;
+        const friendName = button.dataset.friendName || 'this user';
+        if (action === 'remove' && button.dataset.friendshipId) {
+          this.removeFriend(button.dataset.friendshipId, friendName);
+        } else if (action === 'block' && button.dataset.otherUserId) {
+          this.blockUser(button.dataset.otherUserId, friendName);
+        }
+      });
+    }
+
+    const blockedListEl = document.getElementById('blocked-list');
+    if (blockedListEl) {
+      blockedListEl.addEventListener('click', (event) => {
+        const button = event.target.closest ? event.target.closest('button[data-action="unblock"]') : null;
+        if (!button) return;
+        const friendName = button.dataset.username || 'this user';
+        if (button.dataset.userId) {
+          this.unblockUser(button.dataset.userId, friendName);
+        }
+      });
+    }
   },
 
   async searchFriends() {
@@ -4254,7 +4284,7 @@ const App = {
           <div>
             <strong>${this.escapeHtml(user.username)}</strong>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="App.unblockUser('${user.id}', '${this.escapeHtml(user.username)}')">Unblock</button>
+          <button class="btn btn-ghost btn-sm" data-action="unblock" data-user-id="${user.id}" data-username="${this.escapeHtml(user.username)}">Unblock</button>
         </div>
       `).join('');
     } catch (error) {
@@ -4330,8 +4360,8 @@ const App = {
               </div>
               <div class="friend-actions">
                 <a href="#friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-                <button class="btn btn-ghost btn-sm" onclick="App.removeFriend('${friend.id}', '${friendName}')">Remove</button>
-                <button class="btn btn-ghost btn-sm" onclick="App.blockUser('${otherUserId}', '${friendName}')">Block</button>
+                <button class="btn btn-ghost btn-sm" data-action="remove" data-friendship-id="${friend.id}" data-friend-name="${friendName}">Remove</button>
+                <button class="btn btn-ghost btn-sm" data-action="block" data-other-user-id="${otherUserId}" data-friend-name="${friendName}">Block</button>
               </div>
             </div>
           `;
