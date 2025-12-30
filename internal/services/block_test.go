@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -34,6 +35,13 @@ func TestBlockService_Block_BeginError(t *testing.T) {
 func TestBlockService_Block_AlreadyBlocked(t *testing.T) {
 	var rolledBack bool
 	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			if !strings.Contains(sql, "INSERT INTO user_blocks") {
 				t.Fatalf("unexpected sql: %q", sql)
@@ -60,9 +68,53 @@ func TestBlockService_Block_AlreadyBlocked(t *testing.T) {
 }
 
 func TestBlockService_Block_UserNotFound(t *testing.T) {
+	blockedID := uuid.New()
 	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				if args[0] == blockedID {
+					return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+				}
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			t.Fatal("expected to fail before insert")
 			return fakeCommandTag{}, &pgconn.PgError{Code: "23503"}
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+	svc := NewBlockService(db)
+	if err := svc.Block(context.Background(), uuid.New(), blockedID); !errors.Is(err, ErrBlockedUserNotFound) {
+		t.Fatalf("expected ErrBlockedUserNotFound, got %v", err)
+	}
+}
+
+func TestBlockService_Block_UserNotFound_FKViolationFallback(t *testing.T) {
+	var rolledBack bool
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			if !strings.Contains(sql, "INSERT INTO user_blocks") {
+				t.Fatalf("unexpected exec sql: %q", sql)
+			}
+			return fakeCommandTag{}, &pgconn.PgError{Code: "23503"}
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
 		},
 	}
 	db := &fakeDB{
@@ -74,12 +126,22 @@ func TestBlockService_Block_UserNotFound(t *testing.T) {
 	if err := svc.Block(context.Background(), uuid.New(), uuid.New()); !errors.Is(err, ErrBlockedUserNotFound) {
 		t.Fatalf("expected ErrBlockedUserNotFound, got %v", err)
 	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
+	}
 }
 
 func TestBlockService_Block_Success(t *testing.T) {
 	var execCalls int
 	var committed bool
 	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			execCalls++
 			switch execCalls {
@@ -121,6 +183,13 @@ func TestBlockService_Block_Success(t *testing.T) {
 func TestBlockService_Block_DeleteError(t *testing.T) {
 	var rolledBack bool
 	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			if strings.Contains(sql, "INSERT INTO user_blocks") {
 				return fakeCommandTag{rowsAffected: 1}, nil
@@ -150,9 +219,45 @@ func TestBlockService_Block_DeleteError(t *testing.T) {
 	}
 }
 
+func TestBlockService_Block_LockError(t *testing.T) {
+	var rolledBack bool
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error { return errors.New("boom") }}
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			t.Fatal("expected lock failure before exec")
+			return fakeCommandTag{}, nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+	svc := NewBlockService(db)
+	if err := svc.Block(context.Background(), uuid.New(), uuid.New()); err == nil {
+		t.Fatal("expected error")
+	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
+	}
+}
+
 func TestBlockService_Block_CommitError(t *testing.T) {
 	var rolledBack bool
 	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			t.Fatalf("unexpected query sql: %q", sql)
+			return rowFromValues()
+		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},

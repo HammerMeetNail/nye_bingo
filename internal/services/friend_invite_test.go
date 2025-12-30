@@ -178,19 +178,19 @@ func TestFriendInviteService_AcceptInvite_Self(t *testing.T) {
 func TestFriendInviteService_AcceptInvite_Blocked(t *testing.T) {
 	userID := uuid.New()
 	inviterID := uuid.New()
-	calls := 0
 	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			calls++
-			switch calls {
-			case 1:
+			if strings.Contains(sql, "FROM friend_invites") {
 				return rowFromValues(uuid.New(), inviterID, "inviter")
-			case 2:
-				return rowFromValues(true)
-			default:
-				t.Fatalf("unexpected query call %d", calls)
-				return rowFromValues(false)
 			}
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
+				return rowFromValues(true)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
 		},
 	}
 	db := &fakeDB{
@@ -209,22 +209,23 @@ func TestFriendInviteService_AcceptInvite_Success(t *testing.T) {
 	userID := uuid.New()
 	inviterID := uuid.New()
 	inviteID := uuid.New()
-	calls := 0
 	var execCalls int
 	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			calls++
-			switch calls {
-			case 1:
+			if strings.Contains(sql, "FROM friend_invites") {
 				return rowFromValues(inviteID, inviterID, "inviter")
-			case 2:
-				return rowFromValues(false)
-			case 3:
-				return rowFromValues(false)
-			default:
-				t.Fatalf("unexpected query call %d", calls)
+			}
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return rowFromValues(args[0])
+			}
+			if strings.Contains(sql, "FROM user_blocks") {
 				return rowFromValues(false)
 			}
+			if strings.Contains(sql, "FROM friendships") {
+				return rowFromValues(false)
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
 		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			execCalls++
@@ -249,5 +250,41 @@ func TestFriendInviteService_AcceptInvite_Success(t *testing.T) {
 	}
 	if execCalls != 2 {
 		t.Fatalf("expected 2 exec calls, got %d", execCalls)
+	}
+}
+
+func TestFriendInviteService_AcceptInvite_LockError(t *testing.T) {
+	userID := uuid.New()
+	inviterID := uuid.New()
+
+	var rolledBack bool
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM friend_invites") {
+				return rowFromValues(uuid.New(), inviterID, "inviter")
+			}
+			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
+				return fakeRow{scanFunc: func(dest ...any) error { return errors.New("boom") }}
+			}
+			t.Fatalf("unexpected sql: %q", sql)
+			return rowFromValues()
+		},
+		RollbackFunc: func(ctx context.Context) error {
+			rolledBack = true
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return tx, nil
+		},
+	}
+	svc := NewFriendInviteService(db)
+	_, err := svc.AcceptInvite(context.Background(), userID, "token")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !rolledBack {
+		t.Fatal("expected rollback")
 	}
 }

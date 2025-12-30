@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -42,6 +43,12 @@ func (s *BlockService) Block(ctx context.Context, blockerID, blockedID uuid.UUID
 			_ = tx.Rollback(ctx)
 		}
 	}()
+
+	if err := lockUserPairForUpdate(ctx, tx, blockerID, blockedID); errors.Is(err, pgx.ErrNoRows) {
+		return ErrBlockedUserNotFound
+	} else if err != nil {
+		return fmt.Errorf("lock users: %w", err)
+	}
 
 	result, err := tx.Exec(ctx,
 		`INSERT INTO user_blocks (blocker_id, blocked_id)

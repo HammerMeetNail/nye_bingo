@@ -177,6 +177,10 @@ func (s *FriendInviteService) AcceptInvite(ctx context.Context, recipientID uuid
 		return nil, ErrCannotFriendSelf
 	}
 
+	if err := lockUserPairForUpdate(ctx, tx, inviterID, recipientID); err != nil {
+		return nil, fmt.Errorf("lock users: %w", err)
+	}
+
 	var blocked bool
 	err = tx.QueryRow(ctx,
 		`SELECT EXISTS(

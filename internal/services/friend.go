@@ -23,10 +23,10 @@ var (
 )
 
 type FriendService struct {
-	db DBConn
+	db DB
 }
 
-func NewFriendService(db DBConn) *FriendService {
+func NewFriendService(db DB) *FriendService {
 	return &FriendService{db: db}
 }
 
@@ -78,8 +78,24 @@ func (s *FriendService) SendRequest(ctx context.Context, userID, friendID uuid.U
 		return nil, ErrCannotFriendSelf
 	}
 
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin friend request transaction: %w", err)
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback(ctx)
+		}
+	}()
+
+	if err := lockUserPairForUpdate(ctx, tx, userID, friendID); err != nil {
+		return nil, fmt.Errorf("lock users: %w", err)
+	}
+
 	var isBlocked bool
-	err := s.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT EXISTS(
 			SELECT 1 FROM user_blocks
 			WHERE (blocker_id = $1 AND blocked_id = $2)
@@ -94,9 +110,8 @@ func (s *FriendService) SendRequest(ctx context.Context, userID, friendID uuid.U
 		return nil, ErrUserBlocked
 	}
 
-	// Check if friendship already exists in either direction
 	var exists bool
-	err = s.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`SELECT EXISTS(
 			SELECT 1 FROM friendships
 			WHERE (user_id = $1 AND friend_id = $2)
@@ -112,7 +127,7 @@ func (s *FriendService) SendRequest(ctx context.Context, userID, friendID uuid.U
 	}
 
 	friendship := &models.Friendship{}
-	err = s.db.QueryRow(ctx,
+	err = tx.QueryRow(ctx,
 		`INSERT INTO friendships (user_id, friend_id, status)
 		 VALUES ($1, $2, 'pending')
 		 RETURNING id, user_id, friend_id, status, created_at`,
@@ -121,6 +136,11 @@ func (s *FriendService) SendRequest(ctx context.Context, userID, friendID uuid.U
 	if err != nil {
 		return nil, fmt.Errorf("creating friendship: %w", err)
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit friend request: %w", err)
+	}
+	committed = true
 
 	return friendship, nil
 }
