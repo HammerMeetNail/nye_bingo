@@ -172,6 +172,89 @@ components:
         created_at:
           type: string
           format: date-time
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [friend_request_received, friend_request_accepted, friend_bingo, friend_new_card]
+        actor_user_id:
+          type: string
+          format: uuid
+          nullable: true
+        actor_username:
+          type: string
+          nullable: true
+        friendship_id:
+          type: string
+          format: uuid
+          nullable: true
+        card_id:
+          type: string
+          format: uuid
+          nullable: true
+        card_title:
+          type: string
+          nullable: true
+        card_year:
+          type: integer
+          nullable: true
+        bingo_count:
+          type: integer
+          nullable: true
+        in_app_delivered:
+          type: boolean
+        email_delivered:
+          type: boolean
+        email_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    NotificationSettings:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        in_app_enabled:
+          type: boolean
+        in_app_friend_request_received:
+          type: boolean
+        in_app_friend_request_accepted:
+          type: boolean
+        in_app_friend_bingo:
+          type: boolean
+        in_app_friend_new_card:
+          type: boolean
+        email_enabled:
+          type: boolean
+        email_friend_request_received:
+          type: boolean
+        email_friend_request_accepted:
+          type: boolean
+        email_friend_bingo:
+          type: boolean
+        email_friend_new_card:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 security:
   - bearerAuth: []
 paths:
@@ -524,6 +607,300 @@ paths:
                     type: string
         '409':
           description: Already friends
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications:
+    get:
+      summary: List notifications
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: query
+          name: unread
+          schema:
+            type: string
+          description: Set to 1 to return only unread notifications
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: before
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Notification list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete all notifications
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Notifications deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications/{id}:
+    delete:
+      summary: Delete notification
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications/{id}/read:
+    post:
+      summary: Mark notification as read
+      security:
+        - cookieAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications/read-all:
+    post:
+      summary: Mark all notifications as read
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Notifications marked read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications/unread-count:
+    get:
+      summary: Get unread notification count
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /notifications/settings:
+    get:
+      summary: Get notification settings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Notification settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/NotificationSettings'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update notification settings
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                in_app_enabled:
+                  type: boolean
+                in_app_friend_request_received:
+                  type: boolean
+                in_app_friend_request_accepted:
+                  type: boolean
+                in_app_friend_bingo:
+                  type: boolean
+                in_app_friend_new_card:
+                  type: boolean
+                email_enabled:
+                  type: boolean
+                email_friend_request_received:
+                  type: boolean
+                email_friend_request_accepted:
+                  type: boolean
+                email_friend_bingo:
+                  type: boolean
+                email_friend_new_card:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated notification settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/NotificationSettings'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Email verification required for email notifications
           content:
             application/json:
               schema:

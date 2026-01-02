@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
@@ -30,11 +31,16 @@ const (
 )
 
 type FriendInviteService struct {
-	db DB
+	db                  DB
+	notificationService NotificationServiceInterface
 }
 
 func NewFriendInviteService(db DB) *FriendInviteService {
 	return &FriendInviteService{db: db}
+}
+
+func (s *FriendInviteService) SetNotificationService(notificationService NotificationServiceInterface) {
+	s.notificationService = notificationService
 }
 
 func (s *FriendInviteService) CreateInvite(ctx context.Context, inviterID uuid.UUID, expiresInDays int) (*models.FriendInvite, string, error) {
@@ -213,11 +219,13 @@ func (s *FriendInviteService) AcceptInvite(ctx context.Context, recipientID uuid
 		return nil, ErrFriendshipExists
 	}
 
-	_, err = tx.Exec(ctx,
+	var friendshipID uuid.UUID
+	err = tx.QueryRow(ctx,
 		`INSERT INTO friendships (user_id, friend_id, status)
-		 VALUES ($1, $2, 'accepted')`,
+		 VALUES ($1, $2, 'accepted')
+		 RETURNING id`,
 		inviterID, recipientID,
-	)
+	).Scan(&friendshipID)
 	if err != nil {
 		return nil, fmt.Errorf("insert friendship: %w", err)
 	}
@@ -236,6 +244,17 @@ func (s *FriendInviteService) AcceptInvite(ctx context.Context, recipientID uuid
 		return nil, fmt.Errorf("commit invite accept: %w", err)
 	}
 	committed = true
+
+	if s.notificationService != nil {
+		if err := s.notificationService.NotifyFriendRequestAccepted(ctx, inviterID, recipientID, friendshipID); err != nil {
+			logging.Error("Failed to send invite acceptance notification", map[string]interface{}{
+				"error":         err.Error(),
+				"inviter_id":    inviterID.String(),
+				"recipient_id":  recipientID.String(),
+				"friendship_id": friendshipID.String(),
+			})
+		}
+	}
 
 	return &models.UserSearchResult{ID: inviterID, Username: inviterUsername}, nil
 }

@@ -210,6 +210,7 @@ func TestFriendService_SendRequest_Success(t *testing.T) {
 	friendID := uuid.New()
 	friendshipID := uuid.New()
 	var committed bool
+	var notified bool
 	tx := &fakeTx{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
 			if strings.Contains(sql, "FROM users") && strings.Contains(sql, "FOR UPDATE") {
@@ -242,6 +243,15 @@ func TestFriendService_SendRequest_Success(t *testing.T) {
 	}
 
 	svc := NewFriendService(db)
+	svc.SetNotificationService(&stubNotificationService{
+		NotifyFriendRequestReceivedFunc: func(ctx context.Context, recipientID, actorID, gotFriendshipID uuid.UUID) error {
+			notified = true
+			if recipientID != friendID || actorID != userID || gotFriendshipID != friendshipID {
+				t.Fatalf("unexpected notification args: %v %v %v", recipientID, actorID, gotFriendshipID)
+			}
+			return nil
+		},
+	})
 	friendship, err := svc.SendRequest(context.Background(), userID, friendID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -251,6 +261,9 @@ func TestFriendService_SendRequest_Success(t *testing.T) {
 	}
 	if !committed {
 		t.Fatal("expected commit")
+	}
+	if !notified {
+		t.Fatal("expected notification")
 	}
 }
 
@@ -363,9 +376,11 @@ func TestFriendService_AcceptRequest_NotRecipient(t *testing.T) {
 func TestFriendService_AcceptRequest_Success(t *testing.T) {
 	friendshipID := uuid.New()
 	userID := uuid.New()
+	senderID := uuid.New()
+	var notified bool
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			return rowFromValues(friendshipRowValues(friendshipID, uuid.New(), userID, models.FriendshipStatusPending)...)
+			return rowFromValues(friendshipRowValues(friendshipID, senderID, userID, models.FriendshipStatusPending)...)
 		},
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			if !strings.Contains(sql, "UPDATE friendships SET status = 'accepted'") || !strings.Contains(sql, "WHERE id = $1") {
@@ -379,12 +394,24 @@ func TestFriendService_AcceptRequest_Success(t *testing.T) {
 	}
 
 	svc := NewFriendService(db)
+	svc.SetNotificationService(&stubNotificationService{
+		NotifyFriendRequestAcceptedFunc: func(ctx context.Context, recipientID, actorID, gotFriendshipID uuid.UUID) error {
+			notified = true
+			if recipientID != senderID || actorID != userID || gotFriendshipID != friendshipID {
+				t.Fatalf("unexpected notification args: %v %v %v", recipientID, actorID, gotFriendshipID)
+			}
+			return nil
+		},
+	})
 	friendship, err := svc.AcceptRequest(context.Background(), userID, friendshipID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if friendship.Status != models.FriendshipStatusAccepted {
 		t.Fatalf("expected accepted status, got %s", friendship.Status)
+	}
+	if !notified {
+		t.Fatal("expected notification")
 	}
 }
 

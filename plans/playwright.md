@@ -71,6 +71,14 @@
 - `tests/e2e/friend-invites.spec.js`
   - Invite link acceptance connects friends.
   - Blocking removes friendships and hides search results.
+- `tests/e2e/notifications.spec.js`
+  - Viewing notifications marks them read and clears the badge.
+  - Notifications can be deleted individually or cleared all at once.
+  - Friend acceptance notification delivered to sender.
+  - New card notification links to friend card view.
+  - Bingo notification fires once per card (dedupe).
+  - XSS-style usernames render as text in notifications.
+  - Email notifications respect opt-in and include links.
 - `tests/e2e/profile-settings.spec.js`
   - Searchable toggle gates friend search visibility.
   - Password change validation and re-login with new password.

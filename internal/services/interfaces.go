@@ -111,6 +111,22 @@ type ReactionServiceInterface interface {
 	GetUserReactionForItem(ctx context.Context, userID, itemID uuid.UUID) (*models.Reaction, error)
 }
 
+// NotificationServiceInterface defines the contract for notification operations.
+type NotificationServiceInterface interface {
+	GetSettings(ctx context.Context, userID uuid.UUID) (*models.NotificationSettings, error)
+	UpdateSettings(ctx context.Context, userID uuid.UUID, patch models.NotificationSettingsPatch) (*models.NotificationSettings, error)
+	List(ctx context.Context, userID uuid.UUID, params NotificationListParams) ([]models.Notification, error)
+	MarkRead(ctx context.Context, userID, notificationID uuid.UUID) error
+	MarkAllRead(ctx context.Context, userID uuid.UUID) error
+	Delete(ctx context.Context, userID, notificationID uuid.UUID) error
+	DeleteAll(ctx context.Context, userID uuid.UUID) error
+	UnreadCount(ctx context.Context, userID uuid.UUID) (int, error)
+	NotifyFriendRequestReceived(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
+	NotifyFriendRequestAccepted(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
+	NotifyFriendsNewCard(ctx context.Context, actorID, cardID uuid.UUID) error
+	NotifyFriendsBingo(ctx context.Context, actorID, cardID uuid.UUID, bingoCount int) error
+}
+
 // EmailServiceInterface defines the contract for email operations.
 type EmailServiceInterface interface {
 	SendVerificationEmail(ctx context.Context, userID uuid.UUID, email string) error
@@ -120,6 +136,7 @@ type EmailServiceInterface interface {
 	SendPasswordResetEmail(ctx context.Context, userID uuid.UUID, email string) error
 	VerifyPasswordResetToken(ctx context.Context, token string) (uuid.UUID, error)
 	MarkPasswordResetUsed(ctx context.Context, token string) error
+	SendNotificationEmail(ctx context.Context, toEmail, subject, html, text string) error
 	SendSupportEmail(ctx context.Context, fromEmail, category, message string, userID string) error
 }
 

@@ -390,6 +390,47 @@ const API = {
     },
   },
 
+  // Notification endpoints
+  notifications: {
+    async list({ unread = false, limit = 50, before = null } = {}) {
+      const params = new URLSearchParams();
+      if (unread) params.set('unread', '1');
+      if (limit) params.set('limit', String(limit));
+      if (before) params.set('before', before);
+      const query = params.toString();
+      const path = query ? `/api/notifications?${query}` : '/api/notifications';
+      return API.request('GET', path);
+    },
+
+    async markRead(id) {
+      return API.request('POST', `/api/notifications/${id}/read`);
+    },
+
+    async markAllRead() {
+      return API.request('POST', '/api/notifications/read-all');
+    },
+
+    async delete(id) {
+      return API.request('DELETE', `/api/notifications/${id}`);
+    },
+
+    async deleteAll() {
+      return API.request('DELETE', '/api/notifications');
+    },
+
+    async unreadCount() {
+      return API.request('GET', '/api/notifications/unread-count');
+    },
+
+    async getSettings() {
+      return API.request('GET', '/api/notifications/settings');
+    },
+
+    async updateSettings(patch) {
+      return API.request('PUT', '/api/notifications/settings', patch);
+    },
+  },
+
   // Reaction endpoints
   reactions: {
     async add(itemId, emoji) {

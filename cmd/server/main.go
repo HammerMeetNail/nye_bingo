@@ -98,7 +98,12 @@ func run() error {
 	apiTokenService := services.NewApiTokenService(dbAdapter)
 	blockService := services.NewBlockService(dbAdapter)
 	inviteService := services.NewFriendInviteService(dbAdapter)
+	notificationService := services.NewNotificationService(dbAdapter, emailService, cfg.Email.BaseURL)
 	aiService := ai.NewService(cfg, dbAdapter)
+
+	cardService.SetNotificationService(notificationService)
+	friendService.SetNotificationService(notificationService)
+	inviteService.SetNotificationService(notificationService)
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
@@ -111,11 +116,32 @@ func run() error {
 	apiTokenHandler := handlers.NewApiTokenHandler(apiTokenService)
 	blockHandler := handlers.NewBlockHandler(blockService)
 	inviteHandler := handlers.NewFriendInviteHandler(inviteService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
+
+	if err := notificationService.CleanupOld(context.Background()); err != nil {
+		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
+	}
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	notificationService.SetAsyncContext(cleanupCtx)
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-cleanupCtx.Done():
+				return
+			case <-ticker.C:
+				if err := notificationService.CleanupOld(context.Background()); err != nil {
+					logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
+	}()
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService, userService, apiTokenService)
@@ -220,6 +246,14 @@ func run() error {
 	mux.Handle("GET /api/friends/invites", requireSession(http.HandlerFunc(inviteHandler.List)))
 	mux.Handle("DELETE /api/friends/invites/{id}/revoke", requireSession(http.HandlerFunc(inviteHandler.Revoke)))
 	mux.Handle("POST /api/friends/invites/accept", requireSession(http.HandlerFunc(inviteHandler.Accept)))
+	mux.Handle("GET /api/notifications", requireSession(http.HandlerFunc(notificationHandler.List)))
+	mux.Handle("POST /api/notifications/{id}/read", requireSession(http.HandlerFunc(notificationHandler.MarkRead)))
+	mux.Handle("POST /api/notifications/read-all", requireSession(http.HandlerFunc(notificationHandler.MarkAllRead)))
+	mux.Handle("DELETE /api/notifications/{id}", requireSession(http.HandlerFunc(notificationHandler.Delete)))
+	mux.Handle("DELETE /api/notifications", requireSession(http.HandlerFunc(notificationHandler.DeleteAll)))
+	mux.Handle("GET /api/notifications/unread-count", requireSession(http.HandlerFunc(notificationHandler.UnreadCount)))
+	mux.Handle("GET /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.GetSettings)))
+	mux.Handle("PUT /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.UpdateSettings)))
 
 	// Reaction endpoints
 	mux.Handle("POST /api/items/{id}/react", requireSession(http.HandlerFunc(reactionHandler.AddReaction)))
@@ -274,6 +308,7 @@ func run() error {
 	go func() {
 		<-quit
 		logger.Info("Server is shutting down...")
+		cleanupCancel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

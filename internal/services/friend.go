@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
@@ -23,11 +24,16 @@ var (
 )
 
 type FriendService struct {
-	db DB
+	db                  DB
+	notificationService NotificationServiceInterface
 }
 
 func NewFriendService(db DB) *FriendService {
 	return &FriendService{db: db}
+}
+
+func (s *FriendService) SetNotificationService(notificationService NotificationServiceInterface) {
+	s.notificationService = notificationService
 }
 
 func (s *FriendService) SearchUsers(ctx context.Context, currentUserID uuid.UUID, query string) ([]models.UserSearchResult, error) {
@@ -142,6 +148,18 @@ func (s *FriendService) SendRequest(ctx context.Context, userID, friendID uuid.U
 	}
 	committed = true
 
+	if s.notificationService != nil {
+		if err := s.notificationService.NotifyFriendRequestReceived(ctx, friendID, userID, friendship.ID); err != nil {
+			logging.Error("Failed to send friend request notification", map[string]interface{}{
+				"error":         err.Error(),
+				"user_id":       userID.String(),
+				"recipient_id":  friendID.String(),
+				"friendship_id": friendship.ID.String(),
+				"notification":  string(models.NotificationTypeFriendRequestReceived),
+			})
+		}
+	}
+
 	return friendship, nil
 }
 
@@ -170,6 +188,18 @@ func (s *FriendService) AcceptRequest(ctx context.Context, userID, friendshipID 
 	}
 
 	friendship.Status = models.FriendshipStatusAccepted
+
+	if s.notificationService != nil {
+		if err := s.notificationService.NotifyFriendRequestAccepted(ctx, friendship.UserID, userID, friendship.ID); err != nil {
+			logging.Error("Failed to send friend acceptance notification", map[string]interface{}{
+				"error":         err.Error(),
+				"user_id":       userID.String(),
+				"recipient_id":  friendship.UserID.String(),
+				"friendship_id": friendship.ID.String(),
+				"notification":  string(models.NotificationTypeFriendRequestAccepted),
+			})
+		}
+	}
 	return friendship, nil
 }
 
