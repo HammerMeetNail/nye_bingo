@@ -118,6 +118,8 @@ type NotificationServiceInterface interface {
 	List(ctx context.Context, userID uuid.UUID, params NotificationListParams) ([]models.Notification, error)
 	MarkRead(ctx context.Context, userID, notificationID uuid.UUID) error
 	MarkAllRead(ctx context.Context, userID uuid.UUID) error
+	Delete(ctx context.Context, userID, notificationID uuid.UUID) error
+	DeleteAll(ctx context.Context, userID uuid.UUID) error
 	UnreadCount(ctx context.Context, userID uuid.UUID) (int, error)
 	NotifyFriendRequestReceived(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
 	NotifyFriendRequestAccepted(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error

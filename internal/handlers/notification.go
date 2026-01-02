@@ -125,6 +125,50 @@ func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, NotificationMessageResponse{Message: "Notifications marked as read"})
 }
 
+func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	notificationIDStr := r.PathValue("id")
+	notificationID, err := uuid.Parse(notificationIDStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid notification ID")
+		return
+	}
+
+	err = h.notificationService.Delete(r.Context(), user.ID, notificationID)
+	if errors.Is(err, services.ErrNotificationNotFound) {
+		writeError(w, http.StatusNotFound, "Notification not found")
+		return
+	}
+	if err != nil {
+		log.Printf("Error deleting notification: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, NotificationMessageResponse{Message: "Notification deleted"})
+}
+
+func (h *NotificationHandler) DeleteAll(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	if err := h.notificationService.DeleteAll(r.Context(), user.ID); err != nil {
+		log.Printf("Error deleting notifications: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, NotificationMessageResponse{Message: "Notifications deleted"})
+}
+
 func (h *NotificationHandler) UnreadCount(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r.Context())
 	if user == nil {

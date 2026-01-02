@@ -243,6 +243,31 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID uuid.UUID)
 	return nil
 }
 
+func (s *NotificationService) Delete(ctx context.Context, userID, notificationID uuid.UUID) error {
+	result, err := s.db.Exec(ctx,
+		"DELETE FROM notifications WHERE id = $1 AND user_id = $2",
+		notificationID, userID,
+	)
+	if err != nil {
+		return fmt.Errorf("deleting notification: %w", err)
+	}
+	if result.RowsAffected() == 0 {
+		return ErrNotificationNotFound
+	}
+	return nil
+}
+
+func (s *NotificationService) DeleteAll(ctx context.Context, userID uuid.UUID) error {
+	_, err := s.db.Exec(ctx,
+		"DELETE FROM notifications WHERE user_id = $1",
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("deleting all notifications: %w", err)
+	}
+	return nil
+}
+
 func (s *NotificationService) UnreadCount(ctx context.Context, userID uuid.UUID) (int, error) {
 	var count int
 	err := s.db.QueryRow(ctx,

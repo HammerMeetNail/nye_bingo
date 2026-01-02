@@ -35,6 +35,14 @@ func (s *stubNotificationService) MarkAllRead(ctx context.Context, userID uuid.U
 	return nil
 }
 
+func (s *stubNotificationService) Delete(ctx context.Context, userID, notificationID uuid.UUID) error {
+	return nil
+}
+
+func (s *stubNotificationService) DeleteAll(ctx context.Context, userID uuid.UUID) error {
+	return nil
+}
+
 func (s *stubNotificationService) UnreadCount(ctx context.Context, userID uuid.UUID) (int, error) {
 	return 0, nil
 }

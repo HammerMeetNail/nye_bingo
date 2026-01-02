@@ -93,6 +93,12 @@ const App = {
       case 'mark-all-notifications-read':
         this.markAllNotificationsRead();
         break;
+      case 'delete-notification':
+        this.deleteNotification(target);
+        break;
+      case 'delete-all-notifications':
+        this.deleteAllNotifications();
+        break;
       case 'confirmed-logout':
         this.confirmedLogout();
         break;
@@ -588,9 +594,14 @@ const App = {
         <div class="notifications-header">
           <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
           <h2>Notifications</h2>
-          <button class="btn btn-secondary btn-sm" data-action="mark-all-notifications-read" id="mark-all-notifications-btn">
-            Mark all as read
-          </button>
+          <div class="notifications-actions">
+            <button class="btn btn-secondary btn-sm" data-action="mark-all-notifications-read" id="mark-all-notifications-btn">
+              Mark all as read
+            </button>
+            <button class="btn btn-danger-outline btn-sm" data-action="delete-all-notifications" id="delete-all-notifications-btn">
+              Delete all
+            </button>
+          </div>
         </div>
         <div id="notifications-list" class="notifications-list">
           <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
@@ -600,12 +611,14 @@ const App = {
 
     const listEl = document.getElementById('notifications-list');
     const markAllBtn = document.getElementById('mark-all-notifications-btn');
+    const deleteAllBtn = document.getElementById('delete-all-notifications-btn');
 
     try {
       const response = await API.notifications.list({ limit: 50 });
       const notifications = response?.notifications || [];
-      const unreadCount = this.renderNotificationList(listEl, notifications);
-      this.updateNotificationMarkAllButton(markAllBtn, unreadCount);
+      const counts = this.renderNotificationList(listEl, notifications);
+      this.updateNotificationMarkAllButton(markAllBtn, counts.unreadCount);
+      this.updateNotificationDeleteAllButton(deleteAllBtn, counts.totalCount);
       await this.markViewedNotifications(notifications);
     } catch (error) {
       if (listEl) {
@@ -616,18 +629,19 @@ const App = {
         `;
       }
       this.updateNotificationMarkAllButton(markAllBtn, 0);
+      this.updateNotificationDeleteAllButton(deleteAllBtn, 0);
     }
 
     await this.refreshNotificationCount();
   },
 
   renderNotificationList(container, notifications) {
-    if (!container) return 0;
+    if (!container) return { unreadCount: 0, totalCount: 0 };
     container.innerHTML = '';
 
     if (!Array.isArray(notifications) || notifications.length === 0) {
       container.innerHTML = '<p class="text-muted">No notifications yet.</p>';
-      return 0;
+      return { unreadCount: 0, totalCount: 0 };
     }
 
     let unreadCount = 0;
@@ -667,6 +681,9 @@ const App = {
 
       item.appendChild(content);
 
+      const actions = document.createElement('div');
+      actions.className = 'notification-actions';
+
       if (isUnread) {
         const markBtn = document.createElement('button');
         markBtn.type = 'button';
@@ -674,13 +691,29 @@ const App = {
         markBtn.dataset.action = 'mark-notification-read';
         markBtn.dataset.notificationId = notification.id;
         markBtn.textContent = 'Mark as read';
-        item.appendChild(markBtn);
+        actions.appendChild(markBtn);
       }
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'btn btn-ghost btn-sm notification-delete';
+      deleteBtn.dataset.action = 'delete-notification';
+      deleteBtn.dataset.notificationId = notification.id;
+      deleteBtn.setAttribute('aria-label', 'Delete notification');
+      deleteBtn.setAttribute('title', 'Delete');
+      deleteBtn.innerHTML = `
+        <svg class="notification-delete-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M9 3h6l1 2h4v2h-1l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7H4V5h4l1-2zm1 6v9h2V9H10zm4 0v9h2V9h-2z" fill="currentColor"></path>
+        </svg>
+      `;
+      actions.appendChild(deleteBtn);
+
+      item.appendChild(actions);
 
       container.appendChild(item);
     });
 
-    return unreadCount;
+    return { unreadCount, totalCount: notifications.length };
   },
 
   async markViewedNotifications(notifications) {
@@ -755,6 +788,13 @@ const App = {
     button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
   },
 
+  updateNotificationDeleteAllButton(button, totalCount) {
+    if (!button) return;
+    const disabled = totalCount === 0;
+    button.disabled = disabled;
+    button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+  },
+
   async markNotificationRead(target) {
     const notificationId = target?.dataset?.notificationId;
     if (!notificationId) return;
@@ -775,6 +815,32 @@ const App = {
     }
   },
 
+  async deleteNotification(target) {
+    const notificationId = target?.dataset?.notificationId;
+    if (!notificationId) return;
+
+    try {
+      await API.notifications.delete(notificationId);
+      const item = target.closest('.notification-item');
+      if (item) {
+        item.remove();
+      }
+      const listEl = document.getElementById('notifications-list');
+      const totalCount = listEl ? listEl.querySelectorAll('.notification-item').length : 0;
+      if (listEl && totalCount === 0) {
+        listEl.innerHTML = '<p class="text-muted">No notifications yet.</p>';
+      }
+      const unreadCount = document.querySelectorAll('.notification-item--unread').length;
+      const markAllBtn = document.getElementById('mark-all-notifications-btn');
+      const deleteAllBtn = document.getElementById('delete-all-notifications-btn');
+      this.updateNotificationMarkAllButton(markAllBtn, unreadCount);
+      this.updateNotificationDeleteAllButton(deleteAllBtn, totalCount);
+      await this.refreshNotificationCount();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
   async markAllNotificationsRead() {
     try {
       await API.notifications.markAllRead();
@@ -785,6 +851,23 @@ const App = {
       });
       const markAllBtn = document.getElementById('mark-all-notifications-btn');
       this.updateNotificationMarkAllButton(markAllBtn, 0);
+      await this.refreshNotificationCount();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async deleteAllNotifications() {
+    try {
+      await API.notifications.deleteAll();
+      const listEl = document.getElementById('notifications-list');
+      if (listEl) {
+        listEl.innerHTML = '<p class="text-muted">No notifications yet.</p>';
+      }
+      const markAllBtn = document.getElementById('mark-all-notifications-btn');
+      const deleteAllBtn = document.getElementById('delete-all-notifications-btn');
+      this.updateNotificationMarkAllButton(markAllBtn, 0);
+      this.updateNotificationDeleteAllButton(deleteAllBtn, 0);
       await this.refreshNotificationCount();
     } catch (error) {
       this.toast(error.message, 'error');

@@ -418,6 +418,10 @@
       test('notifications namespace exists', () => {
         expect(typeof API.notifications).toBe('object');
         expect(typeof API.notifications.list).toBe('function');
+        expect(typeof API.notifications.markRead).toBe('function');
+        expect(typeof API.notifications.markAllRead).toBe('function');
+        expect(typeof API.notifications.delete).toBe('function');
+        expect(typeof API.notifications.deleteAll).toBe('function');
       });
 
       test('reactions namespace exists', () => {

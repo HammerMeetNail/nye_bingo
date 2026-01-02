@@ -73,6 +73,7 @@
   - Blocking removes friendships and hides search results.
 - `tests/e2e/notifications.spec.js`
   - Viewing notifications marks them read and clears the badge.
+  - Notifications can be deleted individually or cleared all at once.
   - Friend acceptance notification delivered to sender.
   - New card notification links to friend card view.
   - Bingo notification fires once per card (dedupe).

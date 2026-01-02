@@ -607,6 +607,8 @@ type mockNotificationService struct {
 	ListFunc           func(ctx context.Context, userID uuid.UUID, params services.NotificationListParams) ([]models.Notification, error)
 	MarkReadFunc       func(ctx context.Context, userID, notificationID uuid.UUID) error
 	MarkAllReadFunc    func(ctx context.Context, userID uuid.UUID) error
+	DeleteFunc         func(ctx context.Context, userID, notificationID uuid.UUID) error
+	DeleteAllFunc      func(ctx context.Context, userID uuid.UUID) error
 	UnreadCountFunc    func(ctx context.Context, userID uuid.UUID) (int, error)
 	NotifyRequestFunc  func(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
 	NotifyAcceptedFunc func(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
@@ -645,6 +647,20 @@ func (m *mockNotificationService) MarkRead(ctx context.Context, userID, notifica
 func (m *mockNotificationService) MarkAllRead(ctx context.Context, userID uuid.UUID) error {
 	if m.MarkAllReadFunc != nil {
 		return m.MarkAllReadFunc(ctx, userID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) Delete(ctx context.Context, userID, notificationID uuid.UUID) error {
+	if m.DeleteFunc != nil {
+		return m.DeleteFunc(ctx, userID, notificationID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) DeleteAll(ctx context.Context, userID uuid.UUID) error {
+	if m.DeleteAllFunc != nil {
+		return m.DeleteAllFunc(ctx, userID)
 	}
 	return nil
 }

@@ -410,6 +410,14 @@ const API = {
       return API.request('POST', '/api/notifications/read-all');
     },
 
+    async delete(id) {
+      return API.request('DELETE', `/api/notifications/${id}`);
+    },
+
+    async deleteAll() {
+      return API.request('DELETE', '/api/notifications');
+    },
+
     async unreadCount() {
       return API.request('GET', '/api/notifications/unread-count');
     },

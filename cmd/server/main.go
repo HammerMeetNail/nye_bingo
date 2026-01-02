@@ -249,6 +249,8 @@ func run() error {
 	mux.Handle("GET /api/notifications", requireSession(http.HandlerFunc(notificationHandler.List)))
 	mux.Handle("POST /api/notifications/{id}/read", requireSession(http.HandlerFunc(notificationHandler.MarkRead)))
 	mux.Handle("POST /api/notifications/read-all", requireSession(http.HandlerFunc(notificationHandler.MarkAllRead)))
+	mux.Handle("DELETE /api/notifications/{id}", requireSession(http.HandlerFunc(notificationHandler.Delete)))
+	mux.Handle("DELETE /api/notifications", requireSession(http.HandlerFunc(notificationHandler.DeleteAll)))
 	mux.Handle("GET /api/notifications/unread-count", requireSession(http.HandlerFunc(notificationHandler.UnreadCount)))
 	mux.Handle("GET /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.GetSettings)))
 	mux.Handle("PUT /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.UpdateSettings)))

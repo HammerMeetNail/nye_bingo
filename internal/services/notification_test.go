@@ -133,6 +133,71 @@ func TestNotificationService_List_UnreadOnlyFilters(t *testing.T) {
 	}
 }
 
+func TestNotificationService_Delete_NotFound(t *testing.T) {
+	userID := uuid.New()
+	notificationID := uuid.New()
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 0}, nil
+		},
+	}
+
+	svc := NewNotificationService(db, nil, "http://example.com")
+	err := svc.Delete(context.Background(), userID, notificationID)
+	if !errors.Is(err, ErrNotificationNotFound) {
+		t.Fatalf("expected ErrNotificationNotFound, got %v", err)
+	}
+}
+
+func TestNotificationService_Delete_UsesUserFilter(t *testing.T) {
+	userID := uuid.New()
+	notificationID := uuid.New()
+	var gotSQL string
+	var gotArgs []any
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			gotSQL = sql
+			gotArgs = args
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+
+	svc := NewNotificationService(db, nil, "http://example.com")
+	if err := svc.Delete(context.Background(), userID, notificationID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotSQL, "DELETE FROM notifications") {
+		t.Fatalf("expected delete from notifications, got %q", gotSQL)
+	}
+	if len(gotArgs) != 2 || gotArgs[0] != notificationID || gotArgs[1] != userID {
+		t.Fatalf("unexpected args: %v", gotArgs)
+	}
+}
+
+func TestNotificationService_DeleteAll_UsesUserFilter(t *testing.T) {
+	userID := uuid.New()
+	var gotSQL string
+	var gotArgs []any
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+			gotSQL = sql
+			gotArgs = args
+			return fakeCommandTag{rowsAffected: 3}, nil
+		},
+	}
+
+	svc := NewNotificationService(db, nil, "http://example.com")
+	if err := svc.DeleteAll(context.Background(), userID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(gotSQL, "DELETE FROM notifications") {
+		t.Fatalf("expected delete from notifications, got %q", gotSQL)
+	}
+	if len(gotArgs) != 1 || gotArgs[0] != userID {
+		t.Fatalf("expected userID arg, got %v", gotArgs)
+	}
+}
+
 func TestNotificationService_NotifyFriendsNewCard_UsesSettingsAndBlocks(t *testing.T) {
 	actorID := uuid.New()
 	cardID := uuid.New()

@@ -152,6 +152,72 @@ func TestNotificationHandler_MarkAllRead_Success(t *testing.T) {
 	}
 }
 
+func TestNotificationHandler_Delete_NotOwned(t *testing.T) {
+	userID := uuid.New()
+	notificationID := uuid.New()
+	handler := NewNotificationHandler(&mockNotificationService{
+		DeleteFunc: func(ctx context.Context, gotUserID, gotNotificationID uuid.UUID) error {
+			return services.ErrNotificationNotFound
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications/"+notificationID.String(), nil)
+	req.SetPathValue("id", notificationID.String())
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+
+	handler.Delete(rr, req)
+	assertErrorResponse(t, rr, http.StatusNotFound, "Notification not found")
+}
+
+func TestNotificationHandler_Delete_InvalidID(t *testing.T) {
+	userID := uuid.New()
+	handler := NewNotificationHandler(&mockNotificationService{})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications/bad-id", nil)
+	req.SetPathValue("id", "bad-id")
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+
+	handler.Delete(rr, req)
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Invalid notification ID")
+}
+
+func TestNotificationHandler_DeleteAll_RequiresAuth(t *testing.T) {
+	handler := NewNotificationHandler(&mockNotificationService{})
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications", nil)
+	rr := httptest.NewRecorder()
+
+	handler.DeleteAll(rr, req)
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
+}
+
+func TestNotificationHandler_DeleteAll_Success(t *testing.T) {
+	userID := uuid.New()
+	var called bool
+	handler := NewNotificationHandler(&mockNotificationService{
+		DeleteAllFunc: func(ctx context.Context, gotUserID uuid.UUID) error {
+			called = true
+			if gotUserID != userID {
+				t.Fatalf("expected userID %v, got %v", userID, gotUserID)
+			}
+			return nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+
+	handler.DeleteAll(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	if !called {
+		t.Fatal("expected DeleteAll to be called")
+	}
+}
+
 func TestNotificationHandler_UnreadCount_RequiresAuth(t *testing.T) {
 	handler := NewNotificationHandler(&mockNotificationService{})
 	req := httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
