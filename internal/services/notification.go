@@ -29,6 +29,7 @@ type NotificationService struct {
 	emailService EmailServiceInterface
 	baseURL      string
 	async        func(fn func())
+	asyncCtx     context.Context
 }
 
 func NewNotificationService(db DB, emailService EmailServiceInterface, baseURL string) *NotificationService {
@@ -40,11 +41,20 @@ func NewNotificationService(db DB, emailService EmailServiceInterface, baseURL s
 		async: func(fn func()) {
 			go fn()
 		},
+		asyncCtx: context.Background(),
 	}
 }
 
 func (s *NotificationService) SetAsync(fn func(fn func())) {
 	s.async = fn
+}
+
+func (s *NotificationService) SetAsyncContext(ctx context.Context) {
+	if ctx == nil {
+		s.asyncCtx = context.Background()
+		return
+	}
+	s.asyncCtx = ctx
 }
 
 func (s *NotificationService) GetSettings(ctx context.Context, userID uuid.UUID) (*models.NotificationSettings, error) {
@@ -55,6 +65,19 @@ func (s *NotificationService) GetSettings(ctx context.Context, userID uuid.UUID)
 }
 
 func (s *NotificationService) UpdateSettings(ctx context.Context, userID uuid.UUID, patch models.NotificationSettingsPatch) (*models.NotificationSettings, error) {
+	allowedColumns := map[string]struct{}{
+		"in_app_enabled":                 {},
+		"in_app_friend_request_received": {},
+		"in_app_friend_request_accepted": {},
+		"in_app_friend_bingo":            {},
+		"in_app_friend_new_card":         {},
+		"email_enabled":                  {},
+		"email_friend_request_received":  {},
+		"email_friend_request_accepted":  {},
+		"email_friend_bingo":             {},
+		"email_friend_new_card":          {},
+	}
+
 	if enablesEmail(patch) {
 		verified, err := s.isEmailVerified(ctx, userID)
 		if err != nil {
@@ -72,9 +95,14 @@ func (s *NotificationService) UpdateSettings(ctx context.Context, userID uuid.UU
 	setClauses := []string{}
 	args := []any{}
 	idx := 1
+	invalidColumn := ""
 
 	addBool := func(column string, value *bool) {
-		if value == nil {
+		if value == nil || invalidColumn != "" {
+			return
+		}
+		if _, ok := allowedColumns[column]; !ok {
+			invalidColumn = column
 			return
 		}
 		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", column, idx))
@@ -92,6 +120,10 @@ func (s *NotificationService) UpdateSettings(ctx context.Context, userID uuid.UU
 	addBool("email_friend_request_accepted", patch.EmailFriendRequestAccepted)
 	addBool("email_friend_bingo", patch.EmailFriendBingo)
 	addBool("email_friend_new_card", patch.EmailFriendNewCard)
+
+	if invalidColumn != "" {
+		return nil, fmt.Errorf("invalid notification settings column: %s", invalidColumn)
+	}
 
 	if len(setClauses) == 0 {
 		return s.loadSettings(ctx, userID)
@@ -368,7 +400,11 @@ func (s *NotificationService) dispatchEmails(notificationIDs []uuid.UUID) {
 	}
 
 	s.async(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		baseCtx := s.asyncCtx
+		if baseCtx == nil {
+			baseCtx = context.Background()
+		}
+		ctx, cancel := context.WithTimeout(baseCtx, 10*time.Second)
 		defer cancel()
 		s.sendNotificationEmails(ctx, notificationIDs)
 	})
@@ -459,6 +495,8 @@ func (s *NotificationService) buildNotificationEmail(nType models.NotificationTy
 	viewURL := fmt.Sprintf("%s/#notifications", s.baseURL)
 	friendsURL := fmt.Sprintf("%s/#friends", s.baseURL)
 	settingsURL := fmt.Sprintf("%s/#profile", s.baseURL)
+	friendsLabel := "Friends page"
+	settingsLabel := "Manage notification settings"
 
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html>
@@ -489,9 +527,9 @@ func (s *NotificationService) buildNotificationEmail(nType models.NotificationTy
 		templateEscape(message),
 		viewURL,
 		friendsURL,
-		friendsURL,
+		friendsLabel,
 		settingsURL,
-		settingsURL,
+		settingsLabel,
 	)
 
 	text := fmt.Sprintf(`%s

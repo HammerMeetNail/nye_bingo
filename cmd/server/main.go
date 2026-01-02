@@ -127,6 +127,7 @@ func run() error {
 		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
 	}
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	notificationService.SetAsyncContext(cleanupCtx)
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
