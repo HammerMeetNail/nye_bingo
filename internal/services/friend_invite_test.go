@@ -224,6 +224,9 @@ func TestFriendInviteService_AcceptInvite_Success(t *testing.T) {
 			if strings.Contains(sql, "FROM friendships") {
 				return rowFromValues(false)
 			}
+			if strings.Contains(sql, "INSERT INTO friendships") {
+				return rowFromValues(uuid.New())
+			}
 			t.Fatalf("unexpected sql: %q", sql)
 			return rowFromValues()
 		},
@@ -248,8 +251,8 @@ func TestFriendInviteService_AcceptInvite_Success(t *testing.T) {
 	if inviter.ID != inviterID || inviter.Username != "inviter" {
 		t.Fatalf("unexpected inviter: %+v", inviter)
 	}
-	if execCalls != 2 {
-		t.Fatalf("expected 2 exec calls, got %d", execCalls)
+	if execCalls != 1 {
+		t.Fatalf("expected 1 exec call, got %d", execCalls)
 	}
 }
 

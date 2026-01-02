@@ -240,6 +240,31 @@ a:hover {
   transition: color var(--transition-fast);
 }
 
+.nav-link--notifications {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.35rem;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  background: var(--color-gold);
+  color: var(--text-dark);
+  border-radius: var(--radius-full);
+  line-height: 1;
+}
+
+.nav-badge--hidden {
+  display: none;
+}
+
 .nav-link:hover {
   color: var(--color-text-primary);
 }
@@ -1937,6 +1962,117 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
+}
+
+.notification-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.notification-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.notification-channel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.notification-master {
+  font-weight: 600;
+}
+
+.notification-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+  border-left: 2px solid var(--color-silver);
+}
+
+.notification-options--disabled {
+  opacity: 0.6;
+}
+
+.notifications-page {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.notifications-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.notifications-header h2 {
+  margin: 0;
+  text-align: center;
+}
+
+.notifications-header > :last-child {
+  justify-self: end;
+}
+
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-silver);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-secondary);
+}
+
+.notification-item--unread {
+  border-color: var(--color-gold);
+  background: var(--color-bg-hover);
+}
+
+.notification-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  flex: 1;
+}
+
+.notification-message {
+  margin: 0;
+  font-weight: 500;
+}
+
+.notification-meta {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  font-size: var(--font-size-sm);
+}
+
+.notification-time {
+  color: var(--color-text-muted);
+}
+
+.notification-link {
+  color: var(--color-gold);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.notification-link:hover {
+  text-decoration: underline;
 }
 
 .profile-privacy small {

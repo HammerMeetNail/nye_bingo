@@ -278,6 +278,16 @@ func (s *EmailService) MarkPasswordResetUsed(ctx context.Context, token string) 
 	return err
 }
 
+// SendNotificationEmail sends a pre-rendered notification email.
+func (s *EmailService) SendNotificationEmail(ctx context.Context, toEmail, subject, html, text string) error {
+	return s.provider.Send(ctx, &Email{
+		To:      toEmail,
+		Subject: subject,
+		HTML:    html,
+		Text:    text,
+	})
+}
+
 // Email templates
 
 func (s *EmailService) renderVerificationEmail(verifyURL string) (html, text string) {

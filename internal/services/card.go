@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
@@ -34,11 +35,16 @@ var (
 )
 
 type CardService struct {
-	db DB
+	db                  DB
+	notificationService NotificationServiceInterface
 }
 
 func NewCardService(db DB) *CardService {
 	return &CardService{db: db}
+}
+
+func (s *CardService) SetNotificationService(notificationService NotificationServiceInterface) {
+	s.notificationService = notificationService
 }
 
 func (s *CardService) Create(ctx context.Context, params models.CreateCardParams) (*models.BingoCard, error) {
@@ -789,6 +795,9 @@ func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID, pa
 
 	card.IsFinalized = true
 	card.VisibleToFriends = visibleToFriends
+	if card.VisibleToFriends {
+		s.notifyFriendsNewCard(ctx, userID, cardID)
+	}
 	return card, nil
 }
 
@@ -803,6 +812,7 @@ func (s *CardService) UpdateVisibility(ctx context.Context, userID, cardID uuid.
 		return nil, ErrNotCardOwner
 	}
 
+	wasVisible := card.VisibleToFriends
 	_, err = s.db.Exec(ctx,
 		"UPDATE bingo_cards SET visible_to_friends = $2, updated_at = NOW() WHERE id = $1",
 		cardID, visibleToFriends,
@@ -812,6 +822,9 @@ func (s *CardService) UpdateVisibility(ctx context.Context, userID, cardID uuid.
 	}
 
 	card.VisibleToFriends = visibleToFriends
+	if card.IsFinalized && !wasVisible && visibleToFriends {
+		s.notifyFriendsNewCard(ctx, userID, cardID)
+	}
 	return card, nil
 }
 
@@ -822,6 +835,27 @@ func (s *CardService) BulkUpdateVisibility(ctx context.Context, userID uuid.UUID
 		return 0, nil
 	}
 
+	var notifyCardIDs []uuid.UUID
+	if visibleToFriends {
+		rows, err := s.db.Query(ctx,
+			`SELECT id FROM bingo_cards
+			 WHERE id = ANY($1) AND user_id = $2 AND is_finalized = true AND visible_to_friends = false`,
+			cardIDs, userID,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("fetching visibility changes: %w", err)
+		}
+		for rows.Next() {
+			var id uuid.UUID
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return 0, fmt.Errorf("scanning visibility changes: %w", err)
+			}
+			notifyCardIDs = append(notifyCardIDs, id)
+		}
+		rows.Close()
+	}
+
 	result, err := s.db.Exec(ctx,
 		`UPDATE bingo_cards SET visible_to_friends = $1, updated_at = NOW()
 		 WHERE id = ANY($2) AND user_id = $3`,
@@ -829,6 +863,12 @@ func (s *CardService) BulkUpdateVisibility(ctx context.Context, userID uuid.UUID
 	)
 	if err != nil {
 		return 0, fmt.Errorf("bulk updating visibility: %w", err)
+	}
+
+	if visibleToFriends {
+		for _, cardID := range notifyCardIDs {
+			s.notifyFriendsNewCard(ctx, userID, cardID)
+		}
 	}
 
 	return int(result.RowsAffected()), nil
@@ -924,6 +964,28 @@ func (s *CardService) CompleteItem(ctx context.Context, userID, cardID uuid.UUID
 	item.CompletedAt = &now
 	item.Notes = params.Notes
 	item.ProofURL = params.ProofURL
+
+	if card.VisibleToFriends {
+		updatedItems := make([]models.BingoItem, len(card.Items))
+		copy(updatedItems, card.Items)
+		for i := range updatedItems {
+			if updatedItems[i].Position == position {
+				updatedItems[i].IsCompleted = true
+				updatedItems[i].CompletedAt = &now
+				updatedItems[i].Notes = params.Notes
+				updatedItems[i].ProofURL = params.ProofURL
+				break
+			}
+		}
+		var freePos *int
+		if card.HasFreePositionSet() {
+			freePos = card.FreeSpacePos
+		}
+		bingos := s.countBingos(updatedItems, card.GridSize, freePos)
+		if bingos > 0 {
+			s.notifyFriendsBingo(ctx, userID, cardID, bingos)
+		}
+	}
 
 	return item, nil
 }
@@ -1401,6 +1463,10 @@ func (s *CardService) Import(ctx context.Context, params models.ImportCardParams
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
+	if card.IsFinalized && card.VisibleToFriends {
+		s.notifyFriendsNewCard(ctx, card.UserID, card.ID)
+	}
+
 	return card, nil
 }
 
@@ -1674,4 +1740,31 @@ func (s *CardService) Clone(ctx context.Context, userID, sourceCardID uuid.UUID,
 	}
 
 	return &CloneResult{Card: created, TruncatedItemCount: truncated}, nil
+}
+
+func (s *CardService) notifyFriendsNewCard(ctx context.Context, userID, cardID uuid.UUID) {
+	if s.notificationService == nil {
+		return
+	}
+	if err := s.notificationService.NotifyFriendsNewCard(ctx, userID, cardID); err != nil {
+		logging.Error("Failed to notify friends about new card", map[string]interface{}{
+			"error":   err.Error(),
+			"user_id": userID.String(),
+			"card_id": cardID.String(),
+		})
+	}
+}
+
+func (s *CardService) notifyFriendsBingo(ctx context.Context, userID, cardID uuid.UUID, bingoCount int) {
+	if s.notificationService == nil {
+		return
+	}
+	if err := s.notificationService.NotifyFriendsBingo(ctx, userID, cardID, bingoCount); err != nil {
+		logging.Error("Failed to notify friends about bingo", map[string]interface{}{
+			"error":       err.Error(),
+			"user_id":     userID.String(),
+			"card_id":     cardID.String(),
+			"bingo_count": bingoCount,
+		})
+	}
 }

@@ -127,6 +127,7 @@ type mockEmailService struct {
 	SendPasswordResetEmailFunc   func(ctx context.Context, userID uuid.UUID, email string) error
 	VerifyPasswordResetTokenFunc func(ctx context.Context, token string) (uuid.UUID, error)
 	MarkPasswordResetUsedFunc    func(ctx context.Context, token string) error
+	SendNotificationEmailFunc    func(ctx context.Context, toEmail, subject, html, text string) error
 	SendSupportEmailFunc         func(ctx context.Context, fromEmail, category, message string, userID string) error
 }
 
@@ -175,6 +176,13 @@ func (m *mockEmailService) VerifyPasswordResetToken(ctx context.Context, token s
 func (m *mockEmailService) MarkPasswordResetUsed(ctx context.Context, token string) error {
 	if m.MarkPasswordResetUsedFunc != nil {
 		return m.MarkPasswordResetUsedFunc(ctx, token)
+	}
+	return nil
+}
+
+func (m *mockEmailService) SendNotificationEmail(ctx context.Context, toEmail, subject, html, text string) error {
+	if m.SendNotificationEmailFunc != nil {
+		return m.SendNotificationEmailFunc(ctx, toEmail, subject, html, text)
 	}
 	return nil
 }
@@ -589,6 +597,89 @@ func (m *mockApiTokenService) Delete(ctx context.Context, userID uuid.UUID, toke
 func (m *mockApiTokenService) DeleteAll(ctx context.Context, userID uuid.UUID) error {
 	if m.DeleteAllFunc != nil {
 		return m.DeleteAllFunc(ctx, userID)
+	}
+	return nil
+}
+
+type mockNotificationService struct {
+	GetSettingsFunc    func(ctx context.Context, userID uuid.UUID) (*models.NotificationSettings, error)
+	UpdateSettingsFunc func(ctx context.Context, userID uuid.UUID, patch models.NotificationSettingsPatch) (*models.NotificationSettings, error)
+	ListFunc           func(ctx context.Context, userID uuid.UUID, params services.NotificationListParams) ([]models.Notification, error)
+	MarkReadFunc       func(ctx context.Context, userID, notificationID uuid.UUID) error
+	MarkAllReadFunc    func(ctx context.Context, userID uuid.UUID) error
+	UnreadCountFunc    func(ctx context.Context, userID uuid.UUID) (int, error)
+	NotifyRequestFunc  func(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
+	NotifyAcceptedFunc func(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error
+	NotifyNewCardFunc  func(ctx context.Context, actorID, cardID uuid.UUID) error
+	NotifyBingoFunc    func(ctx context.Context, actorID, cardID uuid.UUID, bingoCount int) error
+}
+
+func (m *mockNotificationService) GetSettings(ctx context.Context, userID uuid.UUID) (*models.NotificationSettings, error) {
+	if m.GetSettingsFunc != nil {
+		return m.GetSettingsFunc(ctx, userID)
+	}
+	return &models.NotificationSettings{}, nil
+}
+
+func (m *mockNotificationService) UpdateSettings(ctx context.Context, userID uuid.UUID, patch models.NotificationSettingsPatch) (*models.NotificationSettings, error) {
+	if m.UpdateSettingsFunc != nil {
+		return m.UpdateSettingsFunc(ctx, userID, patch)
+	}
+	return &models.NotificationSettings{}, nil
+}
+
+func (m *mockNotificationService) List(ctx context.Context, userID uuid.UUID, params services.NotificationListParams) ([]models.Notification, error) {
+	if m.ListFunc != nil {
+		return m.ListFunc(ctx, userID, params)
+	}
+	return []models.Notification{}, nil
+}
+
+func (m *mockNotificationService) MarkRead(ctx context.Context, userID, notificationID uuid.UUID) error {
+	if m.MarkReadFunc != nil {
+		return m.MarkReadFunc(ctx, userID, notificationID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) MarkAllRead(ctx context.Context, userID uuid.UUID) error {
+	if m.MarkAllReadFunc != nil {
+		return m.MarkAllReadFunc(ctx, userID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) UnreadCount(ctx context.Context, userID uuid.UUID) (int, error) {
+	if m.UnreadCountFunc != nil {
+		return m.UnreadCountFunc(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (m *mockNotificationService) NotifyFriendRequestReceived(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error {
+	if m.NotifyRequestFunc != nil {
+		return m.NotifyRequestFunc(ctx, recipientID, actorID, friendshipID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) NotifyFriendRequestAccepted(ctx context.Context, recipientID, actorID, friendshipID uuid.UUID) error {
+	if m.NotifyAcceptedFunc != nil {
+		return m.NotifyAcceptedFunc(ctx, recipientID, actorID, friendshipID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) NotifyFriendsNewCard(ctx context.Context, actorID, cardID uuid.UUID) error {
+	if m.NotifyNewCardFunc != nil {
+		return m.NotifyNewCardFunc(ctx, actorID, cardID)
+	}
+	return nil
+}
+
+func (m *mockNotificationService) NotifyFriendsBingo(ctx context.Context, actorID, cardID uuid.UUID, bingoCount int) error {
+	if m.NotifyBingoFunc != nil {
+		return m.NotifyBingoFunc(ctx, actorID, cardID, bingoCount)
 	}
 	return nil
 }
