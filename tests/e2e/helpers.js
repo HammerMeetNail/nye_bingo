@@ -4,14 +4,17 @@ const MAILPIT_BASE_URL = process.env.MAILPIT_BASE_URL || 'http://mailpit:8025';
 const MAILPIT_WAIT_TIMEOUT_MS = Number.parseInt(process.env.MAILPIT_WAIT_TIMEOUT_MS || '30000', 10);
 
 function buildUser(testInfo, prefix, options = {}) {
-  const baseId = testInfo && testInfo.testId
-    ? testInfo.testId.slice(-6)
-    : Date.now().toString().slice(-6);
+  const workerIndex = testInfo && Number.isInteger(testInfo.workerIndex) ? testInfo.workerIndex : 0;
+  const rawId = testInfo && testInfo.testId
+    ? testInfo.testId
+    : `${Date.now().toString(36)}${Math.random().toString(36)}`;
+  const safeId = String(rawId).toLowerCase().replace(/[^a-z0-9]/g, '');
+  const baseId = safeId.slice(-8) || Date.now().toString(36).slice(-8);
   const safePrefix = String(prefix || 'user')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .slice(0, 10) || 'user';
-  const base = `${safePrefix}${baseId}`;
+  const base = `${safePrefix}${workerIndex}${baseId}`;
   return {
     username: options.username || base,
     email: options.email || `${base}@test.com`,
@@ -171,6 +174,15 @@ async function ensureSelectedCount(page, expected) {
   throw new Error(`Unable to reach ${expected} selected cards (got "${finalText}")`);
 }
 
+async function sendFriendRequest(page, username) {
+  await page.goto('/#friends');
+  await page.fill('#friend-search', username);
+  await page.click('#search-btn');
+  const results = page.locator('#search-results');
+  await expect(results).toContainText(username);
+  await results.getByRole('button', { name: 'Add Friend' }).click();
+}
+
 async function clearMailpit(request) {
   const response = await request.delete(`${MAILPIT_BASE_URL}/api/v1/messages`);
   if (!response.ok()) {
@@ -322,6 +334,7 @@ module.exports = {
   logout,
   expectToast,
   ensureSelectedCount,
+  sendFriendRequest,
   clearMailpit,
   waitForEmail,
   expectNoEmail,

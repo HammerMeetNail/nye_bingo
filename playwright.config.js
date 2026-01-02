@@ -1,14 +1,21 @@
 const { defineConfig, devices } = require('@playwright/test');
+const os = require('os');
 
 const isHeadless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || 'playwright-report';
+const defaultWorkers = (() => {
+  if (process.env.CI) return 1;
+  const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 1;
+  return Math.max(1, Math.min(4, cpuCount - 1));
+})();
 const workers = (() => {
   const raw = process.env.PLAYWRIGHT_WORKERS;
-  if (!raw) return 1;
+  if (!raw) return defaultWorkers;
+  if (raw === 'auto') return defaultWorkers;
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultWorkers;
 })();
 
 module.exports = defineConfig({

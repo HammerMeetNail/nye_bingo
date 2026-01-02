@@ -1,6 +1,12 @@
 #!/bin/bash
 # Run end-to-end tests against a fresh local stack.
 # Usage: ./scripts/e2e.sh [playwright args...]
+#
+# Useful env vars:
+# - PLAYWRIGHT_BROWSERS=firefox[,chromium,webkit]
+# - PLAYWRIGHT_WORKERS=auto|N
+# - PLAYWRIGHT_HEADLESS=true|false
+# - AI_STUB=1 (default) for deterministic AI flows
 
 set -euo pipefail
 
@@ -75,7 +81,7 @@ for browser in "${browsers[@]}"; do
 done
 
 echo ""
-echo "Running Playwright (projects: ${PLAYWRIGHT_BROWSERS})..."
+echo "Running Playwright (projects: ${PLAYWRIGHT_BROWSERS}, workers: ${PLAYWRIGHT_WORKERS:-auto})..."
 podman compose --profile e2e run --rm playwright \
   /opt/playwright/node_modules/.bin/playwright test \
   "${project_args[@]}" \
