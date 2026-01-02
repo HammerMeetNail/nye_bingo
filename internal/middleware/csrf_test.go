@@ -53,6 +53,9 @@ func TestCSRFMiddleware_UnsafeMethodsRequireToken(t *testing.T) {
 			if rr.Code != http.StatusForbidden {
 				t.Errorf("%s request without token: expected status 403, got %d", method, rr.Code)
 			}
+			if ct := rr.Result().Header.Get("Content-Type"); ct != "application/json" {
+				t.Errorf("%s request without token: expected Content-Type application/json, got %q", method, ct)
+			}
 		})
 	}
 }
@@ -123,6 +126,9 @@ func TestCSRFMiddleware_MismatchedTokenFails(t *testing.T) {
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("mismatched token: expected status 403, got %d", rr.Code)
 	}
+	if ct := rr.Result().Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("mismatched token: expected Content-Type application/json, got %q", ct)
+	}
 }
 
 func TestCSRFMiddleware_MissingHeaderFails(t *testing.T) {
@@ -141,6 +147,9 @@ func TestCSRFMiddleware_MissingHeaderFails(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("missing header: expected status 403, got %d", rr.Code)
+	}
+	if ct := rr.Result().Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("missing header: expected Content-Type application/json, got %q", ct)
 	}
 }
 

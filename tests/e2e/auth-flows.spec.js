@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const {
   buildUser,
   register,
+  createCardFromAuthenticatedCreate,
   loginWithCredentials,
   logout,
   expectToast,
@@ -86,4 +87,36 @@ test('email verification banner clears after verifying', async ({ page, request 
 
   await page.goto('/#profile');
   await expect(page.locator('.badge').filter({ hasText: 'Verified' })).toBeVisible();
+});
+
+test('verification link does not break authenticated actions in an already-open tab', async ({ page, request }, testInfo) => {
+  const user = buildUser(testInfo, 'csrfverify');
+  await register(page, user);
+
+  await page.getByRole('link', { name: `Hi, ${user.username}` }).click();
+  await expect(page.getByRole('heading', { name: 'Account Settings' })).toBeVisible();
+
+  const after = Date.now();
+  await page.getByRole('button', { name: 'Resend verification email' }).click();
+  await expectToast(page, 'Verification email sent');
+
+  const message = await waitForEmail(request, {
+    to: user.email,
+    subject: 'Verify your Year of Bingo account',
+    after,
+  });
+  const token = extractTokenFromEmail(message, 'verify-email');
+
+  const mailPage = await page.context().newPage();
+  await mailPage.goto('http://mailpit:8025');
+  await mailPage.goto(`/#verify-email?token=${token}`);
+  await expect(mailPage.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
+  await mailPage.close();
+
+  await page.getByRole('link', { name: '← Back' }).click();
+  await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
+  await page.getByRole('link', { name: 'Create Your First Card' }).click();
+
+  await createCardFromAuthenticatedCreate(page);
+  expect(page.url()).toContain('#card/');
 });

@@ -35,19 +35,25 @@ func (m *CSRFMiddleware) Protect(next http.Handler) http.Handler {
 		// Validate CSRF token for state-changing methods
 		cookie, err := r.Cookie(csrfCookieName)
 		if err != nil {
-			http.Error(w, `{"error":"CSRF token missing"}`, http.StatusForbidden)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"CSRF token missing"}`))
 			return
 		}
 
 		headerToken := r.Header.Get(csrfHeaderName)
 		if headerToken == "" {
-			http.Error(w, `{"error":"CSRF token header missing"}`, http.StatusForbidden)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"CSRF token header missing"}`))
 			return
 		}
 
 		// Constant-time comparison
 		if subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(headerToken)) != 1 {
-			http.Error(w, `{"error":"CSRF token mismatch"}`, http.StatusForbidden)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"error":"CSRF token mismatch"}`))
 			return
 		}
 
@@ -96,7 +102,9 @@ func (m *CSRFMiddleware) GetToken(w http.ResponseWriter, r *http.Request) {
 	if err != nil || cookie.Value == "" {
 		token, err := generateCSRFToken()
 		if err != nil {
-			http.Error(w, `{"error":"Failed to generate CSRF token"}`, http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error":"Failed to generate CSRF token"}`))
 			return
 		}
 
