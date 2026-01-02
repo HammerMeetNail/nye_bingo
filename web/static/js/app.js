@@ -606,6 +606,7 @@ const App = {
       const notifications = response?.notifications || [];
       const unreadCount = this.renderNotificationList(listEl, notifications);
       this.updateNotificationMarkAllButton(markAllBtn, unreadCount);
+      await this.markViewedNotifications(notifications);
     } catch (error) {
       if (listEl) {
         listEl.innerHTML = `
@@ -634,6 +635,7 @@ const App = {
       const item = document.createElement('div');
       const isUnread = !notification.read_at;
       item.className = `notification-item${isUnread ? ' notification-item--unread' : ''}`;
+      item.dataset.notificationId = notification.id;
 
       if (isUnread) unreadCount += 1;
 
@@ -679,6 +681,32 @@ const App = {
     });
 
     return unreadCount;
+  },
+
+  async markViewedNotifications(notifications) {
+    if (!Array.isArray(notifications) || notifications.length === 0) return;
+    const unreadIDs = notifications
+      .filter((notification) => !notification.read_at && notification.id)
+      .map((notification) => notification.id);
+    if (unreadIDs.length === 0) return;
+
+    const results = await Promise.allSettled(
+      unreadIDs.map((id) => API.notifications.markRead(id)),
+    );
+
+    unreadIDs.forEach((id, index) => {
+      if (results[index].status !== 'fulfilled') return;
+      const item = document.querySelector(`.notification-item[data-notification-id="${id}"]`);
+      if (!item) return;
+      item.classList.remove('notification-item--unread');
+      const btn = item.querySelector('[data-action="mark-notification-read"]');
+      if (btn) btn.remove();
+    });
+
+    const markAllBtn = document.getElementById('mark-all-notifications-btn');
+    const unreadCount = document.querySelectorAll('.notification-item--unread').length;
+    this.updateNotificationMarkAllButton(markAllBtn, unreadCount);
+    await this.refreshNotificationCount();
   },
 
   buildNotificationMessage(notification) {

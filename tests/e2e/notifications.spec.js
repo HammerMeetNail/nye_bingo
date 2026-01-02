@@ -21,7 +21,7 @@ async function sendFriendRequest(page, username) {
   await results.getByRole('button', { name: 'Add Friend' }).click();
 }
 
-test('friend request notifications show unread badge', async ({ browser }, testInfo) => {
+test('viewing notifications marks them read', async ({ browser }, testInfo) => {
   const userA = buildUser(testInfo, 'nreqa');
   const userB = buildUser(testInfo, 'nreqb');
 
@@ -36,9 +36,10 @@ test('friend request notifications show unread badge', async ({ browser }, testI
   await sendFriendRequest(pageA, userB.username);
 
   await pageB.goto('/#notifications');
-  await expect(pageB.locator('.notification-item--unread')).toHaveCount(1);
-  await expect(pageB.locator('.notification-message')).toContainText('friend request');
-  await expect(pageB.locator('#notification-badge')).toHaveText('1');
+  const notification = pageB.locator('.notification-item', { hasText: 'friend request' });
+  await expect(notification).toBeVisible();
+  await expect(notification).not.toHaveClass(/notification-item--unread/);
+  await expect(pageB.locator('#notification-badge')).toHaveClass(/nav-badge--hidden/);
 
   await contextA.close();
   await contextB.close();

@@ -72,7 +72,7 @@
   - Invite link acceptance connects friends.
   - Blocking removes friendships and hides search results.
 - `tests/e2e/notifications.spec.js`
-  - Friend request notification badge + list entry.
+  - Viewing notifications marks them read and clears the badge.
   - Friend acceptance notification delivered to sender.
   - New card notification links to friend card view.
   - Bingo notification fires once per card (dedupe).
