@@ -890,15 +890,6 @@ paths:
                 properties:
                   error:
                     type: string
-        '403':
-          description: Email not verified
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
   /cards:
     get:
       summary: List all cards
