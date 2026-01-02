@@ -701,6 +701,15 @@ paths:
                 properties:
                   message:
                     type: string
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
         '401':
           description: Authentication required
           content:
@@ -740,6 +749,15 @@ paths:
                 type: object
                 properties:
                   message:
+                    type: string
+        '400':
+          description: Invalid notification ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
                     type: string
         '401':
           description: Authentication required

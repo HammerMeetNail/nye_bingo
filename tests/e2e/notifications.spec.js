@@ -71,6 +71,7 @@ test('notifications can be deleted individually or all at once', async ({ browse
   await deleteButtons.first().click();
   await expect(pageB.locator('.notification-item')).toHaveCount(1);
 
+  pageB.once('dialog', (dialog) => dialog.accept());
   await pageB.getByRole('button', { name: 'Delete all' }).click();
   await expect(pageB.locator('.notification-item')).toHaveCount(0);
   await expect(pageB.locator('.notifications-list')).toContainText('No notifications yet.');

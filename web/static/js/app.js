@@ -858,6 +858,7 @@ const App = {
   },
 
   async deleteAllNotifications() {
+    if (!confirm('Delete all notifications? This cannot be undone.')) return;
     try {
       await API.notifications.deleteAll();
       const listEl = document.getElementById('notifications-list');
