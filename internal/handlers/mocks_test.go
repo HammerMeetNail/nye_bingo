@@ -699,3 +699,94 @@ func (m *mockNotificationService) NotifyFriendsBingo(ctx context.Context, actorI
 	}
 	return nil
 }
+
+type mockReminderService struct {
+	GetSettingsFunc        func(ctx context.Context, userID uuid.UUID) (*models.ReminderSettings, error)
+	UpdateSettingsFunc     func(ctx context.Context, userID uuid.UUID, patch models.ReminderSettingsPatch) (*models.ReminderSettings, error)
+	ListCardCheckinsFunc   func(ctx context.Context, userID uuid.UUID) ([]models.CardCheckinSummary, error)
+	UpsertCardCheckinFunc  func(ctx context.Context, userID, cardID uuid.UUID, schedule models.CardCheckinScheduleInput) (*models.CardCheckinReminder, error)
+	DeleteCardCheckinFunc  func(ctx context.Context, userID, cardID uuid.UUID) error
+	ListGoalRemindersFunc  func(ctx context.Context, userID uuid.UUID, cardID *uuid.UUID) ([]models.GoalReminderSummary, error)
+	UpsertGoalReminderFunc func(ctx context.Context, userID uuid.UUID, input models.GoalReminderInput) (*models.GoalReminder, error)
+	DeleteGoalReminderFunc func(ctx context.Context, userID, reminderID uuid.UUID) error
+	SendTestEmailFunc      func(ctx context.Context, userID, cardID uuid.UUID) error
+	RenderImageByTokenFunc func(ctx context.Context, token string) ([]byte, error)
+	UnsubscribeByTokenFunc func(ctx context.Context, token string) (bool, error)
+}
+
+func (m *mockReminderService) GetSettings(ctx context.Context, userID uuid.UUID) (*models.ReminderSettings, error) {
+	if m.GetSettingsFunc != nil {
+		return m.GetSettingsFunc(ctx, userID)
+	}
+	return &models.ReminderSettings{}, nil
+}
+
+func (m *mockReminderService) UpdateSettings(ctx context.Context, userID uuid.UUID, patch models.ReminderSettingsPatch) (*models.ReminderSettings, error) {
+	if m.UpdateSettingsFunc != nil {
+		return m.UpdateSettingsFunc(ctx, userID, patch)
+	}
+	return &models.ReminderSettings{}, nil
+}
+
+func (m *mockReminderService) ListCardCheckins(ctx context.Context, userID uuid.UUID) ([]models.CardCheckinSummary, error) {
+	if m.ListCardCheckinsFunc != nil {
+		return m.ListCardCheckinsFunc(ctx, userID)
+	}
+	return []models.CardCheckinSummary{}, nil
+}
+
+func (m *mockReminderService) UpsertCardCheckin(ctx context.Context, userID, cardID uuid.UUID, schedule models.CardCheckinScheduleInput) (*models.CardCheckinReminder, error) {
+	if m.UpsertCardCheckinFunc != nil {
+		return m.UpsertCardCheckinFunc(ctx, userID, cardID, schedule)
+	}
+	return &models.CardCheckinReminder{}, nil
+}
+
+func (m *mockReminderService) DeleteCardCheckin(ctx context.Context, userID, cardID uuid.UUID) error {
+	if m.DeleteCardCheckinFunc != nil {
+		return m.DeleteCardCheckinFunc(ctx, userID, cardID)
+	}
+	return nil
+}
+
+func (m *mockReminderService) ListGoalReminders(ctx context.Context, userID uuid.UUID, cardID *uuid.UUID) ([]models.GoalReminderSummary, error) {
+	if m.ListGoalRemindersFunc != nil {
+		return m.ListGoalRemindersFunc(ctx, userID, cardID)
+	}
+	return []models.GoalReminderSummary{}, nil
+}
+
+func (m *mockReminderService) UpsertGoalReminder(ctx context.Context, userID uuid.UUID, input models.GoalReminderInput) (*models.GoalReminder, error) {
+	if m.UpsertGoalReminderFunc != nil {
+		return m.UpsertGoalReminderFunc(ctx, userID, input)
+	}
+	return &models.GoalReminder{}, nil
+}
+
+func (m *mockReminderService) DeleteGoalReminder(ctx context.Context, userID, reminderID uuid.UUID) error {
+	if m.DeleteGoalReminderFunc != nil {
+		return m.DeleteGoalReminderFunc(ctx, userID, reminderID)
+	}
+	return nil
+}
+
+func (m *mockReminderService) SendTestEmail(ctx context.Context, userID, cardID uuid.UUID) error {
+	if m.SendTestEmailFunc != nil {
+		return m.SendTestEmailFunc(ctx, userID, cardID)
+	}
+	return nil
+}
+
+func (m *mockReminderService) RenderImageByToken(ctx context.Context, token string) ([]byte, error) {
+	if m.RenderImageByTokenFunc != nil {
+		return m.RenderImageByTokenFunc(ctx, token)
+	}
+	return nil, nil
+}
+
+func (m *mockReminderService) UnsubscribeByToken(ctx context.Context, token string) (bool, error) {
+	if m.UnsubscribeByTokenFunc != nil {
+		return m.UnsubscribeByTokenFunc(ctx, token)
+	}
+	return false, nil
+}

@@ -6,6 +6,7 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   completeFirstItem,
+  expectToast,
 } = require('./helpers');
 
 test('users can connect and react to friend cards', async ({ browser }, testInfo) => {
@@ -30,7 +31,16 @@ test('users can connect and react to friend cards', async ({ browser }, testInfo
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
   await expect(results).toContainText(userA.username);
+  const requestResponse = pageB.waitForResponse((response) => (
+    response.url().includes('/api/friends/requests')
+      && response.request().method() === 'POST'
+      && response.ok()
+  ));
   await results.getByRole('button', { name: 'Add Friend' }).click();
+  await requestResponse;
+  await expectToast(pageB, 'Friend request sent!');
+  await pageB.reload();
+  await pageB.goto('/#friends');
   await expect(pageB.locator('#sent-requests')).toContainText(userA.username);
 
   await pageA.goto('/#friends');

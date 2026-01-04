@@ -109,6 +109,28 @@ func TestCSRFMiddleware_ValidTokenAllowsRequest(t *testing.T) {
 	}
 }
 
+func TestCSRFMiddleware_UnsubscribeBypass(t *testing.T) {
+	csrf := NewCSRFMiddleware(false)
+
+	handlerCalled := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handlerCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/r/unsubscribe", nil)
+	rr := httptest.NewRecorder()
+
+	csrf.Protect(handler).ServeHTTP(rr, req)
+
+	if !handlerCalled {
+		t.Error("handler should be called for unsubscribe without CSRF token")
+	}
+	if rr.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rr.Code)
+	}
+}
+
 func TestCSRFMiddleware_MismatchedTokenFails(t *testing.T) {
 	csrf := NewCSRFMiddleware(false)
 

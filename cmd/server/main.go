@@ -99,6 +99,7 @@ func run() error {
 	blockService := services.NewBlockService(dbAdapter)
 	inviteService := services.NewFriendInviteService(dbAdapter)
 	notificationService := services.NewNotificationService(dbAdapter, emailService, cfg.Email.BaseURL)
+	reminderService := services.NewReminderService(dbAdapter, emailService, cfg.Email.BaseURL)
 	aiService := ai.NewService(cfg, dbAdapter)
 
 	cardService.SetNotificationService(notificationService)
@@ -117,6 +118,8 @@ func run() error {
 	blockHandler := handlers.NewBlockHandler(blockService)
 	inviteHandler := handlers.NewFriendInviteHandler(inviteService)
 	notificationHandler := handlers.NewNotificationHandler(notificationService)
+	reminderHandler := handlers.NewReminderHandler(reminderService)
+	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
@@ -138,6 +141,40 @@ func run() error {
 			case <-ticker.C:
 				if err := notificationService.CleanupOld(context.Background()); err != nil {
 					logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
+	}()
+
+	if err := reminderService.CleanupOld(context.Background()); err != nil {
+		logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
+	}
+	reminderCtx, reminderCancel := context.WithCancel(context.Background())
+	go func() {
+		interval := resolveRemindersPollInterval(logger, os.LookupEnv)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reminderCtx.Done():
+				return
+			case <-ticker.C:
+				if _, err := reminderService.RunDue(context.Background(), time.Now(), 50); err != nil {
+					logger.Warn("Reminder runner failed", map[string]interface{}{"error": err.Error()})
+				}
+			}
+		}
+	}()
+	go func() {
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-reminderCtx.Done():
+				return
+			case <-ticker.C:
+				if err := reminderService.CleanupOld(context.Background()); err != nil {
+					logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
 				}
 			}
 		}
@@ -255,6 +292,17 @@ func run() error {
 	mux.Handle("GET /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.GetSettings)))
 	mux.Handle("PUT /api/notifications/settings", requireSession(http.HandlerFunc(notificationHandler.UpdateSettings)))
 
+	// Reminder endpoints
+	mux.Handle("GET /api/reminders/settings", requireSession(http.HandlerFunc(reminderHandler.GetSettings)))
+	mux.Handle("PUT /api/reminders/settings", requireSession(http.HandlerFunc(reminderHandler.UpdateSettings)))
+	mux.Handle("GET /api/reminders/cards", requireSession(http.HandlerFunc(reminderHandler.ListCards)))
+	mux.Handle("PUT /api/reminders/cards/{cardId}", requireSession(http.HandlerFunc(reminderHandler.UpsertCardCheckin)))
+	mux.Handle("DELETE /api/reminders/cards/{cardId}", requireSession(http.HandlerFunc(reminderHandler.DeleteCardCheckin)))
+	mux.Handle("GET /api/reminders/goals", requireSession(http.HandlerFunc(reminderHandler.ListGoals)))
+	mux.Handle("POST /api/reminders/goals", requireSession(http.HandlerFunc(reminderHandler.UpsertGoalReminder)))
+	mux.Handle("DELETE /api/reminders/goals/{id}", requireSession(http.HandlerFunc(reminderHandler.DeleteGoalReminder)))
+	mux.Handle("POST /api/reminders/test", requireSession(http.HandlerFunc(reminderHandler.SendTest)))
+
 	// Reaction endpoints
 	mux.Handle("POST /api/items/{id}/react", requireSession(http.HandlerFunc(reactionHandler.AddReaction)))
 	mux.Handle("DELETE /api/items/{id}/react", requireSession(http.HandlerFunc(reactionHandler.RemoveReaction)))
@@ -271,6 +319,11 @@ func run() error {
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))
 	mux.Handle("GET /static/", http.StripPrefix("/static/", fs))
+
+	// Reminder public endpoints
+	mux.Handle("GET /r/img/{token}", http.HandlerFunc(reminderPublicHandler.ServeImage))
+	mux.Handle("GET /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeConfirm))
+	mux.Handle("POST /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeSubmit))
 
 	// API Docs redirect
 	mux.Handle("GET /api/docs", http.RedirectHandler("/static/swagger/index.html", http.StatusFound))
@@ -309,6 +362,7 @@ func run() error {
 		<-quit
 		logger.Info("Server is shutting down...")
 		cleanupCancel()
+		reminderCancel()
 
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -352,4 +406,21 @@ func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv fu
 		}
 	}
 	return aiRateLimit
+}
+
+func resolveRemindersPollInterval(logger *logging.Logger, lookupEnv func(string) (string, bool)) time.Duration {
+	interval := time.Minute
+	if value, ok := lookupEnv("REMINDERS_POLL_INTERVAL"); ok && value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed <= 0 {
+			logger.Warn("Invalid REMINDERS_POLL_INTERVAL; using default", map[string]interface{}{
+				"value":   value,
+				"default": interval.String(),
+			})
+		} else {
+			interval = parsed
+			logger.Info("Using reminders poll interval from env", map[string]interface{}{"interval": interval.String()})
+		}
+	}
+	return interval
 }

@@ -25,6 +25,12 @@ func NewCSRFMiddleware(secure bool) *CSRFMiddleware {
 
 func (m *CSRFMiddleware) Protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Public tokenized endpoints (no session) should not require CSRF headers/cookies.
+		if r.URL.Path == "/r/unsubscribe" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Safe methods don't need CSRF protection
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
 			m.ensureToken(w, r)
