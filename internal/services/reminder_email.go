@@ -200,6 +200,12 @@ func pluralizeBingo(count int) string {
 func sanitizeSubject(subject string) string {
 	cleaned := strings.ReplaceAll(subject, "\n", " ")
 	cleaned = strings.ReplaceAll(cleaned, "\r", " ")
+	cleaned = strings.Map(func(r rune) rune {
+		if r < 32 || r == 127 {
+			return -1
+		}
+		return r
+	}, cleaned)
 	cleaned = strings.TrimSpace(cleaned)
 	if len(cleaned) > 120 {
 		cleaned = cleaned[:117] + "..."
