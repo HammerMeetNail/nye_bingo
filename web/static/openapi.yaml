@@ -10,7 +10,7 @@ info:
     Example: `Authorization: Bearer yob_abc123...`
 
     Note: Some endpoints (e.g. AI generation) require an authenticated browser session cookie and do not accept API tokens.
-  version: 1.4.0
+  version: 1.5.0
 servers:
   - url: /api
 components:
