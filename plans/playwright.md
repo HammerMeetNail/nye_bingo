@@ -79,9 +79,11 @@
   - Bingo notification fires once per card (dedupe).
   - XSS-style usernames render as text in notifications.
   - Email notifications respect opt-in and include links.
-- `tests/e2e/reminders.spec.js`
+- `tests/e2e/reminders-test-email.spec.js`
   - Email-verified users can enable reminders and receive a test email.
+- `tests/e2e/reminders-xss.spec.js`
   - Reminder emails escape XSS-style goal content in suggested goals.
+- `tests/e2e/reminders-image.spec.js`
   - Reminder test emails include a PNG URL that returns valid image data.
 - `tests/e2e/profile-settings.spec.js`
   - Searchable toggle gates friend search visibility.
@@ -102,9 +104,16 @@
   - Friend request, accept flow, view friend card, add reaction.
 - `tests/e2e/support-form.spec.js`
   - Support form validation, success toast, and email delivery via Mailpit.
-- `tests/e2e/ai-wizard.spec.js`
+- `tests/e2e/ai-wizard-create.spec.js`
   - AI wizard generates goals and creates a card (stubbed).
+- `tests/e2e/ai-wizard-append.spec.js`
+  - AI wizard appends goals to an existing card (stubbed).
+- `tests/e2e/ai-wizard-gating.spec.js`
   - Unverified users are prompted to verify after free generations are used.
+- `tests/e2e/ai-wizard-mix.spec.js`
+  - AI wizard handles mixed card/create flows (stubbed).
+- `tests/e2e/ai-wizard-anonymous-gate.spec.js`
+  - Anonymous AI wizard flows enforce gating (stubbed).
 - `tests/e2e/ai-guide-editor.spec.js`
   - AI guide refine flow updates a draft goal.
   - Empty cell click opens add-goal modal and saves a new goal.

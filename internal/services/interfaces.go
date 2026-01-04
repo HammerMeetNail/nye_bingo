@@ -138,6 +138,8 @@ type ReminderServiceInterface interface {
 	UpsertGoalReminder(ctx context.Context, userID uuid.UUID, input models.GoalReminderInput) (*models.GoalReminder, error)
 	DeleteGoalReminder(ctx context.Context, userID uuid.UUID, reminderID uuid.UUID) error
 	SendTestEmail(ctx context.Context, userID, cardID uuid.UUID) error
+	RenderImageByToken(ctx context.Context, token string) ([]byte, error)
+	UnsubscribeByToken(ctx context.Context, token string) (bool, error)
 }
 
 // EmailServiceInterface defines the contract for email operations.

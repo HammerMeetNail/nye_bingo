@@ -710,6 +710,8 @@ type mockReminderService struct {
 	UpsertGoalReminderFunc func(ctx context.Context, userID uuid.UUID, input models.GoalReminderInput) (*models.GoalReminder, error)
 	DeleteGoalReminderFunc func(ctx context.Context, userID, reminderID uuid.UUID) error
 	SendTestEmailFunc      func(ctx context.Context, userID, cardID uuid.UUID) error
+	RenderImageByTokenFunc func(ctx context.Context, token string) ([]byte, error)
+	UnsubscribeByTokenFunc func(ctx context.Context, token string) (bool, error)
 }
 
 func (m *mockReminderService) GetSettings(ctx context.Context, userID uuid.UUID) (*models.ReminderSettings, error) {
@@ -773,4 +775,18 @@ func (m *mockReminderService) SendTestEmail(ctx context.Context, userID, cardID 
 		return m.SendTestEmailFunc(ctx, userID, cardID)
 	}
 	return nil
+}
+
+func (m *mockReminderService) RenderImageByToken(ctx context.Context, token string) ([]byte, error) {
+	if m.RenderImageByTokenFunc != nil {
+		return m.RenderImageByTokenFunc(ctx, token)
+	}
+	return nil, nil
+}
+
+func (m *mockReminderService) UnsubscribeByToken(ctx context.Context, token string) (bool, error) {
+	if m.UnsubscribeByTokenFunc != nil {
+		return m.UnsubscribeByTokenFunc(ctx, token)
+	}
+	return false, nil
 }

@@ -465,7 +465,10 @@ func (s *ReminderService) SendTestEmail(ctx context.Context, userID, cardID uuid
 
 	recommendations := pickReminderRecommendations(items, card.GridSize, card.FreeSpacePos, 3)
 	stats := buildReminderStats(card, items)
-	unsubscribeURL, _ := s.createUnsubscribeURL(ctx, userID)
+	unsubscribeURL, err := s.createUnsubscribeURL(ctx, userID)
+	if err != nil {
+		return err
+	}
 
 	subject, html, text := buildCheckinEmail(checkinEmailParams{
 		Card:            card,
@@ -528,6 +531,9 @@ func (s *ReminderService) RenderImageByToken(ctx context.Context, token string) 
 
 	card, items, err := s.loadCardWithItems(ctx, imageToken.UserID, imageToken.CardID)
 	if err != nil {
+		if errors.Is(err, ErrCardNotFound) {
+			return nil, ErrReminderNotFound
+		}
 		return nil, err
 	}
 
@@ -566,6 +572,18 @@ func (s *ReminderService) UnsubscribeByToken(ctx context.Context, token string) 
 		return false, ErrReminderNotFound
 	}
 
+	if err := s.ensureSettingsRow(ctx, userID); err != nil {
+		return false, err
+	}
+
+	var wasEnabled bool
+	if err := s.db.QueryRow(ctx,
+		"SELECT email_enabled FROM reminder_settings WHERE user_id = $1",
+		userID,
+	).Scan(&wasEnabled); err != nil {
+		return false, fmt.Errorf("load reminder enabled: %w", err)
+	}
+
 	if _, err := s.db.Exec(ctx,
 		"UPDATE reminder_settings SET email_enabled = false, updated_at = NOW() WHERE user_id = $1",
 		userID,
@@ -579,7 +597,7 @@ func (s *ReminderService) UnsubscribeByToken(ctx context.Context, token string) 
 		return false, fmt.Errorf("mark unsubscribe token used: %w", err)
 	}
 
-	return true, nil
+	return !wasEnabled, nil
 }
 
 func (s *ReminderService) runDueCheckins(ctx context.Context, now time.Time, limit int) (int, error) {
@@ -729,6 +747,9 @@ func (s *ReminderService) processCheckin(ctx context.Context, tx Tx, job checkin
 		return false, err
 	}
 	if capReached {
+		if err := s.deferCheckinAfterCapReached(ctx, tx, job, now); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
@@ -750,7 +771,10 @@ func (s *ReminderService) processCheckin(ctx context.Context, tx Tx, job checkin
 		return false, err
 	}
 
-	unsubscribeURL, _ := s.createUnsubscribeURL(ctx, job.UserID)
+	unsubscribeURL, err := s.createUnsubscribeURL(ctx, job.UserID)
+	if err != nil {
+		return false, err
+	}
 	subject, html, text := buildCheckinEmail(checkinEmailParams{
 		Card:            card,
 		Stats:           stats,
@@ -771,14 +795,20 @@ func (s *ReminderService) processCheckin(ctx context.Context, tx Tx, job checkin
 		sent = true
 	}
 
-	nextSendAt, err := s.nextCheckinSendAt(now, job)
-	if err != nil {
-		return sent, err
+	if sent {
+		nextSendAt, err := s.nextCheckinSendAt(now, job)
+		if err != nil {
+			return sent, err
+		}
+		if err := s.updateCheckinAfterSend(ctx, tx, job.ID, now, nextSendAt); err != nil {
+			return sent, err
+		}
+	} else {
+		if err := s.deferCheckinAfterFailure(ctx, tx, job.ID, now); err != nil {
+			return sent, err
+		}
 	}
 
-	if err := s.updateCheckinAfterSend(ctx, tx, job.ID, now, nextSendAt); err != nil {
-		return sent, err
-	}
 	if err := s.logReminderEmail(ctx, tx, job.UserID, "card_checkin", job.ID, status, now); err != nil {
 		return sent, err
 	}
@@ -810,10 +840,16 @@ func (s *ReminderService) processGoalReminder(ctx context.Context, tx Tx, job go
 		return false, err
 	}
 	if capReached {
+		if err := s.deferGoalAfterCapReached(ctx, tx, job, now); err != nil {
+			return false, err
+		}
 		return false, nil
 	}
 
-	unsubscribeURL, _ := s.createUnsubscribeURL(ctx, job.UserID)
+	unsubscribeURL, err := s.createUnsubscribeURL(ctx, job.UserID)
+	if err != nil {
+		return false, err
+	}
 	subject, html, text := buildGoalReminderEmail(goalReminderEmailParams{
 		CardID:         ctxData.CardID,
 		ItemID:         job.ItemID,
@@ -836,6 +872,10 @@ func (s *ReminderService) processGoalReminder(ctx context.Context, tx Tx, job go
 
 	if sent {
 		if err := s.markGoalReminderSent(ctx, tx, job.ID, now); err != nil {
+			return sent, err
+		}
+	} else {
+		if err := s.deferGoalAfterFailure(ctx, tx, job.ID, now); err != nil {
 			return sent, err
 		}
 	}
@@ -868,6 +908,80 @@ func (s *ReminderService) updateCheckinAfterSend(ctx context.Context, tx Tx, rem
 	return nil
 }
 
+func (s *ReminderService) deferCheckinAfterFailure(ctx context.Context, tx Tx, reminderID uuid.UUID, now time.Time) error {
+	if tx == nil {
+		return fmt.Errorf("defer checkin after failure: missing transaction")
+	}
+	next := now.Add(15 * time.Minute)
+	_, err := tx.Exec(ctx,
+		"UPDATE card_checkin_reminders SET next_send_at = $1, updated_at = NOW() WHERE id = $2",
+		next,
+		reminderID,
+	)
+	if err != nil {
+		return fmt.Errorf("defer card checkin after failure: %w", err)
+	}
+	return nil
+}
+
+func (s *ReminderService) deferCheckinAfterCapReached(ctx context.Context, tx Tx, job checkinJob, now time.Time) error {
+	var schedule monthlySchedule
+	if err := json.Unmarshal(job.Schedule, &schedule); err != nil {
+		return ErrInvalidSchedule
+	}
+	parsed, err := time.Parse("15:04", schedule.Time)
+	if err != nil {
+		return ErrInvalidSchedule
+	}
+
+	loc := now.Location()
+	nextDay := time.Date(now.Year(), now.Month(), now.Day(), parsed.Hour(), parsed.Minute(), 0, 0, loc).AddDate(0, 0, 1)
+	_, err = tx.Exec(ctx,
+		"UPDATE card_checkin_reminders SET next_send_at = $1, updated_at = NOW() WHERE id = $2",
+		nextDay,
+		job.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("defer card checkin after cap: %w", err)
+	}
+	return nil
+}
+
+func (s *ReminderService) deferGoalAfterFailure(ctx context.Context, tx Tx, reminderID uuid.UUID, now time.Time) error {
+	if tx == nil {
+		return fmt.Errorf("defer goal reminder after failure: missing transaction")
+	}
+	next := now.Add(15 * time.Minute)
+	_, err := tx.Exec(ctx,
+		"UPDATE goal_reminders SET next_send_at = $1, updated_at = NOW() WHERE id = $2",
+		next,
+		reminderID,
+	)
+	if err != nil {
+		return fmt.Errorf("defer goal reminder after failure: %w", err)
+	}
+	return nil
+}
+
+func (s *ReminderService) deferGoalAfterCapReached(ctx context.Context, tx Tx, job goalReminderJob, now time.Time) error {
+	if tx == nil {
+		return fmt.Errorf("defer goal reminder after cap: missing transaction")
+	}
+
+	base := job.NextSendAt
+	loc := base.Location()
+	nextDay := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day(), base.Hour(), base.Minute(), 0, 0, loc).AddDate(0, 0, 1)
+	_, err := tx.Exec(ctx,
+		"UPDATE goal_reminders SET next_send_at = $1, updated_at = NOW() WHERE id = $2",
+		nextDay,
+		job.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("defer goal reminder after cap: %w", err)
+	}
+	return nil
+}
+
 func (s *ReminderService) markGoalReminderSent(ctx context.Context, tx Tx, reminderID uuid.UUID, sentAt time.Time) error {
 	if tx == nil {
 		return fmt.Errorf("mark goal reminder sent: missing transaction")
@@ -886,8 +1000,31 @@ func (s *ReminderService) markGoalReminderSent(ctx context.Context, tx Tx, remin
 func (s *ReminderService) logReminderEmail(ctx context.Context, tx Tx, userID uuid.UUID, sourceType string, sourceID uuid.UUID, status reminderEmailStatus, sentAt time.Time) error {
 	sentOn := time.Date(sentAt.Year(), sentAt.Month(), sentAt.Day(), 0, 0, 0, 0, sentAt.Location())
 	if tx != nil {
-		_, err := tx.Exec(ctx,
-			"INSERT INTO reminder_email_log (user_id, source_type, source_id, status, sent_at, sent_on) VALUES ($1, $2, $3, $4, $5, $6)",
+		err := s.upsertReminderEmailLog(ctx, tx, userID, sourceType, sourceID, status, sentAt, sentOn)
+		if err != nil {
+			return fmt.Errorf("log reminder email: %w", err)
+		}
+		return nil
+	}
+
+	err := s.upsertReminderEmailLog(ctx, s.db, userID, sourceType, sourceID, status, sentAt, sentOn)
+	if err != nil {
+		return fmt.Errorf("log reminder email: %w", err)
+	}
+	return nil
+}
+
+type reminderEmailLogDB interface {
+	Exec(ctx context.Context, sql string, args ...any) (CommandTag, error)
+}
+
+func (s *ReminderService) upsertReminderEmailLog(ctx context.Context, db reminderEmailLogDB, userID uuid.UUID, sourceType string, sourceID uuid.UUID, status reminderEmailStatus, sentAt, sentOn time.Time) error {
+	if sourceType == "card_checkin" {
+		_, err := db.Exec(ctx, `
+			INSERT INTO reminder_email_log (user_id, source_type, source_id, status, sent_at, sent_on)
+			VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT (source_type, source_id, sent_on) WHERE source_type = 'card_checkin'
+			DO UPDATE SET status = EXCLUDED.status, sent_at = EXCLUDED.sent_at`,
 			userID,
 			sourceType,
 			sourceID,
@@ -895,13 +1032,9 @@ func (s *ReminderService) logReminderEmail(ctx context.Context, tx Tx, userID uu
 			sentAt,
 			sentOn,
 		)
-		if err != nil {
-			return fmt.Errorf("log reminder email: %w", err)
-		}
-		return nil
+		return err
 	}
-
-	_, err := s.db.Exec(ctx,
+	_, err := db.Exec(ctx,
 		"INSERT INTO reminder_email_log (user_id, source_type, source_id, status, sent_at, sent_on) VALUES ($1, $2, $3, $4, $5, $6)",
 		userID,
 		sourceType,
@@ -910,10 +1043,7 @@ func (s *ReminderService) logReminderEmail(ctx context.Context, tx Tx, userID uu
 		sentAt,
 		sentOn,
 	)
-	if err != nil {
-		return fmt.Errorf("log reminder email: %w", err)
-	}
-	return nil
+	return err
 }
 
 func (s *ReminderService) disableCheckin(ctx context.Context, tx Tx, reminderID uuid.UUID) (bool, error) {
@@ -945,7 +1075,7 @@ func (s *ReminderService) cardCheckinCapReached(ctx context.Context, userID uuid
 	sentOn := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var count int
 	if err := s.db.QueryRow(ctx,
-		"SELECT COUNT(*) FROM reminder_email_log WHERE user_id = $1 AND source_type = 'card_checkin' AND sent_on = $2",
+		"SELECT COUNT(*) FROM reminder_email_log WHERE user_id = $1 AND source_type = 'card_checkin' AND status = 'sent' AND sent_on = $2",
 		userID,
 		sentOn,
 	).Scan(&count); err != nil {
@@ -961,7 +1091,7 @@ func (s *ReminderService) goalReminderCapReached(ctx context.Context, userID uui
 	sentOn := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	var count int
 	if err := s.db.QueryRow(ctx,
-		"SELECT COUNT(*) FROM reminder_email_log WHERE user_id = $1 AND source_type = 'goal_reminder' AND sent_on = $2",
+		"SELECT COUNT(*) FROM reminder_email_log WHERE user_id = $1 AND source_type = 'goal_reminder' AND status = 'sent' AND sent_on = $2",
 		userID,
 		sentOn,
 	).Scan(&count); err != nil {

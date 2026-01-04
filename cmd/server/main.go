@@ -322,7 +322,8 @@ func run() error {
 
 	// Reminder public endpoints
 	mux.Handle("GET /r/img/{token}", http.HandlerFunc(reminderPublicHandler.ServeImage))
-	mux.Handle("GET /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.Unsubscribe))
+	mux.Handle("GET /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeConfirm))
+	mux.Handle("POST /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeSubmit))
 
 	// API Docs redirect
 	mux.Handle("GET /api/docs", http.RedirectHandler("/static/swagger/index.html", http.StatusFound))

@@ -220,10 +220,11 @@ func clampLines(face font.Face, lines []string, maxLines int, maxWidth int) []st
 	ellipsis := "..."
 	d := &font.Drawer{Face: face}
 
-	for d.MeasureString(last+ellipsis).Ceil() > maxWidth && len(last) > 0 {
-		last = strings.TrimSpace(last[:len(last)-1])
+	runes := []rune(last)
+	for d.MeasureString(string(runes)+ellipsis).Ceil() > maxWidth && len(runes) > 0 {
+		runes = runes[:len(runes)-1]
 	}
-	lines[maxLines-1] = strings.TrimSpace(last) + ellipsis
+	lines[maxLines-1] = strings.TrimSpace(string(runes)) + ellipsis
 	return lines
 }
 

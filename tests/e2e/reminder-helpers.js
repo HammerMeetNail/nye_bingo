@@ -24,7 +24,14 @@ async function enableReminders(page) {
   const toggle = page.locator('#reminder-email-enabled');
   await expect(toggle).toBeEnabled();
   if (!(await toggle.isChecked())) {
+    const waitResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/reminders/settings')
+        && response.request().method() === 'PUT'
+        && response.ok()
+    ));
     await toggle.check();
+    await waitResponse;
+    await expect(page.locator('#toast-container')).toContainText('Reminder settings updated');
   }
 }
 
