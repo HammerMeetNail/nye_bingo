@@ -41,6 +41,9 @@ func buildCheckinEmail(params checkinEmailParams) (string, string, string) {
 	manageURL := fmt.Sprintf("%s/#profile", params.BaseURL)
 	cardURL := fmt.Sprintf("%s/#card/%s", params.BaseURL, params.Card.ID)
 	unsubscribe := params.UnsubscribeURL
+	safeManageURL := templateEscape(manageURL)
+	safeCardURL := templateEscape(cardURL)
+	safeUnsubscribe := templateEscape(unsubscribe)
 
 	subject := "Your Year of Bingo check-in"
 	if params.IsTest {
@@ -65,8 +68,9 @@ func buildCheckinEmail(params checkinEmailParams) (string, string, string) {
 
 	imageBlock := ""
 	if params.ImageURL != "" {
+		safeImageURL := templateEscape(params.ImageURL)
 		imageBlock = fmt.Sprintf("<p><img src=\"%s\" alt=\"%s\" style=\"max-width: 100%%; border-radius: 8px; border: 1px solid #eee;\"></p>",
-			params.ImageURL,
+			safeImageURL,
 			templateEscape(cardName),
 		)
 	}
@@ -95,12 +99,12 @@ func buildCheckinEmail(params checkinEmailParams) (string, string, string) {
 		templateEscape(cardName),
 		templateEscape(progress),
 		imageBlock,
-		cardURL,
+		safeCardURL,
 		recommendationHTML,
-		manageURL,
-		manageURL,
-		unsubscribe,
-		unsubscribe,
+		safeManageURL,
+		safeManageURL,
+		safeUnsubscribe,
+		safeUnsubscribe,
 	)
 
 	text := fmt.Sprintf(`%s
@@ -131,6 +135,9 @@ func buildGoalReminderEmail(params goalReminderEmailParams) (string, string, str
 	manageURL := fmt.Sprintf("%s/#profile", params.BaseURL)
 	goalURL := fmt.Sprintf("%s/#card/%s?item=%s", params.BaseURL, params.CardID, params.ItemID)
 	unsubscribe := params.UnsubscribeURL
+	safeManageURL := templateEscape(manageURL)
+	safeGoalURL := templateEscape(goalURL)
+	safeUnsubscribe := templateEscape(unsubscribe)
 
 	subject := sanitizeSubject(fmt.Sprintf("Reminder: %s", params.GoalText))
 
@@ -155,11 +162,11 @@ func buildGoalReminderEmail(params goalReminderEmailParams) (string, string, str
 </html>`,
 		goalText,
 		templateEscape(cardName),
-		goalURL,
-		manageURL,
-		manageURL,
-		unsubscribe,
-		unsubscribe,
+		safeGoalURL,
+		safeManageURL,
+		safeManageURL,
+		safeUnsubscribe,
+		safeUnsubscribe,
 	)
 
 	text := fmt.Sprintf(`%s

@@ -6,14 +6,12 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   waitForEmail,
-  clearMailpit,
   expectToast,
 } = require('./helpers');
 const { verifyEmail, enableReminders } = require('./reminder-helpers');
 
 test('reminder emails escape goal content', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'remxss');
-  await clearMailpit(request);
   await register(page, user);
 
   await page.goto('/#dashboard');
@@ -51,14 +49,20 @@ test('reminder emails escape goal content', async ({ page, request }, testInfo) 
   await expect(reminderList).toContainText(xssGoal);
   await expect(reminderList.locator('img')).toHaveCount(0);
 
-  await clearMailpit(request);
   await page.goto('/#profile');
   await expect(page.getByRole('button', { name: 'Send test email' })).toBeEnabled();
+  const sendResponse = page.waitForResponse((response) => (
+    response.url().includes('/api/reminders/test')
+      && response.request().method() === 'POST'
+  ));
+  const after = Date.now();
   await page.getByRole('button', { name: 'Send test email' }).click();
+  await sendResponse;
 
   const message = await waitForEmail(request, {
     to: user.email,
     subject: 'check-in',
+    after,
   });
   const body = message.HTML || message.html || message.Body || message.body || '';
   expect(body).toContain('&lt;img src=x onerror=alert(1)&gt;');

@@ -181,7 +181,14 @@ async function sendFriendRequest(page, username) {
   await page.click('#search-btn');
   const results = page.locator('#search-results');
   await expect(results).toContainText(username);
+  const requestResponse = page.waitForResponse((response) => (
+    response.url().includes('/api/friends/requests')
+      && response.request().method() === 'POST'
+      && response.ok()
+  ));
   await results.getByRole('button', { name: 'Add Friend' }).click();
+  await requestResponse;
+  await expectToast(page, 'Friend request sent!');
 }
 
 async function clearMailpit(request) {
