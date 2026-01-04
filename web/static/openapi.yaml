@@ -255,6 +255,149 @@ components:
         updated_at:
           type: string
           format: date-time
+    ReminderSettings:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email_enabled:
+          type: boolean
+        daily_email_cap:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CardCheckinReminder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        card_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        frequency:
+          type: string
+        schedule:
+          type: object
+          additionalProperties: true
+        include_image:
+          type: boolean
+        include_recommendations:
+          type: boolean
+        next_send_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CardCheckinSummary:
+      type: object
+      properties:
+        card_id:
+          type: string
+          format: uuid
+        card_title:
+          type: string
+          nullable: true
+        card_year:
+          type: integer
+        is_finalized:
+          type: boolean
+        is_archived:
+          type: boolean
+        has_free_space:
+          type: boolean
+        grid_size:
+          type: integer
+        checkin:
+          $ref: '#/components/schemas/CardCheckinReminder'
+          nullable: true
+    GoalReminder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        card_id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+          format: uuid
+        enabled:
+          type: boolean
+        kind:
+          type: string
+        schedule:
+          type: object
+          additionalProperties: true
+        next_send_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    GoalReminderSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        card_id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+        schedule:
+          type: object
+          additionalProperties: true
+        next_send_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+        card_title:
+          type: string
+          nullable: true
+        card_year:
+          type: integer
+        item_text:
+          type: string
 security:
   - bearerAuth: []
 paths:
@@ -901,6 +1044,390 @@ paths:
                     type: string
         '403':
           description: Email verification required for email notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/settings:
+    get:
+      summary: Get reminder settings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Reminder settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/ReminderSettings'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    put:
+      summary: Update reminder settings
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email_enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated reminder settings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings:
+                    $ref: '#/components/schemas/ReminderSettings'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Email verification required for reminder emails
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/cards:
+    get:
+      summary: List card check-in reminders
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: List of card reminders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cards:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CardCheckinSummary'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/cards/{cardId}:
+    put:
+      summary: Upsert a card check-in reminder
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                frequency:
+                  type: string
+                  enum: [monthly]
+                schedule:
+                  type: object
+                  properties:
+                    day_of_month:
+                      type: integer
+                    time:
+                      type: string
+                include_image:
+                  type: boolean
+                include_recommendations:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated card reminder
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  checkin:
+                    $ref: '#/components/schemas/CardCheckinReminder'
+        '400':
+          description: Invalid reminder schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete a card check-in reminder
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: cardId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reminder deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Reminder not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/goals:
+    get:
+      summary: List goal reminders
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: card_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of goal reminders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reminders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GoalReminderSummary'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Upsert a goal reminder
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                item_id:
+                  type: string
+                  format: uuid
+                kind:
+                  type: string
+                  enum: [one_time]
+                schedule:
+                  type: object
+                  properties:
+                    send_at:
+                      type: string
+      responses:
+        '200':
+          description: Updated goal reminder
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reminder:
+                    $ref: '#/components/schemas/GoalReminder'
+        '400':
+          description: Invalid reminder schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Goal not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/goals/{id}:
+    delete:
+      summary: Delete a goal reminder
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reminder deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Reminder not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /reminders/test:
+    post:
+      summary: Send a reminder test email
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                card_id:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Test email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '400':
+          description: Reminders disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Email verification required
           content:
             application/json:
               schema:

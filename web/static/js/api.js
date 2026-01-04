@@ -431,6 +431,46 @@ const API = {
     },
   },
 
+  // Reminder endpoints
+  reminders: {
+    async getSettings() {
+      return API.request('GET', '/api/reminders/settings');
+    },
+
+    async updateSettings(patch) {
+      return API.request('PUT', '/api/reminders/settings', patch);
+    },
+
+    async listCards() {
+      return API.request('GET', '/api/reminders/cards');
+    },
+
+    async upsertCardCheckin(cardId, payload) {
+      return API.request('PUT', `/api/reminders/cards/${cardId}`, payload);
+    },
+
+    async deleteCardCheckin(cardId) {
+      return API.request('DELETE', `/api/reminders/cards/${cardId}`);
+    },
+
+    async listGoals(cardId = null) {
+      const path = cardId ? `/api/reminders/goals?card_id=${encodeURIComponent(cardId)}` : '/api/reminders/goals';
+      return API.request('GET', path);
+    },
+
+    async upsertGoalReminder(payload) {
+      return API.request('POST', '/api/reminders/goals', payload);
+    },
+
+    async deleteGoalReminder(id) {
+      return API.request('DELETE', `/api/reminders/goals/${id}`);
+    },
+
+    async sendTestEmail(cardId) {
+      return API.request('POST', '/api/reminders/test', { card_id: cardId });
+    },
+  },
+
   // Reaction endpoints
   reactions: {
     async add(itemId, emoji) {

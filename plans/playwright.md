@@ -79,6 +79,10 @@
   - Bingo notification fires once per card (dedupe).
   - XSS-style usernames render as text in notifications.
   - Email notifications respect opt-in and include links.
+- `tests/e2e/reminders.spec.js`
+  - Email-verified users can enable reminders and receive a test email.
+  - Reminder emails escape XSS-style goal content in suggested goals.
+  - Reminder test emails include a PNG URL that returns valid image data.
 - `tests/e2e/profile-settings.spec.js`
   - Searchable toggle gates friend search visibility.
   - Password change validation and re-login with new password.

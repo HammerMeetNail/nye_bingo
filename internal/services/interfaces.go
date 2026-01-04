@@ -127,6 +127,19 @@ type NotificationServiceInterface interface {
 	NotifyFriendsBingo(ctx context.Context, actorID, cardID uuid.UUID, bingoCount int) error
 }
 
+// ReminderServiceInterface defines the contract for reminder operations.
+type ReminderServiceInterface interface {
+	GetSettings(ctx context.Context, userID uuid.UUID) (*models.ReminderSettings, error)
+	UpdateSettings(ctx context.Context, userID uuid.UUID, patch models.ReminderSettingsPatch) (*models.ReminderSettings, error)
+	ListCardCheckins(ctx context.Context, userID uuid.UUID) ([]models.CardCheckinSummary, error)
+	UpsertCardCheckin(ctx context.Context, userID, cardID uuid.UUID, schedule models.CardCheckinScheduleInput) (*models.CardCheckinReminder, error)
+	DeleteCardCheckin(ctx context.Context, userID, cardID uuid.UUID) error
+	ListGoalReminders(ctx context.Context, userID uuid.UUID, cardID *uuid.UUID) ([]models.GoalReminderSummary, error)
+	UpsertGoalReminder(ctx context.Context, userID uuid.UUID, input models.GoalReminderInput) (*models.GoalReminder, error)
+	DeleteGoalReminder(ctx context.Context, userID uuid.UUID, reminderID uuid.UUID) error
+	SendTestEmail(ctx context.Context, userID, cardID uuid.UUID) error
+}
+
 // EmailServiceInterface defines the contract for email operations.
 type EmailServiceInterface interface {
 	SendVerificationEmail(ctx context.Context, userID uuid.UUID, email string) error
