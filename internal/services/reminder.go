@@ -296,25 +296,23 @@ func (s *ReminderService) DeleteCardCheckin(ctx context.Context, userID, cardID 
 }
 
 func (s *ReminderService) ListGoalReminders(ctx context.Context, userID uuid.UUID, cardID *uuid.UUID) ([]models.GoalReminderSummary, error) {
-	args := []any{userID}
-	conditions := []string{"gr.user_id = $1", "gr.enabled = true"}
-	if cardID != nil {
-		conditions = append(conditions, "gr.card_id = $2")
-		args = append(args, *cardID)
-	}
-
-	query := fmt.Sprintf(`
+	query := `
 		SELECT gr.id, gr.card_id, gr.item_id, gr.kind, gr.schedule, gr.next_send_at, gr.last_sent_at,
 		       c.title, c.year, i.content
 		  FROM goal_reminders gr
 		  JOIN bingo_items i ON i.id = gr.item_id
 		  JOIN bingo_cards c ON c.id = gr.card_id
-		 WHERE %s
-		 ORDER BY gr.next_send_at NULLS LAST, gr.created_at DESC`,
-		strings.Join(conditions, " AND "),
-	)
+		 WHERE gr.user_id = $1
+		   AND gr.enabled = true
+		   AND ($2::uuid IS NULL OR gr.card_id = $2)
+		 ORDER BY gr.next_send_at NULLS LAST, gr.created_at DESC`
 
-	rows, err := s.db.Query(ctx, query, args...)
+	var cardFilter any
+	if cardID != nil {
+		cardFilter = *cardID
+	}
+
+	rows, err := s.db.Query(ctx, query, userID, cardFilter)
 	if err != nil {
 		return nil, fmt.Errorf("list goal reminders: %w", err)
 	}
@@ -722,6 +720,10 @@ func (s *ReminderService) processCheckin(ctx context.Context, tx Tx, job checkin
 		return s.disableCheckin(ctx, tx, job.ID)
 	}
 
+	if err := s.lockReminderSettings(ctx, tx, job.UserID); err != nil {
+		return false, err
+	}
+
 	capReached, err := s.cardCheckinCapReached(ctx, job.UserID, now)
 	if err != nil {
 		return false, err
@@ -797,6 +799,10 @@ func (s *ReminderService) processGoalReminder(ctx context.Context, tx Tx, job go
 	}
 	if ctxData.ItemCompleted {
 		return s.disableGoalReminder(ctx, tx, job.ID)
+	}
+
+	if err := s.lockReminderSettings(ctx, tx, job.UserID); err != nil {
+		return false, err
 	}
 
 	capReached, err := s.goalReminderCapReached(ctx, job.UserID, now, ctxData.DailyCap)
@@ -1239,7 +1245,47 @@ func (s *ReminderService) loadGoalReminderContext(ctx context.Context, userID, i
 	return ctxData, nil
 }
 
+func (s *ReminderService) lockReminderSettings(ctx context.Context, tx Tx, userID uuid.UUID) error {
+	if tx == nil {
+		return fmt.Errorf("lock reminder settings: missing transaction")
+	}
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx,
+		"SELECT user_id FROM reminder_settings WHERE user_id = $1 FOR UPDATE",
+		userID,
+	).Scan(&locked); err != nil {
+		return fmt.Errorf("lock reminder settings: %w", err)
+	}
+	return nil
+}
+
 func (s *ReminderService) createImageToken(ctx context.Context, userID, cardID uuid.UUID, showCompletions bool) (string, error) {
+	var existing string
+	if err := s.db.QueryRow(ctx, `
+		SELECT token
+		  FROM reminder_image_tokens
+		 WHERE user_id = $1
+		   AND card_id = $2
+		   AND show_completions = $3
+		   AND expires_at > NOW()
+		 ORDER BY expires_at DESC
+		 LIMIT 1`,
+		userID,
+		cardID,
+		showCompletions,
+	).Scan(&existing); err == nil && existing != "" {
+		if _, err := s.db.Exec(ctx,
+			"UPDATE reminder_image_tokens SET expires_at = $1 WHERE token = $2",
+			s.now().Add(14*24*time.Hour),
+			existing,
+		); err != nil {
+			return "", fmt.Errorf("refresh reminder image token: %w", err)
+		}
+		return existing, nil
+	} else if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", fmt.Errorf("load reminder image token: %w", err)
+	}
+
 	token, err := randomToken(24)
 	if err != nil {
 		return "", err

@@ -1142,6 +1142,7 @@ const App = {
                 <input type="time" id="reminder-time" class="form-input" value="${schedule.time}" ${disableControls ? 'disabled' : ''}>
               </div>
             </div>
+            <p class="text-muted">Times use the server clock.</p>
 
             <label class="checkbox-label">
               <input type="checkbox" id="reminder-include-image" ${includeImage ? 'checked' : ''} ${disableControls ? 'disabled' : ''}>
@@ -3670,6 +3671,7 @@ const App = {
           <input type="datetime-local" id="reminder-custom-datetime" class="form-input" ${disableAttr}>
           <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="custom" ${disableAttr}>Set custom reminder</button>
         </div>
+        <p class="text-muted">Reminder times use the server clock.</p>
         ${existing ? `
           <button type="button" class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${existing.id}" ${disableAttr}>Stop reminders for this goal</button>
         ` : ''}
