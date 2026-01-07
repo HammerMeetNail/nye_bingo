@@ -4927,11 +4927,11 @@ const App = {
         if (/^https?:\/\//i.test(rawUrl)) {
           shareUrl = rawUrl;
         } else if (rawUrl.startsWith('#')) {
-          shareUrl = `${window.location.origin}/${rawUrl}`;
+          shareUrl = `${window.location.origin}${rawUrl}`;
         } else if (rawUrl.startsWith('/')) {
           shareUrl = `${window.location.origin}${rawUrl}`;
         } else {
-          shareUrl = `${window.location.origin}/#share/${rawUrl}`;
+          shareUrl = `${window.location.origin}#share/${rawUrl}`;
         }
       }
       const input = document.getElementById('share-link-input');

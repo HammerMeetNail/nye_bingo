@@ -523,9 +523,9 @@ func (s *NotificationService) buildNotificationEmail(nType models.NotificationTy
 		message = "You have a new notification."
 	}
 
-	viewURL := fmt.Sprintf("%s/#notifications", s.baseURL)
-	friendsURL := fmt.Sprintf("%s/#friends", s.baseURL)
-	settingsURL := fmt.Sprintf("%s/#profile", s.baseURL)
+	viewURL := fmt.Sprintf("%s#notifications", s.baseURL)
+	friendsURL := fmt.Sprintf("%s#friends", s.baseURL)
+	settingsURL := fmt.Sprintf("%s#profile", s.baseURL)
 	friendsLabel := "Friends page"
 	settingsLabel := "Manage notification settings"
 
