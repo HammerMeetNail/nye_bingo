@@ -1490,9 +1490,9 @@ const App = {
     if (bodyEl) bodyEl.scrollTop = 0;
     if (overlay) overlay.scrollTop = 0;
     this.modalScrollY = window.scrollY || window.pageYOffset || 0;
-    document.body.style.top = `-${this.modalScrollY}px`;
     if (overlay) overlay.classList.add('modal-overlay--visible');
     document.body.classList.add('modal-open');
+    document.body.style.top = `-${this.modalScrollY}px`;
   },
 
   closeModal() {

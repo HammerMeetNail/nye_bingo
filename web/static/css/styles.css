@@ -1608,6 +1608,7 @@ a:hover {
   padding: var(--spacing-lg);
   overflow-y: auto;
   overscroll-behavior: contain;
+  pointer-events: none;
   z-index: 1000;
   opacity: 0;
   visibility: hidden;
@@ -1629,6 +1630,7 @@ a:hover {
 .modal-overlay--visible {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 
 .modal {
