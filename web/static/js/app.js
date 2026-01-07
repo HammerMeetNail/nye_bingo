@@ -226,9 +226,6 @@ const App = {
       case 'enable-share':
         this.enableShare();
         break;
-      case 'regenerate-share':
-        this.regenerateShare();
-        break;
       case 'disable-share':
         this.disableShare();
         break;
@@ -4957,9 +4954,17 @@ const App = {
     let expiresLabel = 'Never expires';
     if (hasActiveExpiry) {
       const expiresAtLabel = this.escapeHtml(expiresAt.toLocaleDateString());
-      const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const startExpiry = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate());
-      daysLeft = Math.round((startExpiry - startNow) / msInDay);
+      const startNowUtc = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+      );
+      const startExpiryUtc = Date.UTC(
+        expiresAt.getUTCFullYear(),
+        expiresAt.getUTCMonth(),
+        expiresAt.getUTCDate(),
+      );
+      daysLeft = Math.round((startExpiryUtc - startNowUtc) / msInDay);
       if (daysLeft < 0) daysLeft = 0;
       if (daysLeft === 0) {
         expiresLabel = `Expires today (${expiresAtLabel})`;
@@ -5037,7 +5042,7 @@ const App = {
     if (select.value === 'custom') {
       const input = document.getElementById('share-expiry-custom');
       const days = parseInt(input?.value || '', 10);
-      if (!Number.isFinite(days) || days <= 0 || days > 3650) return null;
+      if (!Number.isFinite(days) || days < 0 || days > 3650) return null;
       return days;
     }
     const parsed = parseInt(select.value, 10);
@@ -5054,22 +5059,6 @@ const App = {
       await API.cards.shareEnable(this.currentCard.id, days);
       await this.refreshShareModal();
       this.toast('Share link created', 'success');
-    } catch (error) {
-      this.toast(error.message, 'error');
-    }
-  },
-
-  async regenerateShare() {
-    if (!confirm('Regenerate this link? The old link will stop working.')) return;
-    const days = this.getShareExpiryDays();
-    if (days === null) {
-      this.toast('Enter a valid expiration in days', 'error');
-      return;
-    }
-    try {
-      await API.cards.shareEnable(this.currentCard.id, days);
-      await this.refreshShareModal();
-      this.toast('Share link regenerated', 'success');
     } catch (error) {
       this.toast(error.message, 'error');
     }
