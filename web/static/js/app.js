@@ -4939,14 +4939,28 @@ const App = {
   renderShareModalContent(status) {
     const expiresAt = status?.expires_at ? new Date(status.expires_at) : null;
     const expired = !!status?.expired;
-    const expiresLabel = expiresAt
-      ? `Expires ${expiresAt.toLocaleDateString()}`
-      : 'Never expires';
-    const statusLine = status?.enabled
-      ? `<p class="text-muted">${expired ? 'This link has expired.' : expiresLabel}</p>`
+    const isEnabled = !!status?.enabled;
+    const now = new Date();
+    const msInDay = 24 * 60 * 60 * 1000;
+    const hasActiveExpiry = !!expiresAt && !expired;
+    let daysLeft = 0;
+    let expiresLabel = 'Never expires';
+    if (hasActiveExpiry) {
+      const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startExpiry = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate());
+      daysLeft = Math.round((startExpiry - startNow) / msInDay);
+      if (daysLeft < 0) daysLeft = 0;
+      if (daysLeft === 0) {
+        expiresLabel = `Expires today (${expiresAt.toLocaleDateString()})`;
+      } else {
+        expiresLabel = `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresAt.toLocaleDateString()})`;
+      }
+    }
+    const statusLine = isEnabled
+      ? `<p class="${expired ? 'text-muted' : 'share-expiration'}">${expired ? 'This link has expired.' : expiresLabel}</p>`
       : '<p class="text-muted">Share a read-only link to this card.</p>';
 
-    const linkSection = status?.enabled ? `
+    const linkSection = isEnabled ? `
       <div class="form-group">
         <label class="form-label">Share Link</label>
         <div class="search-input-group">
@@ -4956,17 +4970,15 @@ const App = {
       </div>
     ` : '';
 
-    const primaryAction = status?.enabled
-      ? `<button class="btn btn-secondary" data-action="regenerate-share">Regenerate Link</button>`
+    const primaryAction = isEnabled
+      ? ''
       : `<button class="btn btn-primary" data-action="enable-share">Enable Sharing</button>`;
 
-    const disableAction = status?.enabled
-      ? `<button class="btn btn-ghost" data-action="disable-share">Disable Sharing</button>`
+    const disableAction = isEnabled
+      ? `<button class="btn btn-primary" data-action="disable-share">Disable Sharing</button>`
       : '';
 
-    return `
-      ${statusLine}
-      ${linkSection}
+    const expirationControls = isEnabled ? '' : `
       <div class="form-group">
         <label class="form-label" for="share-expiry-select">Link expiration</label>
         <select id="share-expiry-select" class="form-input">
@@ -4980,6 +4992,16 @@ const App = {
           <input type="number" id="share-expiry-custom" class="form-input" min="1" max="3650" placeholder="Enter days">
         </div>
       </div>
+    `;
+    const expirationNote = isEnabled
+      ? '<p class="text-muted" style="margin-top: 0.5rem;">Disable sharing to change the expiration.</p>'
+      : '';
+
+    return `
+      ${statusLine}
+      ${expirationNote}
+      ${linkSection}
+      ${expirationControls}
       <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
         ${disableAction}
         ${primaryAction}

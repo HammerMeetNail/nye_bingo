@@ -9,7 +9,7 @@ This is an **unlisted** sharing model: possession of the link grants access.
 ## Goals
 
 - Card owner can **enable sharing** for a card and copy a share link.
-- Card owner can **disable sharing** (revoke link) and **regenerate** the link (rotate token).
+- Card owner can **disable sharing** (revoke link) and then re-enable to rotate the link.
 - Anyone with the link can view:
   - Card title/year/category (as appropriate)
   - Grid header + size + FREE-space behavior
@@ -30,13 +30,13 @@ This is an **unlisted** sharing model: possession of the link grants access.
 - **Only finalized cards are shareable** (simpler; avoids leaking draft iteration and prevents ambiguity about “live editing”).
 - Shared view includes **completion state** but not **private notes**.
 - Tokens are **long-lived by default** (no expiration), but the owner can optionally set an expiration.
-- One active share link per card (regenerate rotates it).
+- One active share link per card (disable + re-enable rotates it).
 
 ## User Stories
 
 1. As a card owner, I can enable sharing and copy a link.
 2. As a card owner, I can revoke the link so it stops working immediately.
-3. As a card owner, I can regenerate the link (old one stops working, new one works).
+3. As a card owner, I can disable sharing and create a new link (old one stops working, new one works).
 4. As an anonymous visitor, I can open a shared link and view the card.
 5. As an anonymous visitor, I cannot modify the card and I do not see editing UI.
 6. As a security measure, shared pages do not execute user-provided HTML/JS (XSS regression coverage required).
@@ -209,12 +209,15 @@ Add a “Share” action for finalized card view:
 - Button: “Share” (opens modal).
 - Modal states:
   - Sharing disabled → “Enable sharing” button.
-  - Sharing enabled → show link + “Copy” + “Regenerate” + “Disable” buttons.
-  - Expiration controls:
+  - Sharing enabled → show link + “Copy” + “Disable”.
+  - Expiration controls only appear when sharing is disabled.
+  - When sharing is enabled, show the remaining days until expiration as read-only text (not editable).
+  - To change expiration, the owner must disable sharing and create a new link.
+  - Expiration controls (when disabled):
     - Default selection: “Never expires”
     - Optional presets: 7/30/90 days
     - (If easy) a custom number-of-days input with validation
-  - Confirmation prompt before “Disable” and “Regenerate” (regenerate invalidates old link).
+  - Confirmation prompt before “Disable” (disabling invalidates the old link).
 
 Implementation constraints:
 - No inline scripts/handlers; use the existing `data-action` event delegation pattern.
