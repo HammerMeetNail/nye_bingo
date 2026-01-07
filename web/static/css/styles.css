@@ -143,6 +143,9 @@ body {
 
 body.modal-open {
   overflow: hidden;
+  position: fixed;
+  width: 100%;
+  left: 0;
 }
 
 /* Background with subtle gradient and stars */
@@ -1600,7 +1603,7 @@ a:hover {
   inset: 0;
   background: rgba(0, 0, 0, 0.7);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   padding: var(--spacing-lg);
   overflow-y: auto;
@@ -1634,7 +1637,7 @@ a:hover {
   padding: var(--spacing-xl);
   max-width: 500px;
   width: 90%;
-  max-height: calc(100vh - var(--spacing-2xl));
+  max-height: calc(100vh - (2 * var(--spacing-lg)));
   display: flex;
   flex-direction: column;
   transform: scale(0.9);
