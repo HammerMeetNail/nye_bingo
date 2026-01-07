@@ -3465,7 +3465,7 @@ const App = {
         <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
         <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
-        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
+        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}" aria-label="${visibilityLabel}">
           <i class="fas fa-${visibilityIcon}"></i>
           <span>${visibilityLabel}</span>
         </button>
@@ -3476,8 +3476,8 @@ const App = {
       <div class="finalized-card-view">
         <div class="finalized-card-header">
           <a href="${backLink}" class="btn btn-ghost">&larr; ${backLabel}</a>
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-            <h2 style="margin: 0;">${displayName}</h2>
+          <div class="finalized-card-title">
+            <h2>${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
             ${categoryBadge}
             ${sharedBadge}

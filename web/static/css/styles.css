@@ -761,6 +761,19 @@ a:hover {
   padding: 0 1rem;
 }
 
+.finalized-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+  justify-content: center;
+  text-align: center;
+}
+
+.finalized-card-title h2 {
+  margin: 0;
+}
+
 .finalized-card-header h2 {
   margin: 0;
   text-align: center;
@@ -1335,8 +1348,34 @@ a:hover {
   }
 
   .finalized-card-header {
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "back actions"
+      "title title";
+    row-gap: var(--spacing-sm);
     padding: 0 var(--spacing-sm);
     margin-bottom: 0.5rem;
+  }
+
+  .finalized-card-header > :first-child {
+    grid-area: back;
+    justify-self: start;
+  }
+
+  .finalized-card-header > :nth-child(2) {
+    grid-area: title;
+    justify-self: center;
+  }
+
+  .finalized-card-header > :last-child {
+    grid-area: actions;
+    justify-self: end;
+  }
+
+  .card-header-actions {
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .finalized-card-header h2 {
@@ -1344,11 +1383,16 @@ a:hover {
   }
 
   .bingo-container--finalized {
-    padding: 0.5rem;
+    flex: 0 0 auto;
+    padding: 0.35rem;
   }
 
   .finalized-card-progress {
     padding: 0.5rem var(--spacing-sm);
+  }
+
+  .bingo-container {
+    gap: var(--spacing-md);
   }
 
   .input-area {
@@ -1425,6 +1469,18 @@ a:hover {
 
   .finalized-card-header h2 {
     font-size: var(--font-size-lg);
+  }
+
+  .visibility-toggle-btn span {
+    display: none;
+  }
+
+  .bingo-container {
+    gap: var(--spacing-sm);
+  }
+
+  .bingo-container--finalized {
+    padding: 0.25rem;
   }
 
   .suggestions-categories {
