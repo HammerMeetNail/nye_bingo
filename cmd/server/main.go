@@ -258,9 +258,13 @@ func run() error {
 	mux.Handle("POST /api/cards/{id}/shuffle", requireWrite(http.HandlerFunc(cardHandler.Shuffle)))
 	mux.Handle("POST /api/cards/{id}/swap", requireWrite(http.HandlerFunc(cardHandler.SwapItems)))
 	mux.Handle("POST /api/cards/{id}/finalize", requireWrite(http.HandlerFunc(cardHandler.Finalize)))
+	mux.Handle("POST /api/cards/{id}/share", requireSession(http.HandlerFunc(cardHandler.CreateShare)))
+	mux.Handle("GET /api/cards/{id}/share", requireSession(http.HandlerFunc(cardHandler.GetShareStatus)))
+	mux.Handle("DELETE /api/cards/{id}/share", requireSession(http.HandlerFunc(cardHandler.RevokeShare)))
 	mux.Handle("PUT /api/cards/{id}/items/{pos}/complete", requireWrite(http.HandlerFunc(cardHandler.CompleteItem)))
 	mux.Handle("PUT /api/cards/{id}/items/{pos}/uncomplete", requireWrite(http.HandlerFunc(cardHandler.UncompleteItem)))
 	mux.Handle("PUT /api/cards/{id}/items/{pos}/notes", requireWrite(http.HandlerFunc(cardHandler.UpdateNotes)))
+	mux.Handle("GET /api/share/{token}", http.HandlerFunc(cardHandler.GetSharedCard))
 
 	// Suggestion endpoints
 	mux.Handle("GET /api/suggestions", http.HandlerFunc(suggestionHandler.GetAll))

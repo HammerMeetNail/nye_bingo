@@ -232,6 +232,19 @@ const API = {
       return API.request('POST', `/api/cards/${cardId}/finalize`, body);
     },
 
+    async shareStatus(cardId) {
+      return API.request('GET', `/api/cards/${cardId}/share`);
+    },
+
+    async shareEnable(cardId, expiresInDays = null) {
+      const body = typeof expiresInDays === 'number' ? { expires_in_days: expiresInDays } : null;
+      return API.request('POST', `/api/cards/${cardId}/share`, body);
+    },
+
+    async shareDisable(cardId) {
+      return API.request('DELETE', `/api/cards/${cardId}/share`);
+    },
+
     async updateConfig(cardId, headerText = null, hasFreeSpace = null) {
       const body = {};
       if (headerText !== null) body.header_text = headerText;
@@ -517,6 +530,13 @@ const API = {
   support: {
     async submit(email, category, message) {
       return API.request('POST', '/api/support', { email, category, message });
+    },
+  },
+
+  // Share endpoints
+  share: {
+    async get(token) {
+      return API.request('GET', `/api/share/${encodeURIComponent(token)}`);
     },
   },
 

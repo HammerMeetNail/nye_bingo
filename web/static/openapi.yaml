@@ -101,6 +101,75 @@ components:
         created_at:
           type: string
           format: date-time
+    PublicBingoCard:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        year:
+          type: integer
+        title:
+          type: string
+          nullable: true
+        category:
+          type: string
+          nullable: true
+        grid_size:
+          type: integer
+          description: Square grid size (2-5)
+          enum: [2, 3, 4, 5]
+        header_text:
+          type: string
+        has_free_space:
+          type: boolean
+        free_space_position:
+          type: integer
+          nullable: true
+        is_finalized:
+          type: boolean
+    PublicBingoItem:
+      type: object
+      properties:
+        position:
+          type: integer
+        content:
+          type: string
+        is_completed:
+          type: boolean
+    SharedCard:
+      type: object
+      properties:
+        card:
+          $ref: '#/components/schemas/PublicBingoCard'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicBingoItem'
+    CardShareStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        expired:
+          type: boolean
+        url:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_accessed_at:
+          type: string
+          format: date-time
+          nullable: true
+        access_count:
+          type: integer
+        message:
+          type: string
     CardStats:
       type: object
       properties:
@@ -1626,6 +1695,154 @@ paths:
                 properties:
                   card:
                     $ref: '#/components/schemas/BingoCard'
+  /cards/{id}/share:
+    get:
+      summary: Get share status for a card
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Share status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardShareStatus'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    post:
+      summary: Create or rotate a share link
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expires_in_days:
+                  type: integer
+                  description: Optional expiration window in days (0 or omit for no expiration)
+      responses:
+        '201':
+          description: Share link created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardShareStatus'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Revoke a share link
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Share revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardShareStatus'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
   /cards/{id}/config:
     put:
       summary: Update draft card config (header/FREE)
@@ -1794,6 +2011,32 @@ paths:
                 properties:
                   item:
                     $ref: '#/components/schemas/BingoItem'
+  /share/{token}:
+    get:
+      summary: Get a shared card by token
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shared card
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SharedCard'
+        '404':
+          description: Share link not found or expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
   /suggestions:
     get:
       summary: Get random suggestions

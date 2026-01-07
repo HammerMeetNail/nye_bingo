@@ -226,6 +226,12 @@ describe('parseHash', () => {
     expect(result.params).toEqual(['123', '2024']);
   });
 
+  test('parses share hash', () => {
+    const result = parseHash('#share/abc123');
+    expect(result.page).toBe('share');
+    expect(result.params).toEqual(['abc123']);
+  });
+
   test('handles empty hash', () => {
     const result = parseHash('');
     expect(result.page).toBe('home');
