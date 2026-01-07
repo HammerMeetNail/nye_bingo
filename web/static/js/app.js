@@ -1487,12 +1487,16 @@ const App = {
 
     if (titleEl) titleEl.textContent = title;
     if (bodyEl) bodyEl.innerHTML = content;
+    if (bodyEl) bodyEl.scrollTop = 0;
+    if (overlay) overlay.scrollTop = 0;
     if (overlay) overlay.classList.add('modal-overlay--visible');
+    document.body.classList.add('modal-open');
   },
 
   closeModal() {
     const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.classList.remove('modal-overlay--visible');
+    document.body.classList.remove('modal-open');
   },
 
   async showCreateCardModal() {
