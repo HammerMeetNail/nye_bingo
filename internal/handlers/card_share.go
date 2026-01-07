@@ -52,7 +52,7 @@ func (h *CardHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "expires_in_days must be zero or positive")
 			return
 		}
-		if days > 0 {
+		if days != 0 {
 			if days < services.ShareExpiryMinDays || days > services.ShareExpiryMaxDays {
 				writeError(w, http.StatusBadRequest, "expires_in_days is out of range")
 				return

@@ -198,7 +198,11 @@ func (s *CardService) loadCardOwner(ctx context.Context, cardID uuid.UUID) (uuid
 
 func (s *CardService) touchShareToken(ctx context.Context, token string) error {
 	_, err := s.db.Exec(ctx,
-		"UPDATE bingo_card_shares SET last_accessed_at = NOW(), access_count = access_count + 1 WHERE token = $1",
+		`UPDATE bingo_card_shares
+		 SET last_accessed_at = NOW(),
+		     access_count = access_count + 1
+		 WHERE token = $1
+		   AND (last_accessed_at IS NULL OR last_accessed_at < NOW() - INTERVAL '1 hour')`,
 		token,
 	)
 	if err != nil {

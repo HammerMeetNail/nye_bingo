@@ -3514,7 +3514,7 @@ const App = {
   async renderSharedCard(container, token) {
     this.currentView = 'shared-card';
     this.isSharedView = true;
-    this.isAnonymousMode = false;
+    this.isAnonymousMode = false; // Shared views are read-only; anon mode is for localStorage edits.
 
     if (!token) {
       container.innerHTML = `
@@ -5004,7 +5004,7 @@ const App = {
     if (select.value === 'custom') {
       const input = document.getElementById('share-expiry-custom');
       const days = parseInt(input?.value || '', 10);
-      if (!Number.isFinite(days) || days <= 0) return null;
+      if (!Number.isFinite(days) || days <= 0 || days > 3650) return null;
       return days;
     }
     const parsed = parseInt(select.value, 10);

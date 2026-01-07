@@ -222,6 +222,9 @@ func TestCardService_GetSharedCardByToken_Success(t *testing.T) {
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
 			if strings.Contains(sql, "UPDATE bingo_card_shares") {
 				touchCalled = true
+				if !strings.Contains(sql, "INTERVAL '1 hour'") {
+					t.Fatalf("expected throttled share access update, got %s", sql)
+				}
 			}
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
