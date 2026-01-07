@@ -53,7 +53,12 @@ test('password reset flow updates credentials', async ({ page, request }, testIn
   await page.goto(`/#reset-password?token=${token}`);
   await page.fill('#reset-password-form #password', 'NewPass1');
   await page.fill('#reset-password-form #confirm-password', 'NewPass1');
-  await page.getByRole('button', { name: 'Reset Password' }).click();
+  const resetResponse = page.waitForResponse((response) => (
+    response.url().includes('/api/auth/reset-password')
+      && response.request().method() === 'POST'
+  ));
+  await page.getByRole('button', { name: 'Reset Password' }).click({ noWaitAfter: true });
+  await resetResponse;
   await expectToast(page, 'Password reset successfully');
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
 

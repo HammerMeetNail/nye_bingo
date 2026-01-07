@@ -17,6 +17,7 @@ const App = {
   goalReminders: [],
   goalRemindersByItem: {},
   reminderSelectedCardId: null,
+  modalScrollY: null,
   _lastHash: '',
   _pendingNavigationHash: null,
   _revertingHashChange: false,
@@ -1487,12 +1488,23 @@ const App = {
 
     if (titleEl) titleEl.textContent = title;
     if (bodyEl) bodyEl.innerHTML = content;
+    if (bodyEl) bodyEl.scrollTop = 0;
+    if (overlay) overlay.scrollTop = 0;
+    this.modalScrollY = window.scrollY || window.pageYOffset || 0;
     if (overlay) overlay.classList.add('modal-overlay--visible');
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${this.modalScrollY}px`;
   },
 
   closeModal() {
     const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.classList.remove('modal-overlay--visible');
+    document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    if (typeof this.modalScrollY === 'number') {
+      window.scrollTo(0, this.modalScrollY);
+      this.modalScrollY = null;
+    }
   },
 
   async showCreateCardModal() {
