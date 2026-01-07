@@ -18,6 +18,8 @@ const App = {
   goalRemindersByItem: {},
   reminderSelectedCardId: null,
   modalScrollY: null,
+  isSharedView: false,
+  currentShareStatus: null,
   _lastHash: '',
   _pendingNavigationHash: null,
   _revertingHashChange: false,
@@ -41,6 +43,20 @@ const App = {
   setText(el, text) {
     if (!el) return;
     el.textContent = text ?? '';
+  },
+
+  setRobotsMeta(content) {
+    const existing = document.querySelector('meta[name="robots"]');
+    if (!content) {
+      if (existing) existing.remove();
+      return;
+    }
+    const meta = existing || document.createElement('meta');
+    meta.setAttribute('name', 'robots');
+    meta.setAttribute('content', content);
+    if (!existing) {
+      document.head.appendChild(meta);
+    }
   },
 
   setupActionDelegation() {
@@ -203,6 +219,18 @@ const App = {
         break;
       case 'show-clone-card-modal':
         this.showCloneCardModal();
+        break;
+      case 'open-share-modal':
+        this.showShareCardModal();
+        break;
+      case 'enable-share':
+        this.enableShare();
+        break;
+      case 'disable-share':
+        this.disableShare();
+        break;
+      case 'copy-share-link':
+        this.copyShareLink();
         break;
       case 'finalize-card':
         this.finalizeCard();
@@ -1737,11 +1765,13 @@ const App = {
     this.closeMobileMenu();
     window.scrollTo(0, 0);
     this.currentView = null;
+    this.isSharedView = false;
     const hash = window.location.hash.slice(1) || 'home';
     // Parse hash with query parameters: page?param=value
     const [pagePart, queryPart] = hash.split('?');
     const [page, ...params] = pagePart.split('/');
     const queryParams = new URLSearchParams(queryPart || '');
+    this.setRobotsMeta(page === 'share' ? 'noindex' : null);
 
     const container = document.getElementById('main-container');
     if (!container) return;
@@ -1784,6 +1814,9 @@ const App = {
         break;
       case 'card':
         this.requireAuth(() => this.renderCard(container, params[0], queryParams.get('item')));
+        break;
+      case 'share':
+        this.renderSharedCard(container, params[0]);
         break;
       case 'friends':
         this.requireAuth(() => this.renderFriends(container));
@@ -3408,8 +3441,9 @@ const App = {
     }
   },
 
-  renderFinalizedCard(container) {
-    this.currentView = 'finalized-card';
+  renderFinalizedCard(container, options = {}) {
+    const readOnly = !!options.readOnly;
+    this.currentView = readOnly ? 'shared-card' : 'finalized-card';
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const gridSize = this.getGridSize(this.currentCard);
     const capacity = this.getCardCapacity(this.currentCard);
@@ -3417,25 +3451,39 @@ const App = {
     const displayName = this.getCardDisplayName(this.currentCard);
     const categoryBadge = this.getCategoryBadge(this.currentCard);
 
-    const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
-    const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private';
+    const sharedView = !!options.shared;
+    const showActions = !readOnly && this.user && !this.isAnonymousMode;
+    const backLink = sharedView ? '#home' : '#dashboard';
+    const backLabel = sharedView ? 'Home' : 'Back';
+    const sharedBadge = sharedView ? '<span class="badge badge-warning">Shared view</span>' : '';
+
+    let actionsHtml = '';
+    if (showActions) {
+      const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
+      const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private';
+      actionsHtml = `
+        <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
+        <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+        <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
+        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
+          <i class="fas fa-${visibilityIcon}"></i>
+          <span>${visibilityLabel}</span>
+        </button>
+      `;
+    }
 
     container.innerHTML = `
       <div class="finalized-card-view">
         <div class="finalized-card-header">
-          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <a href="${backLink}" class="btn btn-ghost">&larr; ${backLabel}</a>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
             <h2 style="margin: 0;">${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
             ${categoryBadge}
+            ${sharedBadge}
           </div>
           <div class="card-header-actions">
-            <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
-            <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
-            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
-              <i class="fas fa-${visibilityIcon}"></i>
-              <span>${visibilityLabel}</span>
-            </button>
+            ${actionsHtml}
           </div>
         </div>
 
@@ -3454,9 +3502,45 @@ const App = {
       </div>
     `;
 
-    this.setupFinalizedCardEvents();
-    if (this.user && !this.isAnonymousMode) {
+    this.setupFinalizedCardEvents({ readOnly });
+    if (this.user && !this.isAnonymousMode && !readOnly) {
       this.loadGoalReminders(this.currentCard.id);
+    }
+  },
+
+  async renderSharedCard(container, token) {
+    this.currentView = 'shared-card';
+    this.isSharedView = true;
+    this.isAnonymousMode = false; // Shared views are read-only; anon mode is for localStorage edits.
+
+    if (!token) {
+      container.innerHTML = `
+        <div class="card text-center" style="padding: 3rem;">
+          <h3>Invalid Share Link</h3>
+          <p class="text-muted mb-lg">This share link is missing or malformed.</p>
+          <a href="#home" class="btn btn-primary">Back to Home</a>
+        </div>
+      `;
+      return;
+    }
+
+    this.showLoading(container, 'Loading shared card...');
+    try {
+      const response = await API.share.get(token);
+      const items = response.items || [];
+      this.currentCard = response.card || {};
+      this.currentCard.items = items;
+      this.renderFinalizedCard(container, { readOnly: true, shared: true });
+    } catch (error) {
+      container.innerHTML = `
+        <div class="card text-center" style="padding: 3rem;">
+          <h3>Share Link Not Found</h3>
+          <p class="text-muted mb-lg" id="share-error"></p>
+          <a href="#home" class="btn btn-primary">Back to Home</a>
+        </div>
+      `;
+      const errorEl = document.getElementById('share-error');
+      if (errorEl) errorEl.textContent = error.message;
     }
   },
 
@@ -3525,10 +3609,11 @@ const App = {
         if (item) {
           const isCompleted = item.is_completed;
           const shortText = this.truncateText(item.content, 50);
+          const itemIdAttr = item.id ? `data-item-id="${item.id}"` : '';
           cells.push(`
             <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
                  data-position="${i}"
-                 data-item-id="${item.id}"
+                 ${itemIdAttr}
                  ${!finalized ? 'draggable="true"' : ''}
                  >
               <span class="bingo-cell-content">${this.escapeHtml(shortText)}</span>
@@ -3640,19 +3725,40 @@ const App = {
     });
   },
 
-  setupFinalizedCardEvents() {
+  setupFinalizedCardEvents({ readOnly = false } = {}) {
     document.getElementById('bingo-grid').addEventListener('click', async (e) => {
       const cell = e.target.closest('.bingo-cell');
-      if (!cell || cell.classList.contains('bingo-cell--free')) return;
+      if (!cell || cell.classList.contains('bingo-cell--free') || cell.classList.contains('bingo-cell--empty')) return;
 
       const position = parseInt(cell.dataset.position);
       const item = this.currentCard.items?.find(i => i.position === position);
       const content = item?.content || cell.querySelector('.bingo-cell-content')?.textContent || '';
       const isCompleted = cell.classList.contains('bingo-cell--completed');
 
+      if (readOnly) {
+        this.showSharedItemModal(content, isCompleted);
+        return;
+      }
+
       // Show item detail modal
       this.showItemDetailModal(position, content, isCompleted);
     });
+  },
+
+  showSharedItemModal(content, isCompleted) {
+    const statusText = isCompleted ? 'Completed' : 'Not completed yet';
+    const statusClass = isCompleted ? 'badge badge-success' : 'badge badge-warning';
+    this.openModal(isCompleted ? 'Completed Goal' : 'Goal', `
+      <div class="item-detail">
+        <p class="item-detail-content">${this.escapeHtml(content)}</p>
+        <p style="margin-top: 1rem;"><span class="${statusClass}">${statusText}</span></p>
+      </div>
+      <div style="margin-top: 1.5rem;">
+        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
+          Close
+        </button>
+      </div>
+    `);
   },
 
   renderGoalReminderControls(item) {
@@ -4790,6 +4896,189 @@ const App = {
     } catch (error) {
       this.toast(error.message, 'error');
     }
+  },
+
+  async showShareCardModal() {
+    if (!this.currentCard || this.isAnonymousMode || this.isSharedView || !this.currentCard.is_finalized) return;
+
+    this.openModal('Share Card', `
+      <div id="share-modal-content">
+        <div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>
+      </div>
+    `);
+
+    await this.refreshShareModal();
+  },
+
+  async refreshShareModal() {
+    const content = document.getElementById('share-modal-content');
+    if (!content) return;
+
+    content.innerHTML = '<div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>';
+    try {
+      const response = await API.cards.shareStatus(this.currentCard.id);
+      this.currentShareStatus = response || { enabled: false };
+      content.innerHTML = this.renderShareModalContent(this.currentShareStatus);
+      this.bindShareExpiryControls();
+
+      const rawUrl = this.currentShareStatus.url || '';
+      let shareUrl = '';
+      if (rawUrl) {
+        if (/^https?:\/\//i.test(rawUrl)) {
+          shareUrl = rawUrl;
+        } else if (rawUrl.startsWith('#')) {
+          shareUrl = `${window.location.origin}${rawUrl}`;
+        } else if (rawUrl.startsWith('/')) {
+          shareUrl = `${window.location.origin}${rawUrl}`;
+        } else {
+          shareUrl = `${window.location.origin}#share/${rawUrl}`;
+        }
+      }
+      const input = document.getElementById('share-link-input');
+      if (input) input.value = shareUrl;
+    } catch (error) {
+      content.innerHTML = `<p class="text-muted" id="share-modal-error"></p>`;
+      const errorEl = document.getElementById('share-modal-error');
+      if (errorEl) errorEl.textContent = error.message;
+    }
+  },
+
+  renderShareModalContent(status) {
+    const expiresAt = status?.expires_at ? new Date(status.expires_at) : null;
+    const expired = !!status?.expired;
+    const isEnabled = !!status?.enabled;
+    const now = new Date();
+    const msInDay = 24 * 60 * 60 * 1000;
+    const hasActiveExpiry = !!expiresAt && !expired;
+    let daysLeft = 0;
+    let expiresLabel = 'Never expires';
+    if (hasActiveExpiry) {
+      const expiresAtLabel = this.escapeHtml(expiresAt.toLocaleDateString());
+      const startNowUtc = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+      );
+      const startExpiryUtc = Date.UTC(
+        expiresAt.getUTCFullYear(),
+        expiresAt.getUTCMonth(),
+        expiresAt.getUTCDate(),
+      );
+      daysLeft = Math.round((startExpiryUtc - startNowUtc) / msInDay);
+      if (daysLeft < 0) daysLeft = 0;
+      if (daysLeft === 0) {
+        expiresLabel = `Expires today (${expiresAtLabel})`;
+      } else {
+        expiresLabel = `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresAtLabel})`;
+      }
+    }
+    const statusLine = isEnabled
+      ? `<p class="${expired ? 'text-muted' : 'share-expiration'}">${expired ? 'This link has expired.' : expiresLabel}</p>`
+      : '<p class="text-muted">Share a read-only link to this card.</p>';
+
+    const linkSection = isEnabled ? `
+      <div class="form-group">
+        <label class="form-label">Share Link</label>
+        <div class="search-input-group">
+          <input type="text" class="form-input" id="share-link-input" readonly>
+          <button class="btn btn-secondary" data-action="copy-share-link" ${expired ? 'disabled' : ''}>Copy</button>
+        </div>
+      </div>
+    ` : '';
+
+    const primaryAction = isEnabled
+      ? ''
+      : `<button class="btn btn-primary" data-action="enable-share">Enable Sharing</button>`;
+
+    const disableAction = isEnabled
+      ? `<button class="btn btn-primary" data-action="disable-share">Disable Sharing</button>`
+      : '';
+
+    const expirationControls = isEnabled ? '' : `
+      <div class="form-group">
+        <label class="form-label" for="share-expiry-select">Link expiration</label>
+        <select id="share-expiry-select" class="form-input">
+          <option value="0">Never expires</option>
+          <option value="7">7 days</option>
+          <option value="30">30 days</option>
+          <option value="90">90 days</option>
+          <option value="custom">Custom…</option>
+        </select>
+        <div id="share-expiry-custom-group" style="margin-top: 0.75rem; display: none;">
+          <input type="number" id="share-expiry-custom" class="form-input" min="1" max="3650" placeholder="Enter days">
+        </div>
+      </div>
+    `;
+    const expirationNote = isEnabled
+      ? '<p class="text-muted" style="margin-top: 0.5rem;">Disable sharing to change the expiration.</p>'
+      : '';
+
+    return `
+      ${statusLine}
+      ${expirationNote}
+      ${linkSection}
+      ${expirationControls}
+      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
+        ${disableAction}
+        ${primaryAction}
+      </div>
+    `;
+  },
+
+  bindShareExpiryControls() {
+    const select = document.getElementById('share-expiry-select');
+    const customGroup = document.getElementById('share-expiry-custom-group');
+    if (!select || !customGroup) return;
+    const toggle = () => {
+      customGroup.style.display = select.value === 'custom' ? 'block' : 'none';
+    };
+    select.addEventListener('change', toggle);
+    toggle();
+  },
+
+  getShareExpiryDays() {
+    const select = document.getElementById('share-expiry-select');
+    if (!select) return null;
+    if (select.value === 'custom') {
+      const input = document.getElementById('share-expiry-custom');
+      const days = parseInt(input?.value || '', 10);
+      if (!Number.isFinite(days) || days < 0 || days > 3650) return null;
+      return days;
+    }
+    const parsed = parseInt(select.value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  },
+
+  async enableShare() {
+    const days = this.getShareExpiryDays();
+    if (days === null) {
+      this.toast('Enter a valid expiration in days', 'error');
+      return;
+    }
+    try {
+      await API.cards.shareEnable(this.currentCard.id, days);
+      await this.refreshShareModal();
+      this.toast('Share link created', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async disableShare() {
+    if (!confirm('Disable sharing? The current link will stop working.')) return;
+    try {
+      await API.cards.shareDisable(this.currentCard.id);
+      await this.refreshShareModal();
+      this.toast('Sharing disabled', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  copyShareLink() {
+    const input = document.getElementById('share-link-input');
+    if (!input?.value) return;
+    this.copyToClipboard(input.value);
   },
 
   async toggleCardVisibility(cardId, visibleToFriends) {
@@ -6240,6 +6529,7 @@ const App = {
     const categoryBadge = this.getCategoryBadge(this.currentCard);
     const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
     const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible' : 'Private';
+    const showShare = this.user && !this.isAnonymousMode && this.currentCard.is_finalized;
 
     container.innerHTML = `
       <div class="archive-card-view">
@@ -6252,6 +6542,7 @@ const App = {
           </div>
           <div class="card-header-actions">
             <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+            ${showShare ? '<button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>' : ''}
             <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>

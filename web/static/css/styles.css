@@ -1216,6 +1216,10 @@ a:hover {
 .text-center { text-align: center; }
 .text-gold { color: var(--color-gold); }
 .text-muted { color: var(--color-text-muted); }
+.share-expiration {
+  color: var(--color-gold);
+  font-weight: 600;
+}
 .mt-sm { margin-top: var(--spacing-sm); }
 .mt-md { margin-top: var(--spacing-md); }
 .mt-lg { margin-top: var(--spacing-lg); }

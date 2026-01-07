@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -55,6 +56,10 @@ type CardServiceInterface interface {
 	BulkDelete(ctx context.Context, userID uuid.UUID, cardIDs []uuid.UUID) (int, error)
 	BulkUpdateArchive(ctx context.Context, userID uuid.UUID, cardIDs []uuid.UUID, isArchived bool) (int, error)
 	Import(ctx context.Context, params models.ImportCardParams) (*models.BingoCard, error)
+	CreateOrRotateShare(ctx context.Context, userID, cardID uuid.UUID, expiresAt *time.Time) (*models.CardShare, error)
+	GetShareStatus(ctx context.Context, userID, cardID uuid.UUID) (*models.CardShare, error)
+	RevokeShare(ctx context.Context, userID, cardID uuid.UUID) error
+	GetSharedCardByToken(ctx context.Context, token string) (*models.SharedCard, error)
 }
 
 // SuggestionServiceInterface defines the contract for suggestion operations.

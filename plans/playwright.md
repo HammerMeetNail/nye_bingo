@@ -121,6 +121,9 @@
   - XSS-style usernames render as literal text in friends UI.
   - Friend actions (remove/block/unblock) and invite copy/revoke still work.
   - XSS-style card titles/goals render as literal text (no injected DOM nodes).
+- `tests/e2e/card-share.spec.js`
+  - Share links render a read-only card view with XSS payloads escaped.
+  - Revoked share links display a not-found message.
 - `tests/e2e/csp-header.spec.js`
   - Document responses include strict CSP (no `unsafe-inline` / `unsafe-hashes` for scripts).
 

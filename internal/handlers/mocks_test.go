@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -219,6 +220,10 @@ type mockCardService struct {
 	BulkDeleteFunc           func(ctx context.Context, userID uuid.UUID, cardIDs []uuid.UUID) (int, error)
 	BulkUpdateArchiveFunc    func(ctx context.Context, userID uuid.UUID, cardIDs []uuid.UUID, isArchived bool) (int, error)
 	ImportFunc               func(ctx context.Context, params models.ImportCardParams) (*models.BingoCard, error)
+	CreateOrRotateShareFunc  func(ctx context.Context, userID, cardID uuid.UUID, expiresAt *time.Time) (*models.CardShare, error)
+	GetShareStatusFunc       func(ctx context.Context, userID, cardID uuid.UUID) (*models.CardShare, error)
+	RevokeShareFunc          func(ctx context.Context, userID, cardID uuid.UUID) error
+	GetSharedCardByTokenFunc func(ctx context.Context, token string) (*models.SharedCard, error)
 }
 
 func (m *mockCardService) CheckForConflict(ctx context.Context, userID uuid.UUID, year int, title *string) (*models.BingoCard, error) {
@@ -387,6 +392,34 @@ func (m *mockCardService) Import(ctx context.Context, params models.ImportCardPa
 		return m.ImportFunc(ctx, params)
 	}
 	return nil, nil
+}
+
+func (m *mockCardService) CreateOrRotateShare(ctx context.Context, userID, cardID uuid.UUID, expiresAt *time.Time) (*models.CardShare, error) {
+	if m.CreateOrRotateShareFunc != nil {
+		return m.CreateOrRotateShareFunc(ctx, userID, cardID, expiresAt)
+	}
+	return nil, nil
+}
+
+func (m *mockCardService) GetShareStatus(ctx context.Context, userID, cardID uuid.UUID) (*models.CardShare, error) {
+	if m.GetShareStatusFunc != nil {
+		return m.GetShareStatusFunc(ctx, userID, cardID)
+	}
+	return nil, services.ErrShareNotFound
+}
+
+func (m *mockCardService) RevokeShare(ctx context.Context, userID, cardID uuid.UUID) error {
+	if m.RevokeShareFunc != nil {
+		return m.RevokeShareFunc(ctx, userID, cardID)
+	}
+	return nil
+}
+
+func (m *mockCardService) GetSharedCardByToken(ctx context.Context, token string) (*models.SharedCard, error) {
+	if m.GetSharedCardByTokenFunc != nil {
+		return m.GetSharedCardByTokenFunc(ctx, token)
+	}
+	return nil, services.ErrShareNotFound
 }
 
 type mockSuggestionService struct {

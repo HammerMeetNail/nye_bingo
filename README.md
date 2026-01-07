@@ -22,6 +22,7 @@ A web application for creating and tracking annual Bingo cards. Create a Bingo c
 - **Track Progress**: Mark goals complete with optional notes about how you achieved them
 - **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo
 - **Social Features**: Add friends, view their cards, and react to their achievements with emojis
+- **Shareable Links**: Create an unlisted link for a finalized card so anyone can view completion progress (notes are hidden); links can expire and be revoked
 - **Privacy Controls**: Opt-in discoverability - choose whether others can find you by username
 - **Card Visibility**: Set individual cards as private or visible to friends with per-card controls
 - **Card Archive**: Manually archive cards and view them with completion statistics and bingo counts
