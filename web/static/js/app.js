@@ -4946,14 +4946,15 @@ const App = {
     let daysLeft = 0;
     let expiresLabel = 'Never expires';
     if (hasActiveExpiry) {
+      const expiresAtLabel = this.escapeHtml(expiresAt.toLocaleDateString());
       const startNow = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const startExpiry = new Date(expiresAt.getFullYear(), expiresAt.getMonth(), expiresAt.getDate());
       daysLeft = Math.round((startExpiry - startNow) / msInDay);
       if (daysLeft < 0) daysLeft = 0;
       if (daysLeft === 0) {
-        expiresLabel = `Expires today (${expiresAt.toLocaleDateString()})`;
+        expiresLabel = `Expires today (${expiresAtLabel})`;
       } else {
-        expiresLabel = `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresAt.toLocaleDateString()})`;
+        expiresLabel = `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} (${expiresAtLabel})`;
       }
     }
     const statusLine = isEnabled

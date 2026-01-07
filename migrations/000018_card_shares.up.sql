@@ -7,4 +7,4 @@ CREATE TABLE bingo_card_shares (
     access_count INT NOT NULL DEFAULT 0
 );
 
-CREATE INDEX idx_bingo_card_shares_expires ON bingo_card_shares(expires_at);
+CREATE INDEX idx_bingo_card_shares_expires ON bingo_card_shares(expires_at) WHERE expires_at IS NOT NULL;
