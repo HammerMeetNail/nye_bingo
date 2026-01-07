@@ -204,9 +204,21 @@ a:hover {
   flex-direction: column;
 }
 
+.page--compact-main {
+  min-height: 100vh;
+}
+
 .main-content {
   flex: 1;
   padding: var(--spacing-xl) 0;
+}
+
+.page--compact-main .main-content {
+  flex: 0 0 auto;
+}
+
+.page--compact-main .footer {
+  margin-top: auto;
 }
 
 /* Header */
@@ -1344,7 +1356,7 @@ a:hover {
   }
 
   .finalized-card-view {
-    min-height: calc(100vh - 80px);
+    min-height: 0;
   }
 
   .finalized-card-header {
@@ -1388,8 +1400,14 @@ a:hover {
   }
 
   .finalized-card-progress {
-    padding: 0.5rem var(--spacing-sm);
+    padding: 0.35rem var(--spacing-sm);
+    margin-bottom: 0;
   }
+
+  .main-content {
+    padding: var(--spacing-md) 0;
+  }
+
 
   .bingo-container {
     gap: var(--spacing-md);
