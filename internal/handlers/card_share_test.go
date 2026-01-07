@@ -104,7 +104,10 @@ func TestCardShare_Create_Success(t *testing.T) {
 		t.Fatalf("failed to parse response: %v", err)
 	}
 	if !response.Enabled || response.URL == "" {
-		t.Fatalf("expected enabled share with URL, got %+v", response)
+		t.Fatalf("expected enabled share with token, got %+v", response)
+	}
+	if response.URL != share.Token {
+		t.Fatalf("expected token %q, got %q", share.Token, response.URL)
 	}
 }
 
@@ -134,6 +137,44 @@ func TestCardShare_Status_NotFound(t *testing.T) {
 	}
 	if response.Enabled {
 		t.Fatal("expected enabled false for missing share")
+	}
+}
+
+func TestCardShare_Status_Success(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	cardID := uuid.New()
+	now := time.Now()
+	share := &models.CardShare{
+		CardID:    cardID,
+		Token:     "deadbeef",
+		CreatedAt: now,
+	}
+
+	handler := NewCardHandler(&mockCardShareService{
+		GetShareStatusFunc: func(ctx context.Context, userID, cardID uuid.UUID) (*models.CardShare, error) {
+			return share, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/cards/"+cardID.String()+"/share", nil)
+	req.SetPathValue("id", cardID.String())
+	req = req.WithContext(SetUserInContext(req.Context(), user))
+	rr := httptest.NewRecorder()
+
+	handler.GetShareStatus(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	var response ShareStatusResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if !response.Enabled || response.Expired {
+		t.Fatalf("expected enabled share without expiration, got %+v", response)
+	}
+	if response.URL != share.Token {
+		t.Fatalf("expected token %q, got %q", share.Token, response.URL)
 	}
 }
 

@@ -155,6 +155,7 @@ components:
           type: boolean
         url:
           type: string
+          description: Share token used to build the share URL (#share/{token})
         created_at:
           type: string
           format: date-time

@@ -5,6 +5,13 @@ Year of Bingo is a Go/Vanilla JS web app for creating annual Bingo cards.
 Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE space.
 **Domain**: yearofbingo.com
 
+## Card Sharing
+- Share links are unlisted and token-based.
+- Only finalized cards are shareable.
+- One active share link per card; users can revoke and re-enable to rotate.
+- Links can expire (default is never).
+- Shared view shows completion state but hides item notes.
+
 ## Tech Stack
 - **Backend**: Go 1.24+ (std lib only), pgx/v5, go-redis/v9.
 - **Frontend**: Vanilla JS SPA (Hash routing), CSS variables.

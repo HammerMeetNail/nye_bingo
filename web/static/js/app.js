@@ -4924,9 +4924,19 @@ const App = {
       content.innerHTML = this.renderShareModalContent(this.currentShareStatus);
       this.bindShareExpiryControls();
 
-      const shareUrl = this.currentShareStatus.url
-        ? `${window.location.origin}/${this.currentShareStatus.url}`
-        : '';
+      const rawUrl = this.currentShareStatus.url || '';
+      let shareUrl = '';
+      if (rawUrl) {
+        if (/^https?:\/\//i.test(rawUrl)) {
+          shareUrl = rawUrl;
+        } else if (rawUrl.startsWith('#')) {
+          shareUrl = `${window.location.origin}/${rawUrl}`;
+        } else if (rawUrl.startsWith('/')) {
+          shareUrl = `${window.location.origin}${rawUrl}`;
+        } else {
+          shareUrl = `${window.location.origin}/#share/${rawUrl}`;
+        }
+      }
       const input = document.getElementById('share-link-input');
       if (input) input.value = shareUrl;
     } catch (error) {

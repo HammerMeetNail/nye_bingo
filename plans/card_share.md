@@ -84,7 +84,7 @@ These are UI-driven and should use `requireSession` middleware (consistent with 
   - Verify card `is_finalized == true` (recommended default).
   - Generate new token and upsert into `bingo_card_shares`.
   - If request includes an expiration, persist it; otherwise default to no expiration.
-  - Return share URL + token metadata.
+  - Return share token + metadata; client builds the URL.
 
 Request (example):
 ```json
@@ -95,7 +95,7 @@ Response (example):
 ```json
 {
   "enabled": true,
-  "url": "https://yearofbingo.com/#share/abc123...",
+  "url": "abc123...",
   "created_at": "2026-01-01T00:00:00Z",
   "expires_at": "2026-01-31T00:00:00Z"
 }
@@ -106,7 +106,7 @@ Response (example):
 - Auth: session
 - Behavior:
   - If no share exists: `{ "enabled": false }`
-  - If exists: return `{ enabled, url, created_at, expires_at, last_accessed_at, access_count }`
+  - If exists: return `{ enabled, url, created_at, expires_at, last_accessed_at, access_count }` (where `url` is the share token)
 
 3) **Disable sharing**
 - `DELETE /api/cards/{id}/share`

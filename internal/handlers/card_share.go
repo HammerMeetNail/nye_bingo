@@ -81,7 +81,7 @@ func (h *CardHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	url := "#share/" + share.Token
+	url := share.Token
 	writeJSON(w, http.StatusCreated, ShareStatusResponse{
 		Enabled:        true,
 		URL:            url,
@@ -125,7 +125,7 @@ func (h *CardHandler) GetShareStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expired := share.ExpiresAt != nil && share.ExpiresAt.Before(time.Now())
-	url := "#share/" + share.Token
+	url := share.Token
 	if expired {
 		url = ""
 	}
