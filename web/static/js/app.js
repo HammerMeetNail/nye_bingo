@@ -6507,6 +6507,7 @@ const App = {
     const categoryBadge = this.getCategoryBadge(this.currentCard);
     const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
     const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible' : 'Private';
+    const showShare = this.user && !this.isAnonymousMode && this.currentCard.is_finalized;
 
     container.innerHTML = `
       <div class="archive-card-view">
@@ -6519,6 +6520,7 @@ const App = {
           </div>
           <div class="card-header-actions">
             <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+            ${showShare ? '<button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>' : ''}
             <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
