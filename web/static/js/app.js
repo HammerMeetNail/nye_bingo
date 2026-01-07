@@ -17,6 +17,7 @@ const App = {
   goalReminders: [],
   goalRemindersByItem: {},
   reminderSelectedCardId: null,
+  modalScrollY: null,
   _lastHash: '',
   _pendingNavigationHash: null,
   _revertingHashChange: false,
@@ -1502,7 +1503,7 @@ const App = {
     document.body.style.top = '';
     if (typeof this.modalScrollY === 'number') {
       window.scrollTo(0, this.modalScrollY);
-      this.modalScrollY = 0;
+      this.modalScrollY = null;
     }
   },
 

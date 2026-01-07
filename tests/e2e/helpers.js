@@ -24,7 +24,8 @@ function buildUser(testInfo, prefix, options = {}) {
 }
 
 async function register(page, user, { searchable = false } = {}) {
-  await page.goto('/#register');
+  await page.goto('/#register', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Create Account' })).toBeVisible();
   await page.locator('#register-form #username').fill(user.username);
   await page.locator('#register-form #email').fill(user.email);
   await page.locator('#register-form #password').fill(user.password);
