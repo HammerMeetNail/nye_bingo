@@ -1766,6 +1766,7 @@ const App = {
     window.scrollTo(0, 0);
     this.currentView = null;
     this.isSharedView = false;
+    document.querySelector('.page')?.classList.remove('page--compact-main');
     const hash = window.location.hash.slice(1) || 'home';
     // Parse hash with query parameters: page?param=value
     const [pagePart, queryPart] = hash.split('?');
@@ -3444,6 +3445,7 @@ const App = {
   renderFinalizedCard(container, options = {}) {
     const readOnly = !!options.readOnly;
     this.currentView = readOnly ? 'shared-card' : 'finalized-card';
+    document.querySelector('.page')?.classList.add('page--compact-main');
     const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
     const gridSize = this.getGridSize(this.currentCard);
     const capacity = this.getCardCapacity(this.currentCard);
