@@ -619,7 +619,7 @@ func (s *ReminderService) runDueCheckins(ctx context.Context, now time.Time, lim
 		   AND u.email_verified = true
 		 ORDER BY r.next_send_at ASC
 		 LIMIT $2
-		 FOR UPDATE SKIP LOCKED`,
+		 FOR UPDATE OF r SKIP LOCKED`,
 		now,
 		limit,
 	)
@@ -682,7 +682,7 @@ func (s *ReminderService) runDueGoals(ctx context.Context, now time.Time, limit 
 		   AND u.email_verified = true
 		 ORDER BY gr.next_send_at ASC
 		 LIMIT $2
-		 FOR UPDATE SKIP LOCKED`,
+		 FOR UPDATE OF gr SKIP LOCKED`,
 		now,
 		limit,
 	)
