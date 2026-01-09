@@ -17,6 +17,7 @@ import (
 func TestAccountService_BuildExportZip_CreatesFiles(t *testing.T) {
 	userID := uuid.New()
 	now := time.Date(2024, 5, 1, 12, 0, 0, 0, time.UTC)
+	verifiedAt := now
 
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
@@ -28,7 +29,7 @@ func TestAccountService_BuildExportZip_CreatesFiles(t *testing.T) {
 				"test@example.com",
 				"testuser",
 				true,
-				now,
+				&verifiedAt,
 				2,
 				true,
 				now,
