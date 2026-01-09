@@ -81,6 +81,8 @@
   - Email notifications respect opt-in and include links.
 - `tests/e2e/reminders-test-email.spec.js`
   - Email-verified users can enable reminders and receive a test email.
+- `tests/e2e/reminders-scheduled-goal.spec.js`
+  - Scheduled goal reminders are delivered by the background reminder runner (Mailpit).
 - `tests/e2e/reminders-xss.spec.js`
   - Reminder emails escape XSS-style goal content in suggested goals.
 - `tests/e2e/reminders-image.spec.js`

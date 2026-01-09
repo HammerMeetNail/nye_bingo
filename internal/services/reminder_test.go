@@ -65,6 +65,9 @@ func TestReminderService_RunDue_UsesSkipLocked(t *testing.T) {
 		if !strings.Contains(query, "SKIP LOCKED") {
 			t.Fatalf("expected SKIP LOCKED in query, got %q", query)
 		}
+		if !strings.Contains(query, "FOR UPDATE OF") {
+			t.Fatalf("expected FOR UPDATE OF <alias> to avoid locking join tables, got %q", query)
+		}
 	}
 }
 

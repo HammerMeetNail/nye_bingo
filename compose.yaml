@@ -28,6 +28,7 @@ services:
       - EMAIL_FROM_ADDRESS=noreply@yearofbingo.com
       - EMAIL_FROM_NAME=Year of Bingo
       - APP_BASE_URL=http://localhost:8080
+      - REMINDERS_POLL_INTERVAL=${REMINDERS_POLL_INTERVAL:-1m}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL}
       - GEMINI_THINKING_LEVEL=${GEMINI_THINKING_LEVEL:-minimal}
