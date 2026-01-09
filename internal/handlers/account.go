@@ -89,14 +89,14 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
-		_ = h.authService.DeleteSession(r.Context(), cookie.Value)
-	}
-
 	if err := h.accountService.Delete(r.Context(), user.ID); err != nil {
 		log.Printf("Error deleting account: %v", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+		_ = h.authService.DeleteSession(r.Context(), cookie.Value)
 	}
 
 	h.clearSessionCookie(w)

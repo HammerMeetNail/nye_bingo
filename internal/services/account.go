@@ -40,7 +40,7 @@ func (s *AccountService) BuildExportZip(ctx context.Context, userID uuid.UUID) (
 		`SELECT id, email, username, email_verified, email_verified_at, ai_free_generations_used,
 		        searchable, created_at, updated_at, deleted_at
 		 FROM users
-		 WHERE id = $1`,
+		 WHERE id = $1 AND deleted_at IS NULL`,
 		userID,
 	).Scan(
 		&user.ID,
@@ -82,8 +82,8 @@ func (s *AccountService) BuildExportZip(ctx context.Context, userID uuid.UUID) (
 	}, func(w *csv.Writer) error {
 		return w.Write([]string{
 			user.ID.String(),
-			user.Email,
-			user.Username,
+			sanitizeCSVValue(user.Email),
+			sanitizeCSVValue(user.Username),
 			boolString(user.EmailVerified),
 			formatTime(user.EmailVerifiedAt),
 			fmt.Sprintf("%d", user.AIFreeGenerationsUsed),
@@ -173,6 +173,13 @@ func (s *AccountService) Delete(ctx context.Context, userID uuid.UUID) error {
 		}
 	}()
 
+	var email string
+	if err := tx.QueryRow(ctx, "SELECT email FROM users WHERE id = $1 AND deleted_at IS NULL", userID).Scan(&email); err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("load user email: %w", err)
+		}
+	}
+
 	scrubEmail := fmt.Sprintf("deleted+%s@deleted.invalid", userID.String())
 	scrubUsername := fmt.Sprintf("deleted-%s", userID.String())
 	scrubPassword := fmt.Sprintf("deleted-%s", uuid.New().String())
@@ -208,6 +215,17 @@ func (s *AccountService) Delete(ctx context.Context, userID uuid.UUID) error {
 
 	if _, err := tx.Exec(ctx, "DELETE FROM api_tokens WHERE user_id = $1", userID); err != nil {
 		return fmt.Errorf("revoke api tokens: %w", err)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM email_verification_tokens WHERE user_id = $1", userID); err != nil {
+		return fmt.Errorf("revoke email verification tokens: %w", err)
+	}
+	if _, err := tx.Exec(ctx, "DELETE FROM password_reset_tokens WHERE user_id = $1", userID); err != nil {
+		return fmt.Errorf("revoke password reset tokens: %w", err)
+	}
+	if email != "" {
+		if _, err := tx.Exec(ctx, "DELETE FROM magic_link_tokens WHERE email = $1", email); err != nil {
+			return fmt.Errorf("revoke magic link tokens: %w", err)
+		}
 	}
 	if _, err := tx.Exec(ctx, `
 		DELETE FROM bingo_card_shares
@@ -282,6 +300,30 @@ func boolString(value bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+func sanitizeCSVValue(value string) string {
+	first := firstNonSpace(value)
+	if first == 0 {
+		return value
+	}
+	switch first {
+	case '=', '+', '-', '@':
+		return "'" + value
+	case '\'':
+		return value
+	default:
+		return value
+	}
+}
+
+func firstNonSpace(value string) rune {
+	for _, r := range value {
+		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+			return r
+		}
+	}
+	return 0
 }
 
 func (s *AccountService) writeCardsCSV(ctx context.Context, zipWriter *zip.Writer, userID uuid.UUID) error {
@@ -362,7 +404,7 @@ func (s *AccountService) writeCardsCSV(ctx context.Context, zipWriter *zip.Write
 				nullableString(category),
 				nullableString(title),
 				fmt.Sprintf("%d", gridSize),
-				headerText,
+				sanitizeCSVValue(headerText),
 				boolString(hasFreeSpace),
 				nullableInt(freeSpacePos),
 				boolString(isActive),
@@ -439,7 +481,7 @@ func (s *AccountService) writeItemsCSV(ctx context.Context, zipWriter *zip.Write
 				itemID.String(),
 				cardID.String(),
 				fmt.Sprintf("%d", position),
-				content,
+				sanitizeCSVValue(content),
 				boolString(isCompleted),
 				formatTime(completedAt),
 				nullableString(notes),
@@ -592,7 +634,7 @@ func (s *AccountService) writeAPITokensCSV(ctx context.Context, zipWriter *zip.W
 			if err := w.Write([]string{
 				tokenID.String(),
 				ownerID.String(),
-				name,
+				sanitizeCSVValue(name),
 				prefix,
 				scope,
 				formatTime(expiresAt),
@@ -1491,7 +1533,7 @@ func nullableString(value *string) string {
 	if value == nil {
 		return ""
 	}
-	return *value
+	return sanitizeCSVValue(*value)
 }
 
 func nullableInt(value *int) string {

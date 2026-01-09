@@ -151,6 +151,14 @@ func TestAccountService_Delete_Success(t *testing.T) {
 			}
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "SELECT email FROM users") {
+				return rowFromValues("test@example.com")
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
 		CommitFunc: func(ctx context.Context) error {
 			committed = true
 			return nil
@@ -170,6 +178,15 @@ func TestAccountService_Delete_Success(t *testing.T) {
 	if !committed {
 		t.Fatal("expected transaction commit")
 	}
+	if !containsSQL(execSQL, "DELETE FROM email_verification_tokens") {
+		t.Fatal("expected email verification tokens to be revoked")
+	}
+	if !containsSQL(execSQL, "DELETE FROM password_reset_tokens") {
+		t.Fatal("expected password reset tokens to be revoked")
+	}
+	if !containsSQL(execSQL, "DELETE FROM magic_link_tokens") {
+		t.Fatal("expected magic link tokens to be revoked")
+	}
 }
 
 func TestAccountService_Delete_Idempotent(t *testing.T) {
@@ -182,7 +199,13 @@ func TestAccountService_Delete_Idempotent(t *testing.T) {
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			return rowFromValues(&deletedAt)
+			if strings.Contains(sql, "SELECT email FROM users") {
+				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+			if strings.Contains(sql, "SELECT deleted_at FROM users") {
+				return rowFromValues(&deletedAt)
+			}
+			return fakeRow{scanFunc: func(dest ...any) error { return errors.New("unexpected query") }}
 		},
 	}
 
@@ -207,7 +230,13 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-			return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			if strings.Contains(sql, "SELECT email FROM users") {
+				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+			if strings.Contains(sql, "SELECT deleted_at FROM users") {
+				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error { return errors.New("unexpected query") }}
 		},
 	}
 
@@ -226,4 +255,13 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 func firstLine(data []byte) string {
 	parts := strings.SplitN(string(data), "\n", 2)
 	return strings.TrimSpace(parts[0])
+}
+
+func containsSQL(values []string, needle string) bool {
+	for _, value := range values {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
 }

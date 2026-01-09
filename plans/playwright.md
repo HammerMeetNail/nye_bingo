@@ -58,8 +58,10 @@
   - Bulk visibility updates, export ZIP download (ZIP header sanity), and bulk delete.
 - `tests/e2e/account-export.spec.js`
   - Account export ZIP download from profile.
-- `tests/e2e/account-delete.spec.js`
-  - Delete account confirmation flow, login rejection, and share link invalidation.
+- `tests/e2e/account-delete-login.spec.js`
+  - Delete account confirmation flow and subsequent login rejection.
+- `tests/e2e/account-delete-share.spec.js`
+  - Share link invalidation after account deletion.
 - `tests/e2e/editor-actions.spec.js`
   - Draft goal edit/remove updates grid and progress.
   - Finalized visibility toggle switches between visible/private.
