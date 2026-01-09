@@ -109,6 +109,12 @@ const App = {
       case 'logout':
         this.logout();
         break;
+      case 'export-account':
+        this.exportAccountData(target);
+        break;
+      case 'open-delete-account-modal':
+        this.openDeleteAccountModal();
+        break;
       case 'mark-notification-read':
         this.markNotificationRead(target);
         break;
@@ -403,6 +409,9 @@ const App = {
         break;
       case 'ai-generate':
         AIWizard.handleGenerate(event);
+        break;
+      case 'delete-account':
+        this.handleDeleteAccount(event, form);
         break;
       default:
         break;
@@ -2736,6 +2745,173 @@ const App = {
       this.toast(`Exported ${cardsToExport.length} card${cardsToExport.length > 1 ? 's' : ''}`, 'success');
     } catch (error) {
       this.toast('Error generating export: ' + error.message, 'error');
+    }
+  },
+
+  async exportAccountData(button) {
+    if (!this.user) return;
+    const actionButton = button || document.querySelector('[data-action="export-account"]');
+
+    try {
+      if (actionButton) this.setButtonLoading(actionButton, true);
+      const blob = await API.account.export();
+      const timestamp = new Date().toISOString().slice(0, 10);
+      this.downloadBlob(blob, `yearofbingo_account_export_${timestamp}.zip`);
+      this.toast('Export downloaded', 'success');
+    } catch (error) {
+      this.toast(error.message || 'Unable to export account data', 'error');
+    } finally {
+      if (actionButton) this.setButtonLoading(actionButton, false);
+    }
+  },
+
+  openDeleteAccountModal() {
+    if (!this.user) return;
+    const username = this.escapeHtml(this.user.username);
+
+    this.openModal('Delete Account', `
+      <div class="danger-zone__modal">
+        <div class="danger-zone__banner">
+          <strong>This will permanently delete your account and all associated data. This cannot be undone.</strong>
+        </div>
+        <ul class="danger-zone__list">
+          <li>Cards and items</li>
+          <li>Friends and friend requests</li>
+          <li>Reminders and notifications</li>
+          <li>API tokens and share links</li>
+        </ul>
+        <form data-action="delete-account" class="profile-form" id="delete-account-form">
+          <div class="form-group">
+            <label for="delete-account-username">Type "${username}" to confirm</label>
+            <input type="text" id="delete-account-username" class="form-input" autocomplete="off" required>
+          </div>
+          <div class="form-group">
+            <label for="delete-account-password">Enter your password</label>
+            <input type="password" id="delete-account-password" class="form-input" autocomplete="current-password" required>
+          </div>
+          <label class="checkbox-label">
+            <input type="checkbox" id="delete-account-confirm">
+            <span>I understand this action is permanent and cannot be undone.</span>
+          </label>
+          <div class="form-error hidden" id="delete-account-error"></div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-danger" id="delete-account-submit" disabled>Delete Account</button>
+          </div>
+        </form>
+      </div>
+    `);
+
+    const usernameInput = document.getElementById('delete-account-username');
+    const passwordInput = document.getElementById('delete-account-password');
+    const confirmInput = document.getElementById('delete-account-confirm');
+
+    const update = () => this.updateDeleteAccountModalState();
+    usernameInput?.addEventListener('input', update);
+    passwordInput?.addEventListener('input', update);
+    confirmInput?.addEventListener('change', update);
+
+    this.updateDeleteAccountModalState();
+  },
+
+  updateDeleteAccountModalState() {
+    const usernameInput = document.getElementById('delete-account-username');
+    const passwordInput = document.getElementById('delete-account-password');
+    const confirmInput = document.getElementById('delete-account-confirm');
+    const submitButton = document.getElementById('delete-account-submit');
+    const errorEl = document.getElementById('delete-account-error');
+
+    if (!usernameInput || !passwordInput || !confirmInput || !submitButton) return;
+
+    const usernameMatch = this.matchesDeleteAccountConfirmation(this.user?.username || '', usernameInput.value);
+    const hasPassword = passwordInput.value.length > 0;
+    const confirmed = confirmInput.checked;
+
+    submitButton.disabled = !(usernameMatch && hasPassword && confirmed);
+
+    if (!usernameMatch && usernameInput.value.trim().length > 0) {
+      if (errorEl) {
+        errorEl.textContent = 'Username confirmation must match exactly.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+  },
+
+  matchesDeleteAccountConfirmation(username, inputValue) {
+    return inputValue.trim() === username;
+  },
+
+  async handleDeleteAccount(event, form) {
+    event.preventDefault();
+    if (!this.user || !form) return;
+
+    const usernameInput = form.querySelector('#delete-account-username');
+    const passwordInput = form.querySelector('#delete-account-password');
+    const confirmInput = form.querySelector('#delete-account-confirm');
+    const submitButton = form.querySelector('#delete-account-submit');
+    const errorEl = document.getElementById('delete-account-error');
+
+    const confirmUsername = usernameInput?.value || '';
+    const password = passwordInput?.value || '';
+    const confirmed = confirmInput?.checked || false;
+
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.add('hidden');
+    }
+
+    if (!this.matchesDeleteAccountConfirmation(this.user.username, confirmUsername)) {
+      if (errorEl) {
+        errorEl.textContent = 'Username confirmation must match exactly.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (!password) {
+      if (errorEl) {
+        errorEl.textContent = 'Password is required.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (!confirmed) {
+      if (errorEl) {
+        errorEl.textContent = 'Please confirm that you understand the consequences.';
+        errorEl.classList.remove('hidden');
+      }
+      return;
+    }
+
+    try {
+      if (submitButton) this.setButtonLoading(submitButton, true);
+      await API.account.delete(confirmUsername.trim(), password);
+      this.closeModal();
+      this.user = null;
+      this.notificationSettings = null;
+      this.notificationUnreadCount = 0;
+      this.stopNotificationPolling();
+      this.setupNavigation();
+      sessionStorage.removeItem('pendingInviteToken');
+      this._allowNextHashRoute = true;
+      window.location.hash = '#home';
+      this.toast('Account deleted', 'success');
+    } catch (error) {
+      if (errorEl) {
+        errorEl.textContent = error.message;
+        errorEl.classList.remove('hidden');
+      } else {
+        this.toast(error.message, 'error');
+      }
+    } finally {
+      if (submitButton) this.setButtonLoading(submitButton, false);
     }
   },
 
@@ -6433,6 +6609,22 @@ const App = {
             <div class="profile-actions">
               <button class="btn btn-ghost" data-action="logout">Sign Out</button>
             </div>
+          </div>
+
+          <div class="card profile-section">
+            <h3>Export Your Data</h3>
+            <p class="text-muted">
+              Download a ZIP of CSV files containing your account data (cards, items, friends, reminders, notifications, etc.).
+            </p>
+            <button class="btn btn-secondary btn-sm" data-action="export-account">Download Export</button>
+          </div>
+
+          <div class="card profile-section danger-zone">
+            <h3>Danger Zone: Delete Account</h3>
+            <p class="danger-zone__warning">
+              Permanently delete your account and all associated data. This cannot be undone.
+            </p>
+            <button class="btn btn-danger" data-action="open-delete-account-modal">Delete Account</button>
           </div>
         </div>
       </div>

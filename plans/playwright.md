@@ -56,6 +56,10 @@
   - Clone flow supports grid size/header changes on new draft.
 - `tests/e2e/bulk-actions.spec.js`
   - Bulk visibility updates, export ZIP download (ZIP header sanity), and bulk delete.
+- `tests/e2e/account-export.spec.js`
+  - Account export ZIP download from profile.
+- `tests/e2e/account-delete.spec.js`
+  - Delete account confirmation flow, login rejection, and share link invalidation.
 - `tests/e2e/editor-actions.spec.js`
   - Draft goal edit/remove updates grid and progress.
   - Finalized visibility toggle switches between visible/private.
@@ -81,7 +85,9 @@
   - Email notifications respect opt-in and include links.
 - `tests/e2e/reminders-test-email.spec.js`
   - Email-verified users can enable reminders and receive a test email.
-- `tests/e2e/reminders-scheduled-goal.spec.js`
+- `tests/e2e/reminders-scheduled-goal-setup.spec.js`
+  - Scheduled goal reminders can be created.
+- `tests/e2e/reminders-scheduled-goal-delivery.spec.js`
   - Scheduled goal reminders are delivered by the background reminder runner (Mailpit).
 - `tests/e2e/reminders-xss.spec.js`
   - Reminder emails escape XSS-style goal content in suggested goals.

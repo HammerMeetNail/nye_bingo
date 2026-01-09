@@ -28,7 +28,7 @@ func NewUserService(db DBConn) *UserService {
 func (s *UserService) Create(ctx context.Context, params models.CreateUserParams) (*models.User, error) {
 	// Check if email already exists
 	var exists bool
-	err := s.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", params.Email).Scan(&exists)
+	err := s.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND deleted_at IS NULL)", params.Email).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("checking email existence: %w", err)
 	}
@@ -37,7 +37,7 @@ func (s *UserService) Create(ctx context.Context, params models.CreateUserParams
 	}
 
 	// Check if username already exists (case-insensitive)
-	err = s.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1))", params.Username).Scan(&exists)
+	err = s.db.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1) AND deleted_at IS NULL)", params.Username).Scan(&exists)
 	if err != nil {
 		return nil, fmt.Errorf("checking username existence: %w", err)
 	}
@@ -64,7 +64,7 @@ func (s *UserService) GetByID(ctx context.Context, id uuid.UUID) (*models.User, 
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
 		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
-		 FROM users WHERE id = $1`,
+		 FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
@@ -82,7 +82,7 @@ func (s *UserService) GetByEmail(ctx context.Context, email string) (*models.Use
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
 		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
-		 FROM users WHERE email = $1`,
+		 FROM users WHERE email = $1 AND deleted_at IS NULL`,
 		email,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 
@@ -98,7 +98,7 @@ func (s *UserService) GetByEmail(ctx context.Context, email string) (*models.Use
 
 func (s *UserService) UpdatePassword(ctx context.Context, userID uuid.UUID, newPasswordHash string) error {
 	result, err := s.db.Exec(ctx,
-		`UPDATE users SET password_hash = $1 WHERE id = $2`,
+		`UPDATE users SET password_hash = $1 WHERE id = $2 AND deleted_at IS NULL`,
 		newPasswordHash, userID,
 	)
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID uuid.UUID, newP
 
 func (s *UserService) MarkEmailVerified(ctx context.Context, userID uuid.UUID) error {
 	_, err := s.db.Exec(ctx,
-		`UPDATE users SET email_verified = true, email_verified_at = NOW() WHERE id = $1 AND email_verified = false`,
+		`UPDATE users SET email_verified = true, email_verified_at = NOW() WHERE id = $1 AND email_verified = false AND deleted_at IS NULL`,
 		userID,
 	)
 	if err != nil {
@@ -125,7 +125,7 @@ func (s *UserService) MarkEmailVerified(ctx context.Context, userID uuid.UUID) e
 
 func (s *UserService) UpdateSearchable(ctx context.Context, userID uuid.UUID, searchable bool) error {
 	result, err := s.db.Exec(ctx,
-		`UPDATE users SET searchable = $1, updated_at = NOW() WHERE id = $2`,
+		`UPDATE users SET searchable = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL`,
 		searchable, userID,
 	)
 	if err != nil {

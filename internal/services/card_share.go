@@ -124,6 +124,7 @@ func (s *CardService) GetSharedCardByToken(ctx context.Context, token string) (*
 		       c.free_space_position, c.is_finalized, s.expires_at
 		FROM bingo_card_shares s
 		JOIN bingo_cards c ON c.id = s.card_id
+		JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL
 		WHERE s.token = $1
 	`, token).Scan(
 		&card.ID,

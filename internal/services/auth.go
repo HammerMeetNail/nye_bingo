@@ -193,7 +193,7 @@ func (s *AuthService) getUserByID(ctx context.Context, id uuid.UUID) (*models.Us
 	user := &models.User{}
 	err := s.db.QueryRow(ctx,
 		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
-		 FROM users WHERE id = $1`,
+		 FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
 

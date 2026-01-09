@@ -32,7 +32,7 @@ func lockUserPairForUpdate(ctx context.Context, q DBConn, userA, userB uuid.UUID
 
 func lockUserForUpdate(ctx context.Context, q DBConn, userID uuid.UUID) error {
 	var lockedID uuid.UUID
-	err := q.QueryRow(ctx, `SELECT id FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&lockedID)
+	err := q.QueryRow(ctx, `SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&lockedID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}

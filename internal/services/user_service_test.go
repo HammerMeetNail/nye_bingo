@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -168,6 +169,23 @@ func TestUserService_GetByID_QueryError(t *testing.T) {
 	}
 }
 
+func TestUserService_GetByID_FiltersDeleted(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if !strings.Contains(sql, "deleted_at IS NULL") {
+				t.Fatalf("expected deleted_at filter in query, got %q", sql)
+			}
+			return rowFromValues(uuid.New(), "test@example.com", "hash", "user", false, nil, 0, true, time.Now(), time.Now())
+		},
+	}
+
+	service := NewUserService(db)
+	_, err := service.GetByID(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestUserService_UpdatePassword_NotFound(t *testing.T) {
 	db := &fakeDB{
 		ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
@@ -209,6 +227,23 @@ func TestUserService_GetByEmail_NotFound(t *testing.T) {
 	_, err := service.GetByEmail(context.Background(), "missing@example.com")
 	if !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestUserService_GetByEmail_FiltersDeleted(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if !strings.Contains(sql, "deleted_at IS NULL") {
+				t.Fatalf("expected deleted_at filter in query, got %q", sql)
+			}
+			return rowFromValues(uuid.New(), "test@example.com", "hash", "user", false, nil, 0, true, time.Now(), time.Now())
+		},
+	}
+
+	service := NewUserService(db)
+	_, err := service.GetByEmail(context.Background(), "test@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

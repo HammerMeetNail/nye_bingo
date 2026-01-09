@@ -100,6 +100,7 @@ func run() error {
 	inviteService := services.NewFriendInviteService(dbAdapter)
 	notificationService := services.NewNotificationService(dbAdapter, emailService, cfg.Email.BaseURL)
 	reminderService := services.NewReminderService(dbAdapter, emailService, cfg.Email.BaseURL)
+	accountService := services.NewAccountService(dbAdapter)
 	aiService := ai.NewService(cfg, dbAdapter)
 
 	cardService.SetNotificationService(notificationService)
@@ -121,6 +122,7 @@ func run() error {
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
+	accountHandler := handlers.NewAccountHandler(accountService, authService, cfg.Server.Secure)
 	pageHandler, err := handlers.NewPageHandler("web/templates")
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
@@ -228,6 +230,10 @@ func run() error {
 	mux.Handle("POST /api/auth/forgot-password", requireSession(http.HandlerFunc(authHandler.ForgotPassword)))
 	mux.Handle("POST /api/auth/reset-password", requireSession(http.HandlerFunc(authHandler.ResetPassword)))
 	mux.Handle("PUT /api/auth/searchable", requireSession(http.HandlerFunc(authHandler.UpdateSearchable)))
+
+	// Account endpoints
+	mux.Handle("GET /api/account/export", requireSession(http.HandlerFunc(accountHandler.Export)))
+	mux.Handle("DELETE /api/account", requireSession(http.HandlerFunc(accountHandler.Delete)))
 
 	// API Token endpoints
 	mux.Handle("GET /api/tokens", requireSession(http.HandlerFunc(apiTokenHandler.List)))

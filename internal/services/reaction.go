@@ -107,7 +107,7 @@ func (s *ReactionService) GetReactionsForItem(ctx context.Context, itemID uuid.U
 	rows, err := s.db.Query(ctx,
 		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.username
 		 FROM reactions r
-		 JOIN users u ON r.user_id = u.id
+		 JOIN users u ON r.user_id = u.id AND u.deleted_at IS NULL
 		 WHERE r.item_id = $1
 		 ORDER BY r.created_at`,
 		itemID,
@@ -167,7 +167,7 @@ func (s *ReactionService) GetReactionsForCard(ctx context.Context, cardID uuid.U
 	rows, err := s.db.Query(ctx,
 		`SELECT r.id, r.item_id, r.user_id, r.emoji, r.created_at, u.username
 		 FROM reactions r
-		 JOIN users u ON r.user_id = u.id
+		 JOIN users u ON r.user_id = u.id AND u.deleted_at IS NULL
 		 JOIN bingo_items bi ON r.item_id = bi.id
 		 WHERE bi.card_id = $1
 		 ORDER BY r.item_id, r.created_at`,

@@ -164,7 +164,7 @@ func (s *FriendInviteService) AcceptInvite(ctx context.Context, recipientID uuid
 	err = tx.QueryRow(ctx,
 		`SELECT fi.id, fi.inviter_user_id, u.username
 		 FROM friend_invites fi
-		 JOIN users u ON fi.inviter_user_id = u.id
+		 JOIN users u ON fi.inviter_user_id = u.id AND u.deleted_at IS NULL
 		 WHERE fi.invite_token_hash = $1
 		   AND fi.revoked_at IS NULL
 		   AND fi.accepted_at IS NULL
