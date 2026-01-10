@@ -12,6 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-/opt/yearofbingo/.env}"
+HOSTNAME="$(hostname)"
 
 # Load environment if available
 if [[ -f "$ENV_FILE" ]]; then
@@ -20,17 +21,44 @@ if [[ -f "$ENV_FILE" ]]; then
     set +a
 fi
 
+# Optional email notifications (Resend)
+if [[ -f "${SCRIPT_DIR}/notify-email.sh" ]]; then
+    source "${SCRIPT_DIR}/notify-email.sh"
+fi
+
 # Configuration
 BACKUP_DIR="/tmp/yearofbingo-backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="yearofbingo_${TIMESTAMP}.sql.gz.gpg"
 R2_BUCKET="${R2_BUCKET:-yearofbingo-backups}"
+CURRENT_STEP="init"
 
 # Database connection
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USER="${DB_USER:-bingo}"
 DB_NAME="${DB_NAME:-yearofbingo}"
+
+# Notify on failure (best-effort)
+on_error() {
+    local exit_code=$?
+    set +e
+    local when
+    when="$(date '+%Y-%m-%d %H:%M:%S %Z')"
+    if declare -F notify_email &>/dev/null; then
+        notify_email "Year of Bingo backup FAILED (${HOSTNAME})" \
+            "Timestamp: ${when}
+Hostname: ${HOSTNAME}
+Backup file: ${BACKUP_FILE}
+Step: ${CURRENT_STEP}
+Exit code: ${exit_code}
+Bucket: ${R2_BUCKET}
+
+Action required: Check backup system immediately." || true
+    fi
+    exit "$exit_code"
+}
+trap on_error ERR
 
 # Validation
 if [[ -z "${DB_PASSWORD:-}" ]]; then
@@ -51,6 +79,7 @@ fi
 mkdir -p "$BACKUP_DIR"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting backup..."
+CURRENT_STEP="dump"
 
 # For containerized PostgreSQL, connect via podman if localhost
 if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
@@ -97,9 +126,11 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Backup created: ${BACKUP_FILE} (${BACKUP_SI
 
 # Upload to R2
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Uploading to R2..."
+CURRENT_STEP="upload"
 rclone copy "${BACKUP_DIR}/${BACKUP_FILE}" "r2:${R2_BUCKET}/" --progress
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Upload complete"
+CURRENT_STEP="cleanup"
 
 # Clean up local file
 rm -f "${BACKUP_DIR}/${BACKUP_FILE}"
@@ -107,3 +138,15 @@ rm -f "${BACKUP_DIR}/${BACKUP_FILE}"
 # Note: R2 lifecycle policy handles retention (30 days protected, auto-delete at 31 days)
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Backup completed successfully"
+if declare -F notify_email &>/dev/null; then
+    if [[ "${BACKUP_NOTIFY_SUCCESS:-1}" != "0" ]]; then
+        notify_email "Year of Bingo backup SUCCEEDED (${HOSTNAME})" \
+            "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Hostname: ${HOSTNAME}
+Backup file: ${BACKUP_FILE}
+Size: ${BACKUP_SIZE}
+Bucket: ${R2_BUCKET}
+
+Status: OK" || true
+    fi
+fi
