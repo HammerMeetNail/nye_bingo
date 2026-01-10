@@ -5109,7 +5109,7 @@ const App = {
         } else if (rawUrl.startsWith('/')) {
           shareUrl = `${window.location.origin}${rawUrl}`;
         } else {
-          shareUrl = `${window.location.origin}#share/${rawUrl}`;
+          shareUrl = `${window.location.origin}/s/${rawUrl}`;
         }
       }
       const input = document.getElementById('share-link-input');

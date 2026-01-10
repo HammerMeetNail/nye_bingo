@@ -9,6 +9,8 @@ Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `POST /api/cards/{id}/swap`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 
+Public share: `GET /api/share/{token}` (JSON shared card), `GET /s/{token}` (HTML OpenGraph landing + redirect to `/#share/{token}`), `GET /og/share/{token}.png` (PNG preview), `GET /og/default.png` (default preview)
+
 Suggestions: `GET /api/suggestions`, `GET /api/suggestions/categories`
 
 Friends: `GET /api/friends`, `GET /api/friends/search`, `POST /api/friends/requests`, `PUT /api/friends/requests/{id}/{accept,reject}`, `DELETE /api/friends/requests/{id}/cancel`, `DELETE /api/friends/{id}`, `GET /api/friends/{id}/card`, `GET /api/friends/{id}/cards`

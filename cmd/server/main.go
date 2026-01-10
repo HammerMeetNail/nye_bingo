@@ -127,6 +127,11 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
+	sharePublicHandler, err := handlers.NewSharePublicHandler("web/templates", cardService)
+	if err != nil {
+		return fmt.Errorf("loading share templates: %w", err)
+	}
+	shareOGImageHandler := handlers.NewShareOGImageHandler(cardService)
 	ogImageHandler := handlers.NewOGImageHandler()
 
 	if err := notificationService.CleanupOld(context.Background()); err != nil {
@@ -338,6 +343,10 @@ func run() error {
 
 	// OpenGraph images (public)
 	mux.Handle("GET /og/default.png", http.HandlerFunc(ogImageHandler.Default))
+	mux.Handle("GET /og/share/{token}", http.HandlerFunc(shareOGImageHandler.Serve))
+
+	// Public share landing page (for link unfurls)
+	mux.Handle("GET /s/{token}", http.HandlerFunc(sharePublicHandler.Serve))
 
 	// API Docs redirect
 	mux.Handle("GET /api/docs", http.RedirectHandler("/static/swagger/index.html", http.StatusFound))

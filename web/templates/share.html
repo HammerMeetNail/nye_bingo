@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.PageTitle}}</title>
+  <meta name="robots" content="noindex,nofollow">
+  <meta http-equiv="refresh" content="0; url={{.RedirectPath}}">
+
+  {{- if .Found }}
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Year of Bingo">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:title" content="{{.OGTitle}}">
+  <meta property="og:description" content="{{.OGDescription}}">
+  <meta property="og:url" content="{{.OGURL}}">
+  <meta property="og:image" content="{{.OGImage}}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{.OGImageAlt}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{.OGTitle}}">
+  <meta name="twitter:description" content="{{.OGDescription}}">
+  <meta name="twitter:image" content="{{.OGImage}}">
+  {{- end }}
+
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎯</text></svg>">
+</head>
+<body>
+  <main class="container main-content">
+    <div class="card text-center">
+      {{- if .Found }}
+        <h2>Opening shared card…</h2>
+        <p class="text-muted mb-lg">If you aren’t redirected automatically, open the shared card below.</p>
+        <a href="{{.RedirectPath}}" class="btn btn-primary">Open shared card</a>
+      {{- else }}
+        <h2>Share Link Not Found</h2>
+        <p class="text-muted mb-lg">{{.ErrorMessage}}</p>
+        <a href="/#home" class="btn btn-primary">Back to Home</a>
+      {{- end }}
+    </div>
+  </main>
+</body>
+</html>
+

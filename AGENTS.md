@@ -11,6 +11,10 @@ Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE s
 - One active share link per card; users can revoke and re-enable to rotate.
 - Links can expire (default is never).
 - Shared view shows completion state but hides item notes.
+- Share URLs for humans/scrapers use `GET /s/{token}` (server-routable for OpenGraph unfurls) and redirect to the SPA view `/#share/{token}` (legacy hash links still work but won't unfurl).
+- OpenGraph images:
+  - Default site preview: `GET /og/default.png`
+  - Per-share preview: `GET /og/share/{token}.png` (renders card content + completion state; no notes)
 
 ## Account Export + Deletion
 - Profile page includes data export (ZIP of CSVs) and a Danger Zone delete flow.
