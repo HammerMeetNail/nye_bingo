@@ -15,7 +15,7 @@ test('account delete invalidates share links', async ({ page }, testInfo) => {
   await expect(page.locator('#share-modal-content')).toBeVisible();
   await page.getByRole('button', { name: 'Enable Sharing' }).click();
   const shareInput = page.locator('#share-link-input');
-  await expect(shareInput).toHaveValue(/#share\//);
+  await expect(shareInput).toHaveValue(/\/s\//);
   const shareUrl = await shareInput.inputValue();
   await page.keyboard.press('Escape');
 

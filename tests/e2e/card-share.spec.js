@@ -29,11 +29,14 @@ test('share links show read-only cards and escape XSS goals', async ({ browser }
   const shareInput = page.locator('#share-link-input');
   await expect(shareInput).toBeVisible();
   const shareLink = await shareInput.inputValue();
-  expect(shareLink).toContain('#share/');
+  expect(shareLink).toContain('/s/');
+  const token = shareLink.split('/s/')[1];
+  expect(token).toBeTruthy();
+  const shareHashLink = `${new URL(shareLink).origin}/#share/${token}`;
 
   const publicContext = await browser.newContext();
   const publicPage = await publicContext.newPage();
-  await publicPage.goto(shareLink);
+  await publicPage.goto(shareHashLink);
 
   await expect(publicPage.locator('.finalized-card-view')).toBeVisible();
   await expect(publicPage.locator('.badge').filter({ hasText: 'Shared view' })).toBeVisible();
@@ -63,6 +66,10 @@ test('revoked share links no longer work', async ({ browser }, testInfo) => {
   const shareInput = page.locator('#share-link-input');
   await expect(shareInput).toBeVisible();
   const shareLink = await shareInput.inputValue();
+  expect(shareLink).toContain('/s/');
+  const token = shareLink.split('/s/')[1];
+  expect(token).toBeTruthy();
+  const shareHashLink = `${new URL(shareLink).origin}/#share/${token}`;
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Disable Sharing' }).click();
@@ -70,7 +77,7 @@ test('revoked share links no longer work', async ({ browser }, testInfo) => {
 
   const publicContext = await browser.newContext();
   const publicPage = await publicContext.newPage();
-  await publicPage.goto(shareLink);
+  await publicPage.goto(shareHashLink);
   await expect(publicPage.getByRole('heading', { name: 'Share Link Not Found' })).toBeVisible();
 
   await publicContext.close();

@@ -138,6 +138,8 @@
   - Document responses include strict CSP (no `unsafe-inline` / `unsafe-hashes` for scripts).
 - `tests/e2e/opengraph-unfurl.spec.js`
   - Document responses include OpenGraph/Twitter metadata and the OG image URL is public + returns a PNG.
+- `tests/e2e/share-opengraph.spec.js`
+  - Share landing pages (`/s/{token}`) include card-specific OpenGraph metadata and the og:image URL changes when progress updates.
 
 ## Unit Test Separation
 - Add make targets:

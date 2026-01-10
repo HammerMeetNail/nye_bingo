@@ -155,7 +155,7 @@ components:
           type: boolean
         url:
           type: string
-          description: Share token used to build the share URL (#share/{token})
+          description: Share token used to build the share URL (/s/{token}; legacy /#share/{token})
         created_at:
           type: string
           format: date-time
@@ -2132,6 +2132,53 @@ paths:
                 properties:
                   error:
                     type: string
+  /s/{token}:
+    get:
+      summary: Share landing page (OpenGraph)
+      description: Public HTML landing page used for link previews (OpenGraph/Twitter) and redirecting users to the SPA share view.
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: HTML page containing OpenGraph tags for the shared card
+          content:
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Share link not found or malformed
+          content:
+            text/html:
+              schema:
+                type: string
+  /og/share/{token}.png:
+    get:
+      summary: Shared card OpenGraph image
+      description: Public PNG image representing the shared card state (no notes).
+      security: []
+      parameters:
+        - in: path
+          name: token
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: PNG image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Not modified
+        '404':
+          description: Share link not found or malformed
   /suggestions:
     get:
       summary: Get random suggestions
