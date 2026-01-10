@@ -152,6 +152,13 @@ systemctl status yearofbingo-backup.timer
 journalctl -u yearofbingo-backup.service
 ```
 
+If verification fails with a restore error, run a manual test for full output:
+```bash
+./scripts/test-backup.sh --latest
+```
+
+Note: `pg_dump` plain SQL includes a leading `\connect <db>`; if `/opt/yearofbingo/.env` has a stale `DB_NAME` (e.g. `nye_bingo`), backups may target a different database than expected.
+
 **Manual backup:**
 ```bash
 ./scripts/backup.sh

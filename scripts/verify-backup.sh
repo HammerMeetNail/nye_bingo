@@ -27,6 +27,7 @@ TEST_CONTAINER="yearofbingo-backup-verify"
 TEST_DB_PASSWORD="verify_password_$(date +%s)"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 ERROR_FILE="BACKUP_VERIFICATION_FAILED_${TIMESTAMP}.txt"
+TEST_DB_NAME=""
 
 # Validation
 if [[ -z "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
@@ -55,6 +56,7 @@ BACKUP VERIFICATION FAILED
 Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')
 Hostname: $(hostname)
 Backup file: ${BACKUP_FILE:-unknown}
+Test database: ${TEST_DB_NAME:-unknown}
 
 Error:
 ${error_message}
@@ -73,8 +75,10 @@ EOF
 # Cleanup function
 cleanup() {
     podman rm -f "$TEST_CONTAINER" 2>/dev/null || true
-    rm -f "${BACKUP_DIR}/${BACKUP_FILE}" 2>/dev/null || true
+    rm -f "${BACKUP_DIR}/${BACKUP_FILE:-}" 2>/dev/null || true
     rm -f "${BACKUP_DIR}/verify_restore.sql" 2>/dev/null || true
+    rm -f "${BACKUP_DIR}/verify_restore_psql.log" 2>/dev/null || true
+    rm -f "${BACKUP_DIR}/verify_decrypt.log" 2>/dev/null || true
 }
 trap cleanup EXIT
 
@@ -97,8 +101,13 @@ fi
 
 # Step 2: Decrypt
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Decrypting backup..."
-if ! gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" 2>/dev/null | gunzip > "${BACKUP_DIR}/verify_restore.sql" 2>&1; then
-    write_error "Failed to decrypt/decompress backup. Encryption key may be wrong or file corrupted."
+DECRYPT_LOG="${BACKUP_DIR}/verify_decrypt.log"
+if ! gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" 2>"$DECRYPT_LOG" \
+    | gunzip > "${BACKUP_DIR}/verify_restore.sql" 2>>"$DECRYPT_LOG"; then
+    write_error "Failed to decrypt/decompress backup. Encryption key may be wrong or file corrupted.
+
+Decrypt output (tail):
+$(tail -n 80 "$DECRYPT_LOG" 2>/dev/null || true)"
 fi
 
 SQL_SIZE=$(stat -f%z "${BACKUP_DIR}/verify_restore.sql" 2>/dev/null || stat -c%s "${BACKUP_DIR}/verify_restore.sql" 2>/dev/null)
@@ -106,25 +115,38 @@ if [[ "$SQL_SIZE" -lt 1000 ]]; then
     write_error "Decrypted SQL file too small (${SQL_SIZE} bytes). Backup may be corrupted."
 fi
 
+# Derive database name from dump (pg_dump includes a leading \connect).
+TEST_DB_NAME="$(
+    awk '
+        match($0, /^\\\\connect( -reuse-previous=on)?[[:space:]]+\"?([^\"[:space:]]+)\"?/, m) { print m[2]; exit }
+    ' "${BACKUP_DIR}/verify_restore.sql" 2>/dev/null || true
+)"
+TEST_DB_NAME="${TEST_DB_NAME:-yearofbingo}"
+
 # Step 3: Start test container
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting test PostgreSQL container..."
 if ! podman run -d \
     --name "$TEST_CONTAINER" \
     -e POSTGRES_USER=bingo \
     -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
-    -e POSTGRES_DB=yearofbingo \
+    -e POSTGRES_DB="$TEST_DB_NAME" \
     docker.io/library/postgres:16-alpine 2>&1; then
     write_error "Failed to start test PostgreSQL container"
 fi
 
-# Wait for PostgreSQL
+# Wait for PostgreSQL (pg_isready can report ready during init/restart)
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Waiting for PostgreSQL..."
-for i in {1..30}; do
-    if podman exec "$TEST_CONTAINER" pg_isready -U bingo -d yearofbingo &>/dev/null; then
+for i in {1..60}; do
+    if podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
+        psql -U bingo -d "$TEST_DB_NAME" -c "SELECT 1" &>/dev/null; then
         break
     fi
-    if [[ $i -eq 30 ]]; then
-        write_error "Test PostgreSQL container failed to become ready"
+    if [[ $i -eq 60 ]]; then
+        POSTGRES_LOG_TAIL="$(podman logs --tail 120 "$TEST_CONTAINER" 2>&1 || true)"
+        write_error "Test PostgreSQL container failed to become ready
+
+postgres logs (tail):
+${POSTGRES_LOG_TAIL}"
     fi
     sleep 1
 done
@@ -132,27 +154,36 @@ done
 # Step 4: Restore
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Restoring to test container..."
 if ! podman exec -i -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d yearofbingo < "${BACKUP_DIR}/verify_restore.sql" &>/dev/null; then
-    write_error "Failed to restore backup to test database"
+    psql -U bingo -d "$TEST_DB_NAME" -v ON_ERROR_STOP=1 -v VERBOSITY=terse -v SHOW_CONTEXT=never \
+    < "${BACKUP_DIR}/verify_restore.sql" > "${BACKUP_DIR}/verify_restore_psql.log" 2>&1; then
+    POSTGRES_LOG_TAIL="$(podman logs --tail 120 "$TEST_CONTAINER" 2>&1 || true)"
+    write_error "Failed to restore backup to test database
+
+psql output (tail):
+$(tail -n 120 "${BACKUP_DIR}/verify_restore_psql.log" 2>/dev/null || true)
+
+postgres logs (tail):
+${POSTGRES_LOG_TAIL}"
 fi
 
 # Step 5: Validate
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Validating data..."
 USER_COUNT=$(podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d yearofbingo -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d ' ')
+    psql -U bingo -d "$TEST_DB_NAME" -t -c "SELECT COUNT(*) FROM users;" 2>/dev/null | tr -d ' \n')
 
 if [[ -z "$USER_COUNT" ]] || [[ "$USER_COUNT" -lt 0 ]]; then
     write_error "Failed to query users table - restore may have failed"
 fi
 
 CARD_COUNT=$(podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d yearofbingo -t -c "SELECT COUNT(*) FROM bingo_cards;" 2>/dev/null | tr -d ' ')
+    psql -U bingo -d "$TEST_DB_NAME" -t -c "SELECT COUNT(*) FROM bingo_cards;" 2>/dev/null | tr -d ' \n')
 
 echo ""
 echo "=========================================="
 echo "BACKUP VERIFICATION PASSED"
 echo "=========================================="
 echo "Backup: ${BACKUP_FILE}"
+echo "Database: ${TEST_DB_NAME}"
 echo "Users: ${USER_COUNT}"
 echo "Cards: ${CARD_COUNT}"
 echo "Verified: $(date '+%Y-%m-%d %H:%M:%S %Z')"

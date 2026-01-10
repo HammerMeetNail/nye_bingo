@@ -30,6 +30,7 @@ BACKUP_DIR="/tmp/yearofbingo-backups"
 R2_BUCKET="${R2_BUCKET:-yearofbingo-backups}"
 TEST_CONTAINER="yearofbingo-backup-test"
 TEST_DB_PASSWORD="test_password_$(date +%s)"
+TEST_DB_NAME=""
 
 # Validation
 if [[ -z "${BACKUP_ENCRYPTION_KEY:-}" ]]; then
@@ -51,14 +52,14 @@ fi
 cleanup() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Cleaning up..."
     podman rm -f "$TEST_CONTAINER" 2>/dev/null || true
-    rm -f "${BACKUP_DIR}/${BACKUP_FILE}" 2>/dev/null || true
-    rm -f "${BACKUP_DIR}/${BACKUP_FILE%.gpg}" 2>/dev/null || true
+    rm -f "${BACKUP_DIR}/${BACKUP_FILE:-}" 2>/dev/null || true
+    rm -f "${BACKUP_DIR}/test_restore.sql" 2>/dev/null || true
 }
 trap cleanup EXIT
 
 # Get latest backup filename
 get_latest() {
-    rclone ls "r2:${R2_BUCKET}/" | sort -k2 | tail -1 | awk '{print $2}'
+    rclone ls "r2:${R2_BUCKET}/" | grep -E '\.sql\.gz\.gpg$' | sort -k2 | tail -1 | awk '{print $2}'
 }
 
 # Handle arguments
@@ -74,7 +75,7 @@ else
     echo "Usage: ./test-backup.sh [backup_filename | --latest]"
     echo ""
     echo "Available backups:"
-    rclone ls "r2:${R2_BUCKET}/" | sort -k2 | tail -10
+    rclone ls "r2:${R2_BUCKET}/" | grep -E '\.sql\.gz\.gpg$' | sort -k2 | tail -10
     exit 1
 fi
 
@@ -97,19 +98,28 @@ gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BAC
 SQL_SIZE=$(du -h "${BACKUP_DIR}/test_restore.sql" | cut -f1)
 echo "  Decrypted SQL size: ${SQL_SIZE}"
 
+# Derive database name from dump (pg_dump includes a leading \connect).
+TEST_DB_NAME="$(
+    awk '
+        match($0, /^\\\\connect( -reuse-previous=on)?[[:space:]]+\"?([^\"[:space:]]+)\"?/, m) { print m[2]; exit }
+    ' "${BACKUP_DIR}/test_restore.sql" 2>/dev/null || true
+)"
+TEST_DB_NAME="${TEST_DB_NAME:-yearofbingo}"
+
 # Step 3: Start temporary PostgreSQL
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Step 3/5: Starting temporary PostgreSQL container..."
 podman run -d \
     --name "$TEST_CONTAINER" \
     -e POSTGRES_USER=bingo \
     -e POSTGRES_PASSWORD="$TEST_DB_PASSWORD" \
-    -e POSTGRES_DB=nye_bingo \
+    -e POSTGRES_DB="$TEST_DB_NAME" \
     docker.io/library/postgres:16-alpine
 
 # Wait for PostgreSQL to be ready
 echo "  Waiting for PostgreSQL to be ready..."
-for i in {1..30}; do
-    if podman exec "$TEST_CONTAINER" pg_isready -U bingo -d nye_bingo &>/dev/null; then
+for i in {1..60}; do
+    if podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
+        psql -U bingo -d "$TEST_DB_NAME" -c "SELECT 1" &>/dev/null; then
         break
     fi
     sleep 1
@@ -118,7 +128,7 @@ done
 # Step 4: Restore backup
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Step 4/5: Restoring backup to test container..."
 podman exec -i -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d nye_bingo < "${BACKUP_DIR}/test_restore.sql"
+    psql -U bingo -d "$TEST_DB_NAME" < "${BACKUP_DIR}/test_restore.sql"
 
 # Step 5: Validate data
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Step 5/5: Validating restored data..."
@@ -129,7 +139,7 @@ echo "=========================================="
 
 # Run validation queries
 podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d nye_bingo -c "
+    psql -U bingo -d "$TEST_DB_NAME" -c "
     SELECT 'Users' as table_name, COUNT(*) as count FROM users
     UNION ALL
     SELECT 'Bingo Cards', COUNT(*) FROM bingo_cards
@@ -149,7 +159,7 @@ podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
 echo ""
 echo "Most recent card created:"
 podman exec -e PGPASSWORD="$TEST_DB_PASSWORD" "$TEST_CONTAINER" \
-    psql -U bingo -d nye_bingo -c "
+    psql -U bingo -d "$TEST_DB_NAME" -c "
     SELECT id, year, is_finalized, created_at
     FROM bingo_cards
     ORDER BY created_at DESC
