@@ -31,4 +31,3 @@ func TestOGImageHandler_Default(t *testing.T) {
 		t.Fatalf("expected response body to be a valid PNG: %v", err)
 	}
 }
-
