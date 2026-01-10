@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,13 @@ func TestPageHandler_IndexAndErrors(t *testing.T) {
 		}
 		if ct := rr.Header().Get("Content-Type"); ct == "" {
 			t.Fatalf("expected content-type to be set")
+		}
+		body := rr.Body.String()
+		if body == "" {
+			t.Fatalf("expected response body to be set")
+		}
+		if !containsAll(body, []string{`property="og:image"`, `/og/default.png`, `name="twitter:card"`}) {
+			t.Fatalf("expected OpenGraph/Twitter meta tags to be present")
 		}
 	})
 
@@ -75,4 +83,13 @@ func TestPageHandler_Index_TemplateError(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("expected status 500, got %d", rr.Code)
 	}
+}
+
+func containsAll(s string, needles []string) bool {
+	for _, needle := range needles {
+		if !strings.Contains(s, needle) {
+			return false
+		}
+	}
+	return true
 }
