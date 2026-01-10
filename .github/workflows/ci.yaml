@@ -453,6 +453,8 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          BACKUP_NOTIFY_EMAILS: ${{ secrets.BACKUP_NOTIFY_EMAILS }}
           BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -485,6 +487,7 @@ jobs:
 
           # Copy compose file to server via tunnel
           scp compose.server.deploy.yaml ssh.yearofbingo.com:/opt/yearofbingo/compose.yaml
+          scp scripts/*.sh ssh.yearofbingo.com:/opt/yearofbingo/scripts/
 
           # Deploy via tunnel
           ssh ssh.yearofbingo.com << EOF
@@ -495,10 +498,13 @@ jobs:
           DB_PASSWORD=${DB_PASSWORD}
           REDIS_PASSWORD=${REDIS_PASSWORD}
           RESEND_API_KEY=${RESEND_API_KEY}
+          EMAIL_FROM_ADDRESS=${EMAIL_FROM_ADDRESS}
+          BACKUP_NOTIFY_EMAILS=${BACKUP_NOTIFY_EMAILS}
           GEMINI_API_KEY=${GEMINI_API_KEY}
           BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
           ENVFILE
             chmod 600 .env
+            chmod 0755 scripts/*.sh
 
             # Create/update rclone config for R2 backups
             mkdir -p ~/.config/rclone

@@ -150,6 +150,7 @@ PostgreSQL backups are stored in Cloudflare R2 (S3-compatible, 10GB free tier). 
 - Set `BACKUP_NOTIFY_EMAILS` to a comma-separated list of recipients (requires `RESEND_API_KEY` and `EMAIL_FROM_ADDRESS`).
 - Backup success emails are sent by default; set `BACKUP_NOTIFY_SUCCESS=0` to disable.
 - Verification success emails are off by default; set `BACKUP_NOTIFY_VERIFY_SUCCESS=1` to enable. Verification failures always email (when `BACKUP_NOTIFY_EMAILS` is set).
+Note: Production `.env` is written by CI deploy; set `EMAIL_FROM_ADDRESS` and `BACKUP_NOTIFY_EMAILS` in GitHub repo secrets so they persist across deploys.
 
 Check status:
 ```bash
