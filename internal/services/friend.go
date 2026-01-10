@@ -49,6 +49,7 @@ func (s *FriendService) SearchUsers(ctx context.Context, currentUserID uuid.UUID
 		 WHERE id != $1
 		   AND LOWER(username) LIKE $2
 		   AND searchable = true
+		   AND deleted_at IS NULL
 		   AND NOT EXISTS (
 		     SELECT 1 FROM user_blocks
 		     WHERE (blocker_id = $1 AND blocked_id = users.id)
@@ -285,8 +286,8 @@ func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]mo
 		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at,
 		        CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END
 		 FROM friendships f
-		 JOIN users u1 ON f.user_id = u1.id
-		 JOIN users u2 ON f.friend_id = u2.id
+		 JOIN users u1 ON f.user_id = u1.id AND u1.deleted_at IS NULL
+		 JOIN users u2 ON f.friend_id = u2.id AND u2.deleted_at IS NULL
 		 WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 'accepted'
 		 ORDER BY CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END`,
 		userID,
@@ -316,7 +317,7 @@ func (s *FriendService) ListPendingRequests(ctx context.Context, userID uuid.UUI
 	rows, err := s.db.Query(ctx,
 		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.username
 		 FROM friendships f
-		 JOIN users u ON f.user_id = u.id
+		 JOIN users u ON f.user_id = u.id AND u.deleted_at IS NULL
 		 WHERE f.friend_id = $1 AND f.status = 'pending'
 		 ORDER BY f.created_at DESC`,
 		userID,
@@ -346,7 +347,7 @@ func (s *FriendService) ListSentRequests(ctx context.Context, userID uuid.UUID) 
 	rows, err := s.db.Query(ctx,
 		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at, u.username
 		 FROM friendships f
-		 JOIN users u ON f.friend_id = u.id
+		 JOIN users u ON f.friend_id = u.id AND u.deleted_at IS NULL
 		 WHERE f.user_id = $1 AND f.status = 'pending'
 		 ORDER BY f.created_at DESC`,
 		userID,
@@ -376,9 +377,11 @@ func (s *FriendService) IsFriend(ctx context.Context, userID, otherUserID uuid.U
 	var isFriend bool
 	err := s.db.QueryRow(ctx,
 		`SELECT EXISTS(
-			SELECT 1 FROM friendships
-			WHERE ((user_id = $1 AND friend_id = $2) OR (user_id = $2 AND friend_id = $1))
-			  AND status = 'accepted'
+			SELECT 1 FROM friendships f
+			JOIN users u1 ON f.user_id = u1.id AND u1.deleted_at IS NULL
+			JOIN users u2 ON f.friend_id = u2.id AND u2.deleted_at IS NULL
+			WHERE ((f.user_id = $1 AND f.friend_id = $2) OR (f.user_id = $2 AND f.friend_id = $1))
+			  AND f.status = 'accepted'
 		)`,
 		userID, otherUserID,
 	).Scan(&isFriend)
@@ -413,8 +416,11 @@ func (s *FriendService) GetFriendUserID(ctx context.Context, currentUserID, frie
 func (s *FriendService) getByID(ctx context.Context, friendshipID uuid.UUID) (*models.Friendship, error) {
 	friendship := &models.Friendship{}
 	err := s.db.QueryRow(ctx,
-		`SELECT id, user_id, friend_id, status, created_at
-		 FROM friendships WHERE id = $1`,
+		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at
+		 FROM friendships f
+		 JOIN users u1 ON f.user_id = u1.id AND u1.deleted_at IS NULL
+		 JOIN users u2 ON f.friend_id = u2.id AND u2.deleted_at IS NULL
+		 WHERE f.id = $1`,
 		friendshipID,
 	).Scan(&friendship.ID, &friendship.UserID, &friendship.FriendID, &friendship.Status, &friendship.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -118,7 +118,7 @@ func (s *BlockService) ListBlocked(ctx context.Context, blockerID uuid.UUID) ([]
 	rows, err := s.db.Query(ctx,
 		`SELECT u.id, u.username, ub.created_at
 		 FROM user_blocks ub
-		 JOIN users u ON ub.blocked_id = u.id
+		 JOIN users u ON ub.blocked_id = u.id AND u.deleted_at IS NULL
 		 WHERE ub.blocker_id = $1
 		 ORDER BY u.username`,
 		blockerID,

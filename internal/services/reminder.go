@@ -612,7 +612,7 @@ func (s *ReminderService) runDueCheckins(ctx context.Context, now time.Time, lim
 		       r.include_recommendations, r.next_send_at
 		  FROM card_checkin_reminders r
 		  JOIN reminder_settings s ON s.user_id = r.user_id
-		  JOIN users u ON u.id = r.user_id
+		  JOIN users u ON u.id = r.user_id AND u.deleted_at IS NULL
 		 WHERE r.enabled = true
 		   AND r.next_send_at <= $1
 		   AND s.email_enabled = true
@@ -675,7 +675,7 @@ func (s *ReminderService) runDueGoals(ctx context.Context, now time.Time, limit 
 		SELECT gr.id, gr.user_id, gr.card_id, gr.item_id, gr.kind, gr.schedule, gr.next_send_at
 		  FROM goal_reminders gr
 		  JOIN reminder_settings s ON s.user_id = gr.user_id
-		  JOIN users u ON u.id = gr.user_id
+		  JOIN users u ON u.id = gr.user_id AND u.deleted_at IS NULL
 		 WHERE gr.enabled = true
 		   AND gr.next_send_at <= $1
 		   AND s.email_enabled = true
@@ -1130,7 +1130,7 @@ func (s *ReminderService) loadSettings(ctx context.Context, userID uuid.UUID) (*
 
 func (s *ReminderService) isEmailVerified(ctx context.Context, userID uuid.UUID) (bool, error) {
 	var verified bool
-	if err := s.db.QueryRow(ctx, "SELECT email_verified FROM users WHERE id = $1", userID).Scan(&verified); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT email_verified FROM users WHERE id = $1 AND deleted_at IS NULL", userID).Scan(&verified); err != nil {
 		return false, fmt.Errorf("load email verification: %w", err)
 	}
 	return verified, nil
@@ -1324,7 +1324,7 @@ func (s *ReminderService) loadItemsForCardTx(ctx context.Context, tx Tx, cardID 
 
 func (s *ReminderService) loadUserEmail(ctx context.Context, userID uuid.UUID) (string, error) {
 	var email string
-	if err := s.db.QueryRow(ctx, "SELECT email FROM users WHERE id = $1", userID).Scan(&email); err != nil {
+	if err := s.db.QueryRow(ctx, "SELECT email FROM users WHERE id = $1 AND deleted_at IS NULL", userID).Scan(&email); err != nil {
 		return "", fmt.Errorf("load user email: %w", err)
 	}
 	return email, nil
@@ -1351,7 +1351,7 @@ func (s *ReminderService) loadGoalReminderContext(ctx context.Context, userID, i
 		       rs.daily_email_cap
 		  FROM bingo_items i
 		  JOIN bingo_cards c ON c.id = i.card_id
-		  JOIN users u ON u.id = c.user_id
+		  JOIN users u ON u.id = c.user_id AND u.deleted_at IS NULL
 		  JOIN reminder_settings rs ON rs.user_id = u.id
 		 WHERE i.id = $1 AND c.user_id = $2`,
 		itemID,

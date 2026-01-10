@@ -301,6 +301,40 @@ func TestAuthService_ValidateSession_RedisHit(t *testing.T) {
 	}
 }
 
+func TestAuthService_ValidateSession_FiltersDeletedUsers(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if !strings.Contains(sql, "deleted_at IS NULL") {
+				t.Fatalf("expected deleted_at filter in query, got %q", sql)
+			}
+			return rowFromValues(
+				userID,
+				"user@example.com",
+				"hash",
+				"user",
+				false,
+				nil,
+				0,
+				true,
+				time.Now(),
+				time.Now(),
+			)
+		},
+	}
+
+	redis := &fakeRedis{
+		getValue: userID.String(),
+	}
+
+	auth := NewAuthService(db, redis)
+	if _, err := auth.ValidateSession(ctx, "token"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestAuthService_ValidateSession_DBExpired(t *testing.T) {
 	ctx := context.Background()
 	userID := uuid.New()

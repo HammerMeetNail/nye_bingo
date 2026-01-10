@@ -169,7 +169,7 @@ func (s *NotificationService) List(ctx context.Context, userID uuid.UUID, params
 		        n.friendship_id, n.card_id, c.title, c.year, n.bingo_count,
 		        n.in_app_delivered, n.email_delivered, n.email_sent_at, n.read_at, n.created_at
 		 FROM notifications n
-		 LEFT JOIN users au ON n.actor_user_id = au.id
+		 LEFT JOIN users au ON n.actor_user_id = au.id AND au.deleted_at IS NULL
 		 LEFT JOIN bingo_cards c ON n.card_id = c.id
 		 WHERE %s
 		 ORDER BY n.created_at DESC
@@ -329,6 +329,7 @@ func (s *NotificationService) notifySingle(ctx context.Context, recipientID, act
 		 FROM users u
 		 LEFT JOIN notification_settings ns ON ns.user_id = u.id
 		 WHERE u.id = $1
+		   AND u.deleted_at IS NULL
 		   AND ((%s AND %s) OR (%s AND %s AND u.email_verified))
 		   AND NOT EXISTS (
 		     SELECT 1 FROM user_blocks
@@ -387,7 +388,7 @@ func (s *NotificationService) notifyFriends(ctx context.Context, actorID, cardID
 		   WHERE status = 'accepted'
 		     AND (user_id = $1 OR friend_id = $1)
 		 ) AS f
-		 JOIN users u ON u.id = f.recipient_id
+		 JOIN users u ON u.id = f.recipient_id AND u.deleted_at IS NULL
 		 LEFT JOIN notification_settings ns ON ns.user_id = f.recipient_id
 		 WHERE ((%s AND %s) OR (%s AND %s AND u.email_verified))
 		   AND NOT EXISTS (
@@ -445,8 +446,8 @@ func (s *NotificationService) sendNotificationEmails(ctx context.Context, notifi
 	rows, err := s.db.Query(ctx,
 		`SELECT n.id, n.type, u.email, u.username, au.username, n.friendship_id, c.title, c.year, n.bingo_count
 		 FROM notifications n
-		 JOIN users u ON n.user_id = u.id
-		 LEFT JOIN users au ON n.actor_user_id = au.id
+		 JOIN users u ON n.user_id = u.id AND u.deleted_at IS NULL
+		 LEFT JOIN users au ON n.actor_user_id = au.id AND au.deleted_at IS NULL
 		 LEFT JOIN bingo_cards c ON n.card_id = c.id
 		 WHERE n.id = ANY($1) AND n.email_delivered = true`,
 		notificationIDs,

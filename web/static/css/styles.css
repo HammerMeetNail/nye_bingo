@@ -444,6 +444,17 @@ a:hover {
   color: var(--color-error);
 }
 
+.btn-danger {
+  background: var(--color-error);
+  color: white;
+  border: 1px solid var(--color-error);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
 .btn-lg {
   padding: var(--spacing-md) var(--spacing-xl);
   font-size: var(--font-size-base);
@@ -1740,6 +1751,14 @@ a:hover {
   min-height: 0;
 }
 
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
 .modal-close {
   background: none;
   border: none;
@@ -2024,6 +2043,31 @@ a:hover {
   margin: 0 0 var(--spacing-lg) 0;
   padding-bottom: var(--spacing-md);
   border-bottom: 1px solid var(--border);
+}
+
+.danger-zone {
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.danger-zone__warning {
+  color: var(--color-error);
+  font-weight: 600;
+  margin-bottom: var(--spacing-md);
+}
+
+.danger-zone__banner {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.danger-zone__list {
+  margin: 0 0 var(--spacing-lg) 1.25rem;
+  padding: 0;
+  color: var(--color-text-muted);
 }
 
 .profile-info-grid {

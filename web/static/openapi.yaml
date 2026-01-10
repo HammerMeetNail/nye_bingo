@@ -215,6 +215,24 @@ components:
           type: integer
         searchable:
           type: boolean
+    AccountDeleteRequest:
+      type: object
+      required:
+        - confirm_username
+        - password
+        - confirm
+      properties:
+        confirm_username:
+          type: string
+        password:
+          type: string
+        confirm:
+          type: boolean
+    AccountMessage:
+      type: object
+      properties:
+        message:
+          type: string
     BlockedUser:
       type: object
       properties:
@@ -486,6 +504,82 @@ paths:
                 properties:
                   user:
                     $ref: '#/components/schemas/User'
+  /account/export:
+    get:
+      summary: Export account data as ZIP
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: ZIP archive of account data
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Token authentication not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /account:
+    delete:
+      summary: Delete account
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountDeleteRequest'
+      responses:
+        '200':
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountMessage'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Token authentication not allowed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
   /blocks:
     get:
       summary: List blocked users

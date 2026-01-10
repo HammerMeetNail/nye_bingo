@@ -167,3 +167,9 @@ type ApiTokenServiceInterface interface {
 	Delete(ctx context.Context, userID uuid.UUID, tokenID uuid.UUID) error
 	DeleteAll(ctx context.Context, userID uuid.UUID) error
 }
+
+// AccountServiceInterface defines the contract for account export/delete operations.
+type AccountServiceInterface interface {
+	BuildExportZip(ctx context.Context, userID uuid.UUID) ([]byte, error)
+	Delete(ctx context.Context, userID uuid.UUID) error
+}

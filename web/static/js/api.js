@@ -68,8 +68,8 @@ const API = {
       if (!response.ok) {
         // Handle specific status codes
         if (response.status === 401) {
-          // Session expired - could trigger re-auth
-          throw new APIError('Session expired. Please log in again.', response.status, data);
+          const message = data?.error || 'Session expired. Please log in again.';
+          throw new APIError(message, response.status, data);
         }
         if (response.status === 403) {
           const isCSRFError = typeof data?.error === 'string' && data.error.toLowerCase().includes('csrf token');
@@ -102,6 +102,79 @@ const API = {
         throw error;
       }
       // Network error
+      if (!navigator.onLine) {
+        throw new APIError('No internet connection. Please check your network.', 0);
+      }
+      throw new APIError('Connection error. Please try again.', 0);
+    }
+  },
+
+  async requestBlob(method, path, body = null, options = {}) {
+    const headers = {};
+
+    if (this.csrfToken && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+      headers['X-CSRF-Token'] = this.csrfToken;
+    }
+
+    if (body && method !== 'GET') {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const fetchOptions = {
+      method,
+      headers,
+      credentials: 'same-origin',
+    };
+
+    if (body && method !== 'GET') {
+      fetchOptions.body = JSON.stringify(body);
+    }
+
+    const timeout = options.timeout || 30000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    fetchOptions.signal = controller.signal;
+
+    try {
+      const response = await fetch(path, fetchOptions);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type') || '';
+        let data = null;
+        if (contentType.includes('application/json')) {
+          const text = await response.text();
+          data = text ? JSON.parse(text) : {};
+        }
+
+        if (response.status === 401) {
+          const message = data?.error || 'Session expired. Please log in again.';
+          throw new APIError(message, response.status, data);
+        }
+        if (response.status === 403) {
+          const isCSRFError = typeof data?.error === 'string' && data.error.toLowerCase().includes('csrf token');
+          if (isCSRFError && !options.retried) {
+            await this.fetchCSRFToken();
+            return this.requestBlob(method, path, body, { ...options, retried: true });
+          }
+          throw new APIError(data?.error || 'Access denied.', response.status, data);
+        }
+        if (response.status >= 500) {
+          throw new APIError(data?.error || 'Server error. Please try again later.', response.status, data);
+        }
+        throw new APIError(data?.error || 'Request failed', response.status, data);
+      }
+
+      return response.blob();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error.name === 'AbortError') {
+        throw new APIError('Request timed out. Please check your connection.', 0);
+      }
+      if (error instanceof APIError) {
+        throw error;
+      }
       if (!navigator.onLine) {
         throw new APIError('No internet connection. Please check your network.', 0);
       }
@@ -165,6 +238,20 @@ const API = {
 
     async updateSearchable(searchable) {
       return API.request('PUT', '/api/auth/searchable', { searchable });
+    },
+  },
+
+  account: {
+    async export() {
+      return API.requestBlob('GET', '/api/account/export');
+    },
+
+    async delete(confirmUsername, password) {
+      return API.request('DELETE', '/api/account', {
+        confirm_username: confirmUsername,
+        password,
+        confirm: true,
+      });
     },
   },
 

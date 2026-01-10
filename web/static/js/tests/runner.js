@@ -113,6 +113,10 @@ function calculateProgress(completed, total) {
   return Math.round((completed / total) * 100);
 }
 
+function matchesDeleteAccountConfirmation(username, inputValue) {
+  return inputValue.trim() === username;
+}
+
 function checkBingo(grid) {
   const bingos = [];
 
@@ -240,6 +244,20 @@ describe('parseHash', () => {
   test('handles just #', () => {
     const result = parseHash('#');
     expect(result.page).toBe('home');
+  });
+});
+
+describe('matchesDeleteAccountConfirmation', () => {
+  test('matches after trimming whitespace', () => {
+    expect(matchesDeleteAccountConfirmation('user123', '  user123  ')).toBe(true);
+  });
+
+  test('is case sensitive', () => {
+    expect(matchesDeleteAccountConfirmation('User123', 'user123')).toBe(false);
+  });
+
+  test('rejects non-matching input', () => {
+    expect(matchesDeleteAccountConfirmation('user123', 'user124')).toBe(false);
   });
 });
 

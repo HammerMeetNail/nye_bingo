@@ -12,6 +12,13 @@ Cards support predefined grid sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE s
 - Links can expire (default is never).
 - Shared view shows completion state but hides item notes.
 
+## Account Export + Deletion
+- Profile page includes data export (ZIP of CSVs) and a Danger Zone delete flow.
+- Export is session-only (`GET /api/account/export`) and excludes secret/token material.
+- Delete is session-only (`DELETE /api/account`) with typed username + password confirmation.
+- Deletion is soft delete: `users.deleted_at` set, PII scrubbed, access tokens/sessions revoked.
+- Deleted users are filtered from auth, search, friends, shares, and notifications.
+
 ## Tech Stack
 - **Backend**: Go 1.24+ (std lib only), pgx/v5, go-redis/v9.
 - **Frontend**: Vanilla JS SPA (Hash routing), CSS variables.
