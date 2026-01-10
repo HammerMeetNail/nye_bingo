@@ -252,6 +252,38 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 	}
 }
 
+func TestSanitizeCSVValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "formula prefix with single quote inside",
+			input:    "=1+1'test",
+			expected: "'=1+1''test",
+		},
+		{
+			name:     "formula prefix without single quote",
+			input:    "=2+2",
+			expected: "'=2+2",
+		},
+		{
+			name:     "plain value unchanged",
+			input:    "hello",
+			expected: "hello",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeCSVValue(tt.input); got != tt.expected {
+				t.Fatalf("expected %q, got %q", tt.expected, got)
+			}
+		})
+	}
+}
+
 func firstLine(data []byte) string {
 	parts := strings.SplitN(string(data), "\n", 2)
 	return strings.TrimSpace(parts[0])
