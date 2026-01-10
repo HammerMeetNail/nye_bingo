@@ -237,7 +237,7 @@ Handler responsibilities:
 ### API client additions (`web/static/js/api.js`)
 Add:
 - `API.account.export()` → `GET /api/account/export` and return a `Blob` (ZIP)
-- `API.account.delete(confirmUsername, password)` → `DELETE /api/account` with JSON body
+- `API.account.delete(confirmUsername, password, confirm)` → `DELETE /api/account` with JSON body
 
 ### Profile UI + actions (`web/static/js/app.js`)
 In `renderProfile()`:

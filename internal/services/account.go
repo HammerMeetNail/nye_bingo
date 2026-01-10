@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -309,7 +310,7 @@ func sanitizeCSVValue(value string) string {
 	}
 	switch first {
 	case '=', '+', '-', '@':
-		return "'" + value
+		return "'" + strings.ReplaceAll(value, "'", "''")
 	case '\'':
 		return value
 	default:

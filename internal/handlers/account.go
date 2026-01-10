@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"mime"
 	"net/http"
 	"strings"
 	"time"
@@ -55,7 +56,7 @@ func (h *AccountHandler) Export(w http.ResponseWriter, r *http.Request) {
 
 	filename := "yearofbingo_account_export_" + time.Now().UTC().Format("2006-01-02") + ".zip"
 	w.Header().Set("Content-Type", "application/zip")
-	w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(data); err != nil {
 		log.Printf("Error writing account export: %v", err)
