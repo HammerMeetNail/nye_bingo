@@ -126,7 +126,7 @@ Server: `SERVER_HOST`, `SERVER_PORT`, `SERVER_SECURE`
 Database: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_SSLMODE`
 Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 Email: `EMAIL_PROVIDER`, `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `APP_BASE_URL`
-Backup: `BACKUP_ENCRYPTION_KEY`, `R2_BUCKET` (default: yearofbingo-backups)
+Backup: `BACKUP_ENCRYPTION_KEY`, `R2_BUCKET` (default: yearofbingo-backups), `BACKUP_NOTIFY_EMAILS`
 
 ## Database Backups
 
@@ -145,6 +145,11 @@ PostgreSQL backups are stored in Cloudflare R2 (S3-compatible, 10GB free tier). 
 - 4:00 AM - Verification (`yearofbingo-verify-backup.timer`)
 
 **Verification:** If daily verification fails, an error file `BACKUP_VERIFICATION_FAILED_*.txt` is written to the R2 bucket with details. Check the bucket periodically or set up Cloudflare notifications.
+
+**Email notifications (Resend):**
+- Set `BACKUP_NOTIFY_EMAILS` to a comma-separated list of recipients (requires `RESEND_API_KEY` and `EMAIL_FROM_ADDRESS`).
+- Backup success emails are sent by default; set `BACKUP_NOTIFY_SUCCESS=0` to disable.
+- Verification success emails are off by default; set `BACKUP_NOTIFY_VERIFY_SUCCESS=1` to enable. Verification failures always email (when `BACKUP_NOTIFY_EMAILS` is set).
 
 Check status:
 ```bash

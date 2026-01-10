@@ -12,12 +12,18 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${ENV_FILE:-/opt/yearofbingo/.env}"
+HOSTNAME="$(hostname)"
 
 # Load environment if available
 if [[ -f "$ENV_FILE" ]]; then
     set -a
     source "$ENV_FILE"
     set +a
+fi
+
+# Optional email notifications (Resend)
+if [[ -f "${SCRIPT_DIR}/notify-email.sh" ]]; then
+    source "${SCRIPT_DIR}/notify-email.sh"
 fi
 
 # Configuration
@@ -50,11 +56,27 @@ write_error() {
     local error_message="$1"
     local error_file="/tmp/${ERROR_FILE}"
 
+    if declare -F notify_email &>/dev/null; then
+        local safe_error
+        safe_error="$(printf '%s' "$error_message" | head -n 1)"
+        notify_email "Year of Bingo backup verification FAILED (${HOSTNAME})" \
+            "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Hostname: ${HOSTNAME}
+Backup file: ${BACKUP_FILE:-unknown}
+Test database: ${TEST_DB_NAME:-unknown}
+Bucket: ${R2_BUCKET}
+Report file: ${ERROR_FILE}
+
+Error: ${safe_error}
+
+Action required: Check backup system immediately." || true
+    fi
+
     cat > "$error_file" << EOF
 BACKUP VERIFICATION FAILED
 ==========================
 Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')
-Hostname: $(hostname)
+Hostname: ${HOSTNAME}
 Backup file: ${BACKUP_FILE:-unknown}
 Test database: ${TEST_DB_NAME:-unknown}
 
@@ -188,3 +210,17 @@ echo "Users: ${USER_COUNT}"
 echo "Cards: ${CARD_COUNT}"
 echo "Verified: $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "=========================================="
+
+if declare -F notify_email &>/dev/null; then
+    if [[ "${BACKUP_NOTIFY_VERIFY_SUCCESS:-0}" == "1" ]]; then
+        notify_email "Year of Bingo backup verification SUCCEEDED (${HOSTNAME})" \
+            "Timestamp: $(date '+%Y-%m-%d %H:%M:%S %Z')
+Hostname: ${HOSTNAME}
+Backup: ${BACKUP_FILE}
+Test database: ${TEST_DB_NAME}
+Users: ${USER_COUNT}
+Cards: ${CARD_COUNT}
+
+Status: OK" || true
+    fi
+fi
