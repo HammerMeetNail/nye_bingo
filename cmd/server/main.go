@@ -127,6 +127,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
+	ogImageHandler := handlers.NewOGImageHandler()
 
 	if err := notificationService.CleanupOld(context.Background()); err != nil {
 		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
@@ -334,6 +335,9 @@ func run() error {
 	mux.Handle("GET /r/img/{token}", http.HandlerFunc(reminderPublicHandler.ServeImage))
 	mux.Handle("GET /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeConfirm))
 	mux.Handle("POST /r/unsubscribe", http.HandlerFunc(reminderPublicHandler.UnsubscribeSubmit))
+
+	// OpenGraph images (public)
+	mux.Handle("GET /og/default.png", http.HandlerFunc(ogImageHandler.Default))
 
 	// API Docs redirect
 	mux.Handle("GET /api/docs", http.RedirectHandler("/static/swagger/index.html", http.StatusFound))

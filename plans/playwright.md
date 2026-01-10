@@ -136,6 +136,8 @@
   - Revoked share links display a not-found message.
 - `tests/e2e/csp-header.spec.js`
   - Document responses include strict CSP (no `unsafe-inline` / `unsafe-hashes` for scripts).
+- `tests/e2e/opengraph-unfurl.spec.js`
+  - Document responses include OpenGraph/Twitter metadata and the OG image URL is public + returns a PNG.
 
 ## Unit Test Separation
 - Add make targets:
