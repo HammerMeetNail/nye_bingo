@@ -213,18 +213,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, secrets, lint, test-go, test-js, e2e]
     if: >
-      ${{
-        always() &&
-        needs.changes.outputs.code == 'true' &&
-        needs.secrets.result == 'success' &&
-        needs.lint.result == 'success' &&
-        needs.test-go.result == 'success' &&
-        needs.test-js.result == 'success' &&
-        (
-          !startsWith(github.ref, 'refs/tags/v') ||
-          needs.e2e.result == 'success'
-        )
-      }}
+      always() &&
+      needs.changes.outputs.code == 'true' &&
+      needs.secrets.result == 'success' &&
+      needs.lint.result == 'success' &&
+      needs.test-go.result == 'success' &&
+      needs.test-js.result == 'success' &&
+      (
+        !startsWith(github.ref, 'refs/tags/v') ||
+        needs.e2e.result == 'success'
+      )
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -248,12 +246,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     needs: [build, e2e]
     if: >
-      ${{
-        github.event_name == 'push' &&
-        startsWith(github.ref, 'refs/tags/v') &&
-        needs.e2e.result == 'success' &&
-        github.actor != 'dependabot[bot]'
-      }}
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.e2e.result == 'success' &&
+      github.actor != 'dependabot[bot]'
     strategy:
       matrix:
         include:
@@ -305,12 +301,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-image, e2e]
     if: >
-      ${{
-        github.event_name == 'push' &&
-        startsWith(github.ref, 'refs/tags/v') &&
-        needs.e2e.result == 'success' &&
-        github.actor != 'dependabot[bot]'
-      }}
+      github.event_name == 'push' &&
+      startsWith(github.ref, 'refs/tags/v') &&
+      needs.e2e.result == 'success' &&
+      github.actor != 'dependabot[bot]'
     outputs:
       digest: ${{ steps.digest.outputs.digest }}
       tag: ${{ steps.tag.outputs.tag }}
@@ -427,18 +421,16 @@ jobs:
     runs-on: ubuntu-latest
     needs: [scan-and-push, e2e]
     if: >
-      ${{
-        (
-          github.event_name == 'workflow_dispatch' &&
-          needs.scan-and-push.result == 'success'
-        ) ||
-        (
-          github.event_name == 'push' &&
-          startsWith(github.ref, 'refs/tags/v') &&
-          needs.scan-and-push.result == 'success' &&
-          needs.e2e.result == 'success'
-        )
-      }}
+      (
+        github.event_name == 'workflow_dispatch' &&
+        needs.scan-and-push.result == 'success'
+      ) ||
+      (
+        github.event_name == 'push' &&
+        startsWith(github.ref, 'refs/tags/v') &&
+        needs.scan-and-push.result == 'success' &&
+        needs.e2e.result == 'success'
+      )
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
