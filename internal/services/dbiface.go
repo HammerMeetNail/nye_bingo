@@ -46,7 +46,7 @@ type DB interface {
 	Begin(ctx context.Context) (Tx, error)
 }
 
-type poolLike interface {
+type pgxPoolLike interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
@@ -55,7 +55,7 @@ type poolLike interface {
 
 // PoolAdapter wraps *pgxpool.Pool to satisfy DB.
 type PoolAdapter struct {
-	pool poolLike
+	pool pgxPoolLike
 }
 
 // NewPoolAdapter builds a DB adapter around a pgx pool.

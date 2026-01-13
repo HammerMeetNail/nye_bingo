@@ -39,6 +39,7 @@ test-frontend:
 # Run Go tests with a coverage summary (writes coverage.out)
 coverage:
 	@mkdir -p .cache/go-build .cache/go-mod
+	@echo "Running Go tests with coverage (may take a couple minutes; includes slow crypto/bcrypt tests)..."
 	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod go test -v -race -coverprofile=coverage.out ./...
 	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod go tool cover -func=coverage.out | tail -n 1
 
