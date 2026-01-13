@@ -11,29 +11,13 @@ A web application for creating and tracking annual Bingo cards. Create a Bingo c
 
 ## Features
 
-- **Create Bingo Cards**: Build a personalized Bingo card in predefined sizes (2x2, 3x3, 4x4, 5x5) with an optional FREE space (default on)
-- **Drag and Drop**: Rearrange items on your card with drag and drop (desktop) or long-press and drag (mobile)
-- **Try Before Signing Up**: Create and customize a card anonymously, then sign up to save it
-- **AI Goal Wizard**: Generate goals with AI to fill your empty squares (requires an account; unverified users get 5 free generations, then must verify email)
-- **AI Assist in Editor**: Refine a goal or get options for a single empty cell without leaving the card editor (same AI gating as the wizard)
-- **Fill Empty Spaces**: Auto-fill empty card slots with random suggestions to get started quickly
-- **Quality of Life**: Clear all cells on an unfinalized card, and get a warning prompt if you try to leave a full but unfinalized card
-- **Curated Suggestions**: Browse 80+ goal suggestions across 8 categories to inspire your resolutions
-- **Track Progress**: Mark goals complete with optional notes about how you achieved them
-- **Celebrate Wins**: Get notified when you complete a row, column, or diagonal bingo
-- **Social Features**: Add friends, view their cards, and react to their achievements with emojis
-- **Shareable Links**: Create an unlisted link for a finalized card so anyone can view completion progress (notes are hidden); links can expire and be revoked
-- **Privacy Controls**: Opt-in discoverability - choose whether others can find you by username
-- **Card Visibility**: Set individual cards as private or visible to friends with per-card controls
-- **Card Archive**: Manually archive cards and view them with completion statistics and bingo counts
-- **Export to CSV**: Select cards on the dashboard and export them as CSV files in a ZIP archive
-- **Email Authentication**: Email verification, magic link login, and password reset
-- **Profile Management**: View account settings, email verification status, privacy settings, and change password
-- **Public API**: Generate API tokens to access your data programmatically with full Swagger documentation
-- **Contact Support**: Submit support requests via contact form with rate limiting protection
-- **FAQ**: Comprehensive help documentation answering common questions
-- **Accessible Design**: Uses OpenDyslexic font for improved readability
-- **Open Source**: Apache 2.0 licensed with full source code available
+- Create and customize annual bingo cards (2x2–5x5, optional FREE space)
+- Edit via drag/drop (desktop) and touch-friendly interactions (mobile)
+- Track progress with optional notes and bingo notifications
+- Suggestions + AI-assisted goal generation (email-verification gated)
+- Social features: friends, reactions, share links, and privacy controls
+- Archive + export (stats + CSV export)
+- Email auth flows (verification, magic links, reset password)
 
 ## Tech Stack
 
@@ -83,24 +67,11 @@ make down
 # Run linting (requires golangci-lint)
 make lint
 
-# Run all tests in container
+# Run all tests in container (wraps ./scripts/test.sh)
 make test
 
-# Clean up everything including volumes (full reset)
+# Clean up everything including volumes (full reset, destructive)
 make clean
-```
-
-#### Manual Commands
-
-```bash
-# Rebuild after code changes
-podman compose build --no-cache && podman compose up
-
-# Run Go build locally (requires Go 1.24+)
-go build -o server ./cmd/server
-
-# Download dependencies
-go mod tidy
 ```
 
 ### Testing
@@ -109,10 +80,11 @@ Tests run in containers to match the production environment:
 
 ```bash
 # Run all tests (Go + JavaScript)
-./scripts/test.sh
+make test
 
-# Run with coverage report
-./scripts/test.sh --coverage
+# Run Go-only / JS-only
+make test-backend
+make test-frontend
 ```
 
 Or run locally:
@@ -130,15 +102,12 @@ node web/static/js/tests/runner.js
 Playwright runs in a container (no npm install on the host) and uses Mailpit (SMTP) for email flows.
 
 ```bash
-# Full E2E run (fresh DB, seeds, Firefox by default)
+# Full E2E run (destructive: resets volumes, reseeds data)
 make e2e
 
-# Run other browsers
-make e2e BROWSERS=chromium
-make e2e BROWSERS=webkit
-
-# Headed mode
-make e2e HEADLESS=false
+# Headed mode / debug helpers
+make e2e-headed
+make e2e-debug
 ```
 
 Artifacts:
@@ -148,10 +117,7 @@ Artifacts:
 Notes:
 - E2E runs with `AI_STUB=1` by default so AI wizard tests are deterministic (no network/API keys).
 - Specs live in `tests/e2e/*.spec.js` (with shared helpers in `tests/e2e/helpers.js`).
-- Seeded-data tests rely on the seeded baseline created by `scripts/seed.sh` (see `tests/e2e/seeded-data.spec.js`).
 - For a current “coverage map” of workflows, see `plans/playwright.md`.
-
-CI runs the E2E suite headless using Docker Compose and the Playwright container (Mailpit is used for verification/magic-link/reset tests).
 
 ## Project Structure
 
@@ -179,300 +145,29 @@ yearofbingo/
 └── AGENTS.md            # AI assistant guidance
 ```
 
-## Environment Variables
+## Documentation
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `SERVER_HOST` | Server bind address | `0.0.0.0` |
-| `SERVER_PORT` | Server port | `8080` |
-| `SERVER_SECURE` | Enable secure cookies | `false` |
-| `DEBUG` | Enable debug-level logging | `false` |
-| `DEBUG_LOG_MAX_CHARS` | Max chars to log for large debug fields | `8000` |
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | PostgreSQL user | `bingo` |
-| `DB_PASSWORD` | PostgreSQL password | `bingo` |
-| `DB_NAME` | PostgreSQL database | `bingo` |
-| `DB_SSLMODE` | PostgreSQL SSL mode | `disable` |
-| `REDIS_HOST` | Redis host | `localhost` |
-| `REDIS_PORT` | Redis port | `6379` |
-| `REDIS_PASSWORD` | Redis password | (empty) |
-| `REDIS_DB` | Redis database number | `0` |
-| `GEMINI_API_KEY` | Gemini API key (server-side only) | (empty) |
-| `GEMINI_MODEL` | Gemini model name (server-side only) | `gemini-3-flash-preview` |
-| `GEMINI_THINKING_LEVEL` | Gemini 3 thinking level (minimal/low/medium/high) | `minimal` |
-| `GEMINI_THINKING_BUDGET` | Gemini 2.5 thinking budget (0 disables) | `0` |
-| `GEMINI_TEMPERATURE` | Gemini sampling temperature | `0.8` |
-| `GEMINI_MAX_OUTPUT_TOKENS` | Gemini max output tokens | `4096` |
-| `AI_RATE_LIMIT` | AI generations per hour per user | `10` (prod), `100` (dev) |
-| `EMAIL_PROVIDER` | Email provider (resend, smtp, console) | `console` |
-| `RESEND_API_KEY` | Resend API key (for production) | - |
-| `SMTP_HOST` | SMTP host (for local dev with Mailpit) | `mailpit` |
-| `SMTP_PORT` | SMTP port | `1025` |
-| `APP_BASE_URL` | Application base URL for email links | `http://localhost:8080` |
+- API docs: `/api/docs` (Swagger UI) and `web/static/openapi.yaml`
+- Architectural notes and “how we work”: `agent_docs/`
+- Feature specs and implementation notes: `plans/`
 
-## Debug Logging
+## Configuration
 
-Set `DEBUG=true` to enable debug-level logs. In `APP_ENV=development`, this also logs Gemini prompt/response text for AI requests (truncated to `DEBUG_LOG_MAX_CHARS`); do not enable in production.
+Configuration is via environment variables (see `.env.example`). For local development, Compose files (`compose.yaml`, `compose.prod.yaml`) provide sensible defaults.
 
-## API Endpoints
-
-### Authentication
-- `POST /api/auth/register` - Create new account
-- `POST /api/auth/login` - Sign in
-- `POST /api/auth/logout` - Sign out
-- `GET /api/auth/me` - Get current user
-- `PUT /api/auth/change-password` - Change password
-- `POST /api/auth/verify-email` - Verify email with token
-- `POST /api/auth/resend-verification` - Resend verification email
-- `POST /api/auth/magic-link` - Request magic link email
-- `GET /api/auth/magic-link/verify` - Verify magic link token
-- `POST /api/auth/forgot-password` - Request password reset email
-- `POST /api/auth/reset-password` - Reset password with token
-- `PUT /api/auth/searchable` - Update privacy settings (opt-in to friend search)
-
-### Cards
-- `POST /api/cards` - Create new card
-- `GET /api/cards` - List user's cards
-- `GET /api/cards/archive` - List archived cards from past years
-- `GET /api/cards/{id}` - Get card details
-- `GET /api/cards/{id}/stats` - Get card statistics (completion rate, bingos)
-- `GET /api/cards/export` - Get all cards for CSV export
-- `POST /api/cards/{id}/items` - Add item to card
-- `POST /api/cards/{id}/shuffle` - Shuffle card items
-- `POST /api/cards/{id}/finalize` - Lock card for play
-- `PUT /api/cards/{id}/visibility` - Update card visibility to friends
-- `PUT /api/cards/visibility/bulk` - Bulk update visibility for multiple cards
-- `PUT /api/cards/archive/bulk` - Bulk archive/unarchive multiple cards
-- `DELETE /api/cards/bulk` - Bulk delete multiple cards
-
-### Items
-- `PUT /api/cards/{id}/items/{pos}` - Update item
-- `DELETE /api/cards/{id}/items/{pos}` - Remove item
-- `POST /api/cards/{id}/swap` - Swap two item positions
-- `PUT /api/cards/{id}/items/{pos}/complete` - Mark complete
-- `PUT /api/cards/{id}/items/{pos}/uncomplete` - Mark incomplete
-
-### Suggestions
-- `GET /api/suggestions` - Get all suggestions
-- `GET /api/suggestions/categories` - Get grouped by category
-
-### Friends
-- `GET /api/friends` - List friends and requests
-- `GET /api/friends/search?q=` - Search users by username (only shows users who opted in)
-- `POST /api/friends/requests` - Send friend request
-- `PUT /api/friends/requests/{id}/accept` - Accept request
-- `PUT /api/friends/requests/{id}/reject` - Reject request
-- `DELETE /api/friends/requests/{id}/cancel` - Cancel pending request
-- `DELETE /api/friends/{id}` - Remove friend
-- `GET /api/friends/{id}/card` - View friend's current card
-- `GET /api/friends/{id}/cards` - View all friend's cards (with year selector)
-
-### Friend Invites
-- `GET /api/friends/invites` - List active invites
-- `POST /api/friends/invites` - Create invite link
-- `POST /api/friends/invites/accept` - Accept invite link
-- `DELETE /api/friends/invites/{id}/revoke` - Revoke invite
-
-### Blocks
-- `GET /api/blocks` - List blocked users
-- `POST /api/blocks` - Block a user
-- `DELETE /api/blocks/{id}` - Unblock a user
-
-### Reactions
-- `POST /api/items/{id}/react` - React to completed item
-- `DELETE /api/items/{id}/react` - Remove reaction
-- `GET /api/items/{id}/reactions` - Get item reactions
-
-### Docs
-- `GET /api/docs` - Swagger API documentation
-
-### Support
-- `POST /api/support` - Submit support request (rate limited: 5/hour per IP)
-
-### AI
-- `POST /api/ai/generate` - Generate AI goals (session cookie required; API tokens not allowed; unverified users get 5 free generations, then must verify email; rate limited: 10/hour per user in production, 100/hour per user in development)
-
-### API Access
-
-Programmatic access is available via Bearer tokens.
-
-1. Generate a token in your Profile settings
-2. Use the token in the `Authorization` header: `Authorization: Bearer yob_abc...`
-3. Full interactive documentation available at `/api/docs`
+Set `DEBUG=true` to enable debug-level logs. In `APP_ENV=development`, this may log Gemini prompt/response text during AI requests; don’t enable in production.
 
 ## Scripts
 
-Development and testing scripts are located in the `scripts/` directory. All scripts use the API (not direct database access) and require `curl` and `jq`.
+Helper scripts live in `scripts/` (generally API-driven; many require `curl` + `jq`). Common entrypoints:
 
-### seed.sh
-
-Seeds the database with test data for development and testing.
-
-```bash
-# Use default URL (http://localhost:8080)
-./scripts/seed.sh
-
-# Use custom URL
-./scripts/seed.sh http://localhost:3000
-```
-
-**Creates:**
-- 3 test users with password `Password1`:
-  - `alice@test.com` (Alice Anderson)
-  - `bob@test.com` (Bob Builder)
-  - `carol@test.com` (Carol Chen)
-- Alice's cards:
-  - 2025: 6/24 completed (current year)
-  - 2024: 18/24 completed, 2 bingos (archived)
-  - 2023: 12/24 completed, 1 bingo (archived)
-- Bob's cards:
-  - 2025: 6/24 completed (current year)
-  - 2024: 24/24 completed, 12 bingos - perfect year! (archived)
-- Friendships: Alice ↔ Bob (accepted), Carol → Alice (pending)
-- Emoji reactions from Bob on Alice's completed items
-
-**Idempotent behavior:** If users/cards already exist, the script logs in and fetches existing data rather than failing.
-
-### cleanup.sh
-
-Removes friendships and reactions for test accounts via the API.
-
-```bash
-# Use default URL (http://localhost:8080)
-./scripts/cleanup.sh
-
-# Use custom URL
-./scripts/cleanup.sh http://localhost:3000
-```
-
-**Note:** User accounts and cards remain after cleanup (no delete API). For a complete reset:
-
-```bash
-podman compose down -v && podman compose up
-```
-
-### test-archive.sh
-
-Tests the archive and statistics endpoints.
-
-```bash
-# Use default URL (http://localhost:8080)
-./scripts/test-archive.sh
-
-# Use custom URL
-./scripts/test-archive.sh http://localhost:3000
-```
-
-**Tests:**
-- `GET /api/cards/archive` - Lists cards from past years
-- `GET /api/cards/{id}/stats` - Card statistics including completion rate and bingo count
-
-**Note:** Archive only shows cards from past years. Cards created by `seed.sh` (2025) won't appear in archive until 2026.
-
-### build-assets.sh
-
-Generates content-hashed filenames for CSS and JavaScript files, enabling aggressive caching without stale asset issues.
-
-```bash
-./scripts/build-assets.sh
-```
-
-**Output:**
-- Creates hashed files in `web/static/dist/` (e.g., `styles.08535cc8.css`)
-- Generates `manifest.json` mapping original paths to hashed versions
-- Hashed assets are served with immutable cache headers (1 year)
-
-**Note:** This script runs automatically during container builds. The Go server reads the manifest and injects hashed paths into HTML templates.
-
-### Adding New Scripts
-
-When adding new scripts to this directory:
-1. Use the API, not direct database access
-2. Include a header comment explaining purpose and usage
-3. Support a custom base URL as the first argument
-4. Use the shared patterns: `get_csrf()`, `login_user()`, `logout_user()`
-5. Log to stderr (`>&2`) so function return values aren't polluted
-6. Handle "already exists" cases gracefully for idempotency
+- `./scripts/test.sh` (used by `make test`; supports flags like `--coverage`, `--go`, `--js`)
+- `./scripts/seed.sh` (seed local dev data)
+- `./scripts/build-assets.sh` (build content-hashed frontend assets)
 
 ## CI/CD
 
-The project uses GitHub Actions for continuous integration and deployment.
-
-### Pipeline Stages
-
-1. **Lint** - Code quality checks with golangci-lint
-2. **Test (Go)** - Unit tests with race detection and coverage
-3. **Test (JS)** - Frontend JavaScript tests
-4. **Build** - Compile Go binary
-5. **Build & Scan Image** - Build container, run Trivy security scan
-6. **Push** - Push to container registry (only after scan passes)
-
-### Container Images
-
-Multi-architecture images (linux/amd64 and linux/arm64) are published to [quay.io/yearofbingo/yearofbingo](https://quay.io/repository/yearofbingo/yearofbingo):
-- `quay.io/yearofbingo/yearofbingo:latest` - Latest main branch build
-- `quay.io/yearofbingo/yearofbingo:<sha>` - Specific commit builds
-
-### Running the Production Image
-
-```bash
-# Run the production image from quay.io
-podman compose -f compose.prod.yaml up
-
-# Or with Docker
-docker compose -f compose.prod.yaml up
-```
-
-This pulls the pre-built image from quay.io and runs it with local PostgreSQL and Redis containers.
-
-### Running CI Locally
-
-```bash
-# Run linting (requires golangci-lint)
-golangci-lint run
-
-# Run all tests
-./scripts/test.sh
-
-# Build container image locally
-podman build -f Containerfile -t yearofbingo .
-```
-
-### Secret Scanning
-
-The repository uses [Gitleaks](https://github.com/gitleaks/gitleaks) to prevent accidentally committing secrets:
-
-- **Pre-commit hook**: Scans staged files before each commit
-- **CI check**: Scans all changes in pull requests and pushes
-
-To set up the pre-commit hook after cloning:
-
-```bash
-# Install pre-commit (macOS)
-brew install pre-commit
-
-# Or with pip
-pip install pre-commit
-
-# Install the hooks
-pre-commit install
-```
-
-Gitleaks will now run automatically on every `git commit`. To test manually:
-
-```bash
-pre-commit run --all-files
-```
-
-### Path Filtering
-
-To avoid unnecessary builds and deploys, the CI pipeline uses path filtering:
-
-- **Always runs**: Secret scanning (gitleaks)
-- **Only on code changes**: Lint, test, build, and deploy jobs
-
-Documentation-only changes (README, markdown files, etc.) will not trigger builds or deployments.
+CI runs via GitHub Actions (`.github/workflows/ci.yaml`) and exercises lint, unit/integration tests, and container builds. Release notes/process live in `agent_docs/ops.md`.
 
 ## Security & Performance
 
