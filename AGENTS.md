@@ -19,6 +19,7 @@ Year of Bingo (yearofbingo.com) is a Go + vanilla JS web app for creating annual
 - Tests (preferred): `make test` (container; wraps `./scripts/test.sh`)
 - Targeted tests: `make test-backend`, `make test-frontend` (or run `./scripts/test.sh` with flags like `--coverage`)
 - Lint: `make lint`
+- Coverage: `make coverage` (prints the total via `go tool cover`)
 - E2E: `make e2e` (destructive: resets volumes, reseeds; Playwright runs in a container) plus `make e2e-headed` / `make e2e-debug`
 - Debug: `DEBUG=true` (in development this may log Gemini prompt/response text; don’t enable in prod)
 

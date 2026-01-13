@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"bytes"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -49,4 +50,16 @@ func TestRandomHelpers(t *testing.T) {
 	if RandomEmail() == "" {
 		t.Fatal("expected email")
 	}
+}
+
+func TestAssertHelpers_RunWithoutErrors(t *testing.T) {
+	AssertEqual(t, 1, 1, "equal")
+	AssertNotEqual(t, 1, 2, "not equal")
+	AssertNil(t, nil, "nil")
+	AssertNotNil(t, 1, "not nil")
+	AssertTrue(t, true, "true")
+	AssertFalse(t, false, "false")
+	AssertNoError(t, nil, "no error")
+	AssertError(t, errors.New("boom"), "has error")
+	AssertContains(t, "hello world", "world", "contains")
 }

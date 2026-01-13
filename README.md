@@ -42,10 +42,7 @@ git clone https://github.com/HammerMeetNail/yearofbingo.git
 cd yearofbingo
 
 # Start the application
-podman compose up
-
-# Or with Docker
-docker compose up
+make local
 ```
 
 The application will be available at http://localhost:8080
@@ -69,6 +66,9 @@ make lint
 
 # Run all tests in container (wraps ./scripts/test.sh)
 make test
+
+# Check code coverage
+make coverage
 
 # Clean up everything including volumes (full reset, destructive)
 make clean

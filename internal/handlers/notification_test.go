@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -292,4 +294,128 @@ func TestNotificationHandler_UpdateSettings_EmailNotVerified(t *testing.T) {
 
 	handler.UpdateSettings(rr, req)
 	assertErrorResponse(t, rr, http.StatusForbidden, "Verify your email to enable email notifications")
+}
+
+func TestNotificationHandler_List_SuccessAndInternalError(t *testing.T) {
+	userID := uuid.New()
+	handler := NewNotificationHandler(&mockNotificationService{
+		ListFunc: func(ctx context.Context, gotUserID uuid.UUID, params services.NotificationListParams) ([]models.Notification, error) {
+			return []models.Notification{{ID: uuid.New(), UserID: gotUserID, Type: models.NotificationTypeFriendNewCard, CreatedAt: time.Now()}}, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/notifications?unread=1", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+	handler.List(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		ListFunc: func(ctx context.Context, gotUserID uuid.UUID, params services.NotificationListParams) ([]models.Notification, error) {
+			return nil, errors.New("boom")
+		},
+	})
+	rr = httptest.NewRecorder()
+	handler.List(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+}
+
+func TestNotificationHandler_MarkRead_SuccessAndInternalError(t *testing.T) {
+	userID := uuid.New()
+	notificationID := uuid.New()
+	handler := NewNotificationHandler(&mockNotificationService{
+		MarkReadFunc: func(ctx context.Context, gotUserID, gotNotificationID uuid.UUID) error {
+			return nil
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/notifications/"+notificationID.String()+"/read", nil)
+	req.SetPathValue("id", notificationID.String())
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+	handler.MarkRead(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		MarkReadFunc: func(ctx context.Context, gotUserID, gotNotificationID uuid.UUID) error {
+			return errors.New("boom")
+		},
+	})
+	rr = httptest.NewRecorder()
+	handler.MarkRead(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+}
+
+func TestNotificationHandler_Delete_SuccessAndInternalError(t *testing.T) {
+	userID := uuid.New()
+	notificationID := uuid.New()
+	handler := NewNotificationHandler(&mockNotificationService{
+		DeleteFunc: func(ctx context.Context, gotUserID, gotNotificationID uuid.UUID) error {
+			return nil
+		},
+	})
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications/"+notificationID.String(), nil)
+	req.SetPathValue("id", notificationID.String())
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+	handler.Delete(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		DeleteFunc: func(ctx context.Context, gotUserID, gotNotificationID uuid.UUID) error {
+			return errors.New("boom")
+		},
+	})
+	rr = httptest.NewRecorder()
+	handler.Delete(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+}
+
+func TestNotificationHandler_OtherInternalErrors(t *testing.T) {
+	userID := uuid.New()
+
+	handler := NewNotificationHandler(&mockNotificationService{
+		DeleteAllFunc: func(ctx context.Context, gotUserID uuid.UUID) error { return errors.New("boom") },
+	})
+	req := httptest.NewRequest(http.MethodDelete, "/api/notifications", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr := httptest.NewRecorder()
+	handler.DeleteAll(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		UnreadCountFunc: func(ctx context.Context, gotUserID uuid.UUID) (int, error) { return 0, errors.New("boom") },
+	})
+	req = httptest.NewRequest(http.MethodGet, "/api/notifications/unread-count", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr = httptest.NewRecorder()
+	handler.UnreadCount(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		GetSettingsFunc: func(ctx context.Context, gotUserID uuid.UUID) (*models.NotificationSettings, error) {
+			return nil, errors.New("boom")
+		},
+	})
+	req = httptest.NewRequest(http.MethodGet, "/api/notifications/settings", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr = httptest.NewRecorder()
+	handler.GetSettings(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
+
+	handler = NewNotificationHandler(&mockNotificationService{
+		UpdateSettingsFunc: func(ctx context.Context, gotUserID uuid.UUID, patch models.NotificationSettingsPatch) (*models.NotificationSettings, error) {
+			return nil, errors.New("boom")
+		},
+	})
+	req = httptest.NewRequest(http.MethodPut, "/api/notifications/settings", bytes.NewBufferString(`{"in_app_enabled":true}`))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{ID: userID}))
+	rr = httptest.NewRecorder()
+	handler.UpdateSettings(rr, req)
+	assertErrorResponse(t, rr, http.StatusInternalServerError, "Internal server error")
 }

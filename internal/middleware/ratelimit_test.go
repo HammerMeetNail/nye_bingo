@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func TestRateLimiter_Middleware_NilRedis(t *testing.T) {
@@ -100,3 +102,51 @@ func TestWriteError(t *testing.T) {
 // Note: Full integration testing of RateLimiter requires a running Redis instance
 // or a mock that implements the go-redis interface, which is not trivial without
 // external libraries like redismock.
+
+func TestRateLimiter_Middleware_RedisError_FailOpenAndFailClosed(t *testing.T) {
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:        "127.0.0.1:1",
+		DialTimeout: 50 * time.Millisecond,
+		ReadTimeout: 50 * time.Millisecond,
+		MaxRetries:  0,
+	})
+	defer func() { _ = redisClient.Close() }()
+
+	t.Run("fail-open", func(t *testing.T) {
+		limiter := NewRateLimiter(redisClient, 1, time.Second, "test:", func(r *http.Request) string {
+			return ""
+		}, true)
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.1:1234"
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200, got %d", rr.Code)
+		}
+	})
+
+	t.Run("fail-closed", func(t *testing.T) {
+		limiter := NewRateLimiter(redisClient, 1, time.Second, "test:", func(r *http.Request) string {
+			return "key"
+		}, false)
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		req := httptest.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("expected status 503, got %d", rr.Code)
+		}
+		if rr.Header().Get("Content-Type") != "application/json" {
+			t.Fatalf("expected json response, got %q", rr.Header().Get("Content-Type"))
+		}
+	})
+}

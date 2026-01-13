@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -123,4 +124,48 @@ func TestReminderPublicHandler_UnsubscribeSubmit_AlreadyDisabled(t *testing.T) {
 	if !strings.Contains(rr.Body.String(), "already disabled") {
 		t.Fatalf("expected already disabled message, got %q", rr.Body.String())
 	}
+}
+
+func TestReminderPublicHandler_ServeImage_TrimsPngSuffixAndWritesHeaders(t *testing.T) {
+	pngBytes := []byte{0x89, 0x50, 0x4E, 0x47}
+	handler := NewReminderPublicHandler(&mockReminderService{
+		RenderImageByTokenFunc: func(ctx context.Context, token string) ([]byte, error) {
+			if token != "abc123" {
+				t.Fatalf("expected token abc123, got %q", token)
+			}
+			return pngBytes, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/r/img/abc123.png", nil)
+	req.SetPathValue("token", "abc123.png")
+	rr := httptest.NewRecorder()
+
+	handler.ServeImage(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rr.Code)
+	}
+	if ct := rr.Result().Header.Get("Content-Type"); ct != "image/png" {
+		t.Fatalf("expected Content-Type image/png, got %q", ct)
+	}
+	if cache := rr.Result().Header.Get("Cache-Control"); cache != "public, max-age=3600" {
+		t.Fatalf("expected Cache-Control public, max-age=3600, got %q", cache)
+	}
+	if !bytes.Equal(rr.Body.Bytes(), pngBytes) {
+		t.Fatalf("expected %v, got %v", pngBytes, rr.Body.Bytes())
+	}
+}
+
+func TestReminderPublicHandler_ServeImage_NotFound(t *testing.T) {
+	handler := NewReminderPublicHandler(&mockReminderService{
+		RenderImageByTokenFunc: func(ctx context.Context, token string) ([]byte, error) {
+			return nil, services.ErrReminderNotFound
+		},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/r/img/abc", nil)
+	req.SetPathValue("token", "abc")
+	rr := httptest.NewRecorder()
+
+	handler.ServeImage(rr, req)
+	assertErrorResponse(t, rr, http.StatusNotFound, "Image not found")
 }
