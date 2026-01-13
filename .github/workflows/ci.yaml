@@ -13,6 +13,10 @@ on:
         description: 'Skip build, deploy existing image'
         type: boolean
         default: false
+      coverage_only:
+        description: 'Run only Go coverage upload'
+        type: boolean
+        default: false
 
 env:
   GO_VERSION: "1.24"
@@ -27,6 +31,34 @@ jobs:
     steps:
       - name: No-op for badge status
         run: echo "Badge update run on main."
+
+  coverage-main:
+    name: Coverage Upload (Main)
+    runs-on: ubuntu-latest
+    if: >
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && inputs.coverage_only)
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests with coverage
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          flags: go
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   changes:
     name: Detect Changes
