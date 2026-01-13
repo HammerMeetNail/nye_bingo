@@ -1,4 +1,4 @@
-.PHONY: local down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend release
+.PHONY: local down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release
 
 # Run full local rebuild: down, build assets, build container, up in background
 local: down assets build up
@@ -35,6 +35,13 @@ test-backend:
 # Run JS tests only
 test-frontend:
 	./scripts/test.sh --js
+
+# Run Go tests with a coverage summary (writes coverage.out)
+coverage:
+	@mkdir -p .cache/go-build .cache/go-mod
+	@echo "Running Go tests with coverage (may take a couple minutes; includes slow crypto/bcrypt tests)..."
+	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod go test -v -race -coverprofile=coverage.out ./...
+	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod go tool cover -func=coverage.out | tail -n 1
 
 # Run linter
 lint:

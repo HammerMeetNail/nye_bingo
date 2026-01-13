@@ -18,6 +18,9 @@ make test-frontend
 
 # Run with coverage report
 ./scripts/test.sh --coverage
+
+# Run Go tests with a coverage summary (writes coverage.out)
+make coverage
 ```
 
 ### E2E Tests (Playwright)

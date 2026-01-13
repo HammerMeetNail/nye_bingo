@@ -252,6 +252,279 @@ func TestAccountService_Delete_NotFound(t *testing.T) {
 	}
 }
 
+func TestAccountService_Writers_WriteRowsCoverNullables(t *testing.T) {
+	userID := uuid.New()
+	now := time.Date(2024, 5, 1, 12, 0, 0, 0, time.UTC)
+	title := "Title,\nWith Newline"
+	category := "Category"
+	freePos := 12
+	notes := "note"
+	proofURL := "https://example.com"
+	actorID := uuid.New()
+	friendshipID := uuid.New()
+	cardID := uuid.New()
+	bingoCount := 2
+	expiresAt := now.Add(24 * time.Hour)
+	checkinID := uuid.New()
+	goalReminderID := uuid.New()
+	itemID := uuid.New()
+	cardShareCreated := now.Add(-2 * time.Hour)
+	emailLogID := uuid.New()
+	providerMessageID := "provider-msg"
+	passwordResetID := uuid.New()
+	emailVerificationID := uuid.New()
+	aiLogID := uuid.New()
+
+	db := &fakeDB{
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			switch {
+			case strings.Contains(sql, "FROM bingo_cards"):
+				return &fakeRows{rows: [][]any{{
+					cardID, userID, 2025, &category, &title, 5, "BINGO", true, &freePos, true, true, true, false, now, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM bingo_items"):
+				itemID := uuid.New()
+				completedAt := now.Add(-time.Hour)
+				return &fakeRows{rows: [][]any{{
+					itemID, cardID, 3, "Do something", true, &completedAt, &notes, &proofURL, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM friendships"):
+				friendID := uuid.New()
+				return &fakeRows{rows: [][]any{{
+					friendshipID, userID, friendID, "accepted", now,
+				}}}, nil
+			case strings.Contains(sql, "FROM user_blocks"):
+				blocked := uuid.New()
+				return &fakeRows{rows: [][]any{{
+					userID, blocked, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM notifications"):
+				notificationID := uuid.New()
+				emailSentAt := now.Add(-time.Minute)
+				readAt := now.Add(-time.Second)
+				return &fakeRows{rows: [][]any{{
+					notificationID, userID, "friend_bingo", &actorID, &friendshipID, &cardID, &bingoCount, true, true, &emailSentAt, &readAt, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM api_tokens"):
+				tokenID := uuid.New()
+				lastUsed := now.Add(-time.Hour)
+				return &fakeRows{rows: [][]any{{
+					tokenID, userID, "My Token", "pref", "read", &expiresAt, &lastUsed, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM notification_settings"):
+				return &fakeRows{rows: [][]any{{
+					userID,
+					true, true, true, true, true,
+					true, true, true, true, true,
+					now, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM friend_invites"):
+				inviteID := uuid.New()
+				acceptedBy := uuid.New()
+				acceptedAt := now.Add(-2 * time.Hour)
+				return &fakeRows{rows: [][]any{{
+					inviteID, userID, &expiresAt, nil, &acceptedBy, &acceptedAt, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM sessions"):
+				sessionID := uuid.New()
+				return &fakeRows{rows: [][]any{{
+					sessionID, userID, expiresAt, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM reminder_settings"):
+				return &fakeRows{rows: [][]any{{
+					userID, true, 3, now, now,
+				}}}, nil
+			case strings.Contains(sql, "FROM card_checkin_reminders"):
+				nextSendAt := now.Add(48 * time.Hour)
+				return &fakeRows{rows: [][]any{{
+					checkinID,
+					userID,
+					cardID,
+					true,
+					"monthly",
+					[]byte(`{"day_of_month":28,"time":"09:00"}`),
+					true,
+					true,
+					&nextSendAt,
+					nil,
+					now,
+					now,
+				}}}, nil
+			case strings.Contains(sql, "FROM goal_reminders"):
+				nextSendAt := now.Add(72 * time.Hour)
+				return &fakeRows{rows: [][]any{{
+					goalReminderID,
+					userID,
+					cardID,
+					itemID,
+					true,
+					"one_time",
+					[]byte(`{"send_at":"2030-01-02T15:04:05Z"}`),
+					&nextSendAt,
+					nil,
+					now,
+					now,
+				}}}, nil
+			case strings.Contains(sql, "FROM reminder_email_log"):
+				sentAt := now.Add(-30 * time.Minute)
+				sentOn := time.Date(sentAt.Year(), sentAt.Month(), sentAt.Day(), 0, 0, 0, 0, sentAt.Location())
+				return &fakeRows{rows: [][]any{{
+					emailLogID,
+					userID,
+					"card_checkin",
+					checkinID,
+					sentAt,
+					sentOn,
+					&providerMessageID,
+					"sent",
+				}}}, nil
+			case strings.Contains(sql, "FROM reminder_image_tokens"):
+				lastAccessedAt := now.Add(-time.Hour)
+				return &fakeRows{rows: [][]any{{
+					userID,
+					cardID,
+					true,
+					expiresAt,
+					now,
+					&lastAccessedAt,
+					2,
+				}}}, nil
+			case strings.Contains(sql, "FROM reminder_unsubscribe_tokens"):
+				usedAt := now.Add(-time.Minute)
+				return &fakeRows{rows: [][]any{{
+					userID,
+					expiresAt,
+					now,
+					&usedAt,
+				}}}, nil
+			case strings.Contains(sql, "FROM email_verification_tokens"):
+				return &fakeRows{rows: [][]any{{
+					emailVerificationID,
+					userID,
+					expiresAt,
+					now,
+				}}}, nil
+			case strings.Contains(sql, "FROM password_reset_tokens"):
+				usedAt := now.Add(-time.Minute)
+				return &fakeRows{rows: [][]any{{
+					passwordResetID,
+					userID,
+					expiresAt,
+					&usedAt,
+					now,
+				}}}, nil
+			case strings.Contains(sql, "FROM ai_generation_logs"):
+				return &fakeRows{rows: [][]any{{
+					aiLogID,
+					userID,
+					"model",
+					10,
+					20,
+					30,
+					"ok",
+					now,
+				}}}, nil
+			case strings.Contains(sql, "FROM bingo_card_shares"):
+				lastAccessedAt := now.Add(-time.Hour)
+				return &fakeRows{rows: [][]any{{
+					cardID,
+					cardShareCreated,
+					&expiresAt,
+					&lastAccessedAt,
+					2,
+				}}}, nil
+			default:
+				return &fakeRows{}, nil
+			}
+		},
+	}
+
+	service := NewAccountService(db)
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	if err := service.writeCardsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeCardsCSV: %v", err)
+	}
+	if err := service.writeItemsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeItemsCSV: %v", err)
+	}
+	if err := service.writeFriendshipsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeFriendshipsCSV: %v", err)
+	}
+	if err := service.writeBlocksCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeBlocksCSV: %v", err)
+	}
+	if err := service.writeNotificationsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeNotificationsCSV: %v", err)
+	}
+	if err := service.writeAPITokensCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeAPITokensCSV: %v", err)
+	}
+	if err := service.writeNotificationSettingsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeNotificationSettingsCSV: %v", err)
+	}
+	if err := service.writeFriendInvitesCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeFriendInvitesCSV: %v", err)
+	}
+	if err := service.writeSessionsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeSessionsCSV: %v", err)
+	}
+	if err := service.writeReminderSettingsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeReminderSettingsCSV: %v", err)
+	}
+	if err := service.writeCardCheckinRemindersCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeCardCheckinRemindersCSV: %v", err)
+	}
+	if err := service.writeGoalRemindersCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeGoalRemindersCSV: %v", err)
+	}
+	if err := service.writeCardSharesCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeCardSharesCSV: %v", err)
+	}
+	if err := service.writeReminderEmailLogCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeReminderEmailLogCSV: %v", err)
+	}
+	if err := service.writeReminderImageTokensCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeReminderImageTokensCSV: %v", err)
+	}
+	if err := service.writeReminderUnsubscribeTokensCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeReminderUnsubscribeTokensCSV: %v", err)
+	}
+	if err := service.writeEmailVerificationTokensCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeEmailVerificationTokensCSV: %v", err)
+	}
+	if err := service.writePasswordResetTokensCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writePasswordResetTokensCSV: %v", err)
+	}
+	if err := service.writeAIGenerationLogsCSV(context.Background(), zipWriter, userID); err != nil {
+		t.Fatalf("writeAIGenerationLogsCSV: %v", err)
+	}
+	if err := zipWriter.Close(); err != nil {
+		t.Fatalf("zip close: %v", err)
+	}
+
+	reader, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
+	if err != nil {
+		t.Fatalf("read zip: %v", err)
+	}
+	if len(reader.File) < 6 {
+		t.Fatalf("expected zip entries, got %d", len(reader.File))
+	}
+}
+
+func TestNullableHelpers(t *testing.T) {
+	if nullableString(nil) != "" {
+		t.Fatal("expected nullableString(nil) to be empty")
+	}
+	if nullableInt(nil) != "" {
+		t.Fatal("expected nullableInt(nil) to be empty")
+	}
+	if nullableUUID(nil) != "" {
+		t.Fatal("expected nullableUUID(nil) to be empty")
+	}
+}
+
 func TestSanitizeCSVValue(t *testing.T) {
 	tests := []struct {
 		name     string
