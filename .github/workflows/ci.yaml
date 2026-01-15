@@ -192,6 +192,9 @@ jobs:
     env:
       AI_STUB: "1"
       PLAYWRIGHT_WORKERS: "2"
+      # Speed up the background reminder runner in CI so scheduled reminder tests
+      # reliably deliver within Playwright's per-test timeout.
+      REMINDERS_POLL_INTERVAL: "1s"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
