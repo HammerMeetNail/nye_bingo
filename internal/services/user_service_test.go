@@ -23,7 +23,7 @@ func TestUserService_Create_EmailExists(t *testing.T) {
 	service := NewUserService(db)
 	_, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "exists@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "user",
 		Searchable:   true,
 	})
@@ -44,7 +44,7 @@ func TestUserService_Create_EmailCheckError(t *testing.T) {
 	service := NewUserService(db)
 	_, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "test@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "user",
 		Searchable:   true,
 	})
@@ -72,7 +72,7 @@ func TestUserService_Create_UsernameExists(t *testing.T) {
 	service := NewUserService(db)
 	_, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "new@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "exists",
 		Searchable:   true,
 	})
@@ -98,7 +98,7 @@ func TestUserService_Create_UsernameCheckError(t *testing.T) {
 	service := NewUserService(db)
 	_, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "test@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "user",
 		Searchable:   true,
 	})
@@ -128,7 +128,7 @@ func TestUserService_Create_InsertError(t *testing.T) {
 	service := NewUserService(db)
 	_, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "test@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "user",
 		Searchable:   true,
 	})
@@ -175,7 +175,7 @@ func TestUserService_GetByID_FiltersDeleted(t *testing.T) {
 			if !strings.Contains(sql, "deleted_at IS NULL") {
 				t.Fatalf("expected deleted_at filter in query, got %q", sql)
 			}
-			return rowFromValues(uuid.New(), "test@example.com", "hash", "user", false, nil, 0, true, time.Now(), time.Now())
+			return rowFromValues(uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true, time.Now(), time.Now())
 		},
 	}
 
@@ -236,7 +236,7 @@ func TestUserService_GetByEmail_FiltersDeleted(t *testing.T) {
 			if !strings.Contains(sql, "deleted_at IS NULL") {
 				t.Fatalf("expected deleted_at filter in query, got %q", sql)
 			}
-			return rowFromValues(uuid.New(), "test@example.com", "hash", "user", false, nil, 0, true, time.Now(), time.Now())
+			return rowFromValues(uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true, time.Now(), time.Now())
 		},
 	}
 
@@ -307,7 +307,7 @@ func TestUserService_Create_Success(t *testing.T) {
 				return rowFromValues(
 					userID,
 					"test@example.com",
-					"hash",
+					stringPtr("hash"),
 					"user",
 					false,
 					nil,
@@ -323,7 +323,7 @@ func TestUserService_Create_Success(t *testing.T) {
 	service := NewUserService(db)
 	user, err := service.Create(context.Background(), models.CreateUserParams{
 		Email:        "test@example.com",
-		PasswordHash: "hash",
+		PasswordHash: stringPtr("hash"),
 		Username:     "user",
 		Searchable:   true,
 	})
@@ -343,7 +343,7 @@ func TestUserService_GetByID_Success(t *testing.T) {
 			return rowFromValues(
 				userID,
 				"test@example.com",
-				"hash",
+				stringPtr("hash"),
 				"user",
 				false,
 				nil,
@@ -373,7 +373,7 @@ func TestUserService_GetByEmail_Success(t *testing.T) {
 			return rowFromValues(
 				userID,
 				"test@example.com",
-				"hash",
+				stringPtr("hash"),
 				"user",
 				true,
 				nil,
@@ -424,6 +424,10 @@ func TestUserService_MarkEmailVerified_Success(t *testing.T) {
 	if !called {
 		t.Fatal("expected update to be executed")
 	}
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
 
 func TestUserService_MarkEmailVerified_Error(t *testing.T) {

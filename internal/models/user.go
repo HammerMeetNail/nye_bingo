@@ -9,7 +9,7 @@ import (
 type User struct {
 	ID                    uuid.UUID  `json:"id"`
 	Email                 string     `json:"email"`
-	PasswordHash          string     `json:"-"`
+	PasswordHash          *string    `json:"-"`
 	Username              string     `json:"username"`
 	EmailVerified         bool       `json:"email_verified"`
 	EmailVerifiedAt       *time.Time `json:"email_verified_at,omitempty"`
@@ -21,7 +21,7 @@ type User struct {
 
 type CreateUserParams struct {
 	Email        string
-	PasswordHash string
+	PasswordHash *string
 	Username     string
 	Searchable   bool
 }

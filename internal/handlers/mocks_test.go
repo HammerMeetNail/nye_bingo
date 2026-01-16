@@ -63,7 +63,7 @@ func (m *mockUserService) UpdateSearchable(ctx context.Context, userID uuid.UUID
 
 type mockAuthService struct {
 	HashPasswordFunc          func(password string) (string, error)
-	VerifyPasswordFunc        func(hash, password string) bool
+	VerifyPasswordFunc        func(hash *string, password string) bool
 	GenerateSessionTokenFunc  func() (string, string, error)
 	CreateSessionFunc         func(ctx context.Context, userID uuid.UUID) (string, error)
 	ValidateSessionFunc       func(ctx context.Context, token string) (*models.User, error)
@@ -78,11 +78,11 @@ func (m *mockAuthService) HashPassword(password string) (string, error) {
 	return "hashed_" + password, nil
 }
 
-func (m *mockAuthService) VerifyPassword(hash, password string) bool {
+func (m *mockAuthService) VerifyPassword(hash *string, password string) bool {
 	if m.VerifyPasswordFunc != nil {
 		return m.VerifyPasswordFunc(hash, password)
 	}
-	return hash == "hashed_"+password
+	return hash != nil && *hash == "hashed_"+password
 }
 
 func (m *mockAuthService) GenerateSessionToken() (string, string, error) {

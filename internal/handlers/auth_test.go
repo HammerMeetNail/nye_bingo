@@ -165,8 +165,8 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 			if params.Email != createdUser.Email {
 				t.Fatalf("unexpected email: %s", params.Email)
 			}
-			if params.PasswordHash != "hashed_password" {
-				t.Fatalf("unexpected password hash: %s", params.PasswordHash)
+			if params.PasswordHash == nil || *params.PasswordHash != "hashed_password" {
+				t.Fatalf("unexpected password hash: %v", params.PasswordHash)
 			}
 			return createdUser, nil
 		},
@@ -412,7 +412,7 @@ func TestAuthHandler_Login_InvalidBody(t *testing.T) {
 }
 
 func TestAuthHandler_Login_Success(t *testing.T) {
-	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: "stored-hash"}
+	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: ptrString("stored-hash")}
 	mockUser := &mockUserService{
 		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
 			if email != user.Email {
@@ -422,8 +422,8 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 		},
 	}
 	mockAuth := &mockAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool {
-			return hash == "stored-hash" && password == "SecurePass123"
+		VerifyPasswordFunc: func(hash *string, password string) bool {
+			return hash != nil && *hash == "stored-hash" && password == "SecurePass123"
 		},
 		CreateSessionFunc: func(ctx context.Context, userID uuid.UUID) (string, error) {
 			if userID != user.ID {
@@ -457,17 +457,38 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 }
 
 func TestAuthHandler_Login_InvalidPassword(t *testing.T) {
-	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: "stored-hash"}
+	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: ptrString("stored-hash")}
 	mockUser := &mockUserService{
 		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
 			return user, nil
 		},
 	}
 	mockAuth := &mockAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool { return false },
+		VerifyPasswordFunc: func(hash *string, password string) bool { return false },
 	}
 
 	handler := NewAuthHandler(mockUser, mockAuth, nil, false)
+
+	body := LoginRequest{Email: "test@example.com", Password: "wrong"}
+	bodyBytes, _ := json.Marshal(body)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewBuffer(bodyBytes))
+	rr := httptest.NewRecorder()
+
+	handler.Login(rr, req)
+
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Invalid email or password")
+}
+
+func TestAuthHandler_Login_NoPasswordSet(t *testing.T) {
+	user := &models.User{ID: uuid.New(), Email: "test@example.com"}
+	mockUser := &mockUserService{
+		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
+			return user, nil
+		},
+	}
+
+	handler := NewAuthHandler(mockUser, &mockAuthService{}, nil, false)
 
 	body := LoginRequest{Email: "test@example.com", Password: "wrong"}
 	bodyBytes, _ := json.Marshal(body)
@@ -524,7 +545,7 @@ func TestAuthHandler_Login_GetByEmailError(t *testing.T) {
 
 func TestAuthHandler_Login_CreateSessionError(t *testing.T) {
 	password := "SecurePass123"
-	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: "hashed_" + password}
+	user := &models.User{ID: uuid.New(), Email: "test@example.com", PasswordHash: ptrString("hashed_" + password)}
 	mockUser := &mockUserService{
 		GetByEmailFunc: func(ctx context.Context, email string) (*models.User, error) {
 			return user, nil
@@ -1179,7 +1200,7 @@ func TestWriteError(t *testing.T) {
 }
 
 func TestAuthHandler_ChangePassword_Success(t *testing.T) {
-	user := &models.User{ID: uuid.New(), PasswordHash: "hash"}
+	user := &models.User{ID: uuid.New(), PasswordHash: ptrString("hash")}
 
 	mockUser := &mockUserService{
 		UpdatePasswordFunc: func(ctx context.Context, userID uuid.UUID, newPasswordHash string) error {
@@ -1193,7 +1214,7 @@ func TestAuthHandler_ChangePassword_Success(t *testing.T) {
 		},
 	}
 	mockAuth := &mockAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool { return true },
+		VerifyPasswordFunc: func(hash *string, password string) bool { return true },
 		HashPasswordFunc:   func(password string) (string, error) { return "new_hash", nil },
 		CreateSessionFunc:  func(ctx context.Context, userID uuid.UUID) (string, error) { return "session_token", nil },
 	}
@@ -1217,12 +1238,12 @@ func TestAuthHandler_ChangePassword_Success(t *testing.T) {
 func TestAuthHandler_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 	user := &models.User{
 		ID:           uuid.New(),
-		PasswordHash: "hash",
+		PasswordHash: ptrString("hash"),
 	}
 	handler := NewAuthHandler(
 		&mockUserService{},
 		&mockAuthService{
-			VerifyPasswordFunc: func(hash, password string) bool {
+			VerifyPasswordFunc: func(hash *string, password string) bool {
 				return false
 			},
 		},
@@ -1240,15 +1261,27 @@ func TestAuthHandler_ChangePassword_InvalidCurrentPassword(t *testing.T) {
 	}
 }
 
+func TestAuthHandler_ChangePassword_NoPasswordSet(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	handler := NewAuthHandler(&mockUserService{}, &mockAuthService{}, &mockEmailService{}, false)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/password", strings.NewReader(`{"current_password":"bad","new_password":"NewPass123!"}`))
+	req = req.WithContext(SetUserInContext(req.Context(), user))
+	rr := httptest.NewRecorder()
+
+	handler.ChangePassword(rr, req)
+	assertErrorResponse(t, rr, http.StatusBadRequest, "No password set; use password reset to set one.")
+}
+
 func TestAuthHandler_ChangePassword_HashError(t *testing.T) {
 	user := &models.User{
 		ID:           uuid.New(),
-		PasswordHash: "hash",
+		PasswordHash: ptrString("hash"),
 	}
 	handler := NewAuthHandler(
 		&mockUserService{},
 		&mockAuthService{
-			VerifyPasswordFunc: func(hash, password string) bool { return true },
+			VerifyPasswordFunc: func(hash *string, password string) bool { return true },
 			HashPasswordFunc: func(password string) (string, error) {
 				return "", errors.New("hash error")
 			},
@@ -1270,7 +1303,7 @@ func TestAuthHandler_ChangePassword_HashError(t *testing.T) {
 func TestAuthHandler_ChangePassword_UpdatePasswordError(t *testing.T) {
 	user := &models.User{
 		ID:           uuid.New(),
-		PasswordHash: "hash",
+		PasswordHash: ptrString("hash"),
 	}
 	handler := NewAuthHandler(
 		&mockUserService{
@@ -1279,7 +1312,7 @@ func TestAuthHandler_ChangePassword_UpdatePasswordError(t *testing.T) {
 			},
 		},
 		&mockAuthService{
-			VerifyPasswordFunc: func(hash, password string) bool { return true },
+			VerifyPasswordFunc: func(hash *string, password string) bool { return true },
 			HashPasswordFunc:   func(password string) (string, error) { return "hash2", nil },
 		},
 		&mockEmailService{},
@@ -1299,12 +1332,12 @@ func TestAuthHandler_ChangePassword_UpdatePasswordError(t *testing.T) {
 func TestAuthHandler_ChangePassword_CreateSessionError(t *testing.T) {
 	user := &models.User{
 		ID:           uuid.New(),
-		PasswordHash: "hash",
+		PasswordHash: ptrString("hash"),
 	}
 	handler := NewAuthHandler(
 		&mockUserService{},
 		&mockAuthService{
-			VerifyPasswordFunc: func(hash, password string) bool { return true },
+			VerifyPasswordFunc: func(hash *string, password string) bool { return true },
 			HashPasswordFunc:   func(password string) (string, error) { return "hash2", nil },
 			CreateSessionFunc:  func(ctx context.Context, userID uuid.UUID) (string, error) { return "", errors.New("session error") },
 		},

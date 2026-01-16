@@ -52,7 +52,7 @@ func TestAuthService_VerifyPassword_Correct(t *testing.T) {
 		t.Fatalf("failed to hash password: %v", err)
 	}
 
-	if !auth.VerifyPassword(hash, password) {
+	if !auth.VerifyPassword(&hash, password) {
 		t.Error("correct password should verify successfully")
 	}
 }
@@ -66,7 +66,7 @@ func TestAuthService_VerifyPassword_Incorrect(t *testing.T) {
 		t.Fatalf("failed to hash password: %v", err)
 	}
 
-	if auth.VerifyPassword(hash, "wrongPassword") {
+	if auth.VerifyPassword(&hash, "wrongPassword") {
 		t.Error("incorrect password should not verify")
 	}
 }
@@ -76,7 +76,7 @@ func TestAuthService_VerifyPassword_EmptyPassword(t *testing.T) {
 
 	hash, _ := auth.HashPassword("somePassword")
 
-	if auth.VerifyPassword(hash, "") {
+	if auth.VerifyPassword(&hash, "") {
 		t.Error("empty password should not verify")
 	}
 }
@@ -84,7 +84,8 @@ func TestAuthService_VerifyPassword_EmptyPassword(t *testing.T) {
 func TestAuthService_VerifyPassword_InvalidHash(t *testing.T) {
 	auth := &AuthService{}
 
-	if auth.VerifyPassword("not-a-valid-hash", "password") {
+	hash := "not-a-valid-hash"
+	if auth.VerifyPassword(&hash, "password") {
 		t.Error("invalid hash should not verify")
 	}
 }
@@ -188,7 +189,7 @@ func TestPasswordComplexity(t *testing.T) {
 			if err != nil {
 				t.Errorf("failed to hash password: %v", err)
 			}
-			if !auth.VerifyPassword(hash, pwd) {
+			if !auth.VerifyPassword(&hash, pwd) {
 				t.Error("password should verify after hashing")
 			}
 		})
@@ -275,7 +276,7 @@ func TestAuthService_ValidateSession_RedisHit(t *testing.T) {
 			return rowFromValues(
 				userID,
 				"user@example.com",
-				"hash",
+				stringPtr("hash"),
 				"username",
 				true,
 				nil,
@@ -313,7 +314,7 @@ func TestAuthService_ValidateSession_FiltersDeletedUsers(t *testing.T) {
 			return rowFromValues(
 				userID,
 				"user@example.com",
-				"hash",
+				stringPtr("hash"),
 				"user",
 				false,
 				nil,
@@ -507,7 +508,7 @@ func TestAuthService_ValidateSession_DBHit(t *testing.T) {
 			return rowFromValues(
 				userID,
 				"user@example.com",
-				"hash",
+				stringPtr("hash"),
 				"username",
 				true,
 				nil,

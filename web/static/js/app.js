@@ -1800,6 +1800,9 @@ const App = {
       case 'register':
         this.renderRegister(container);
         break;
+      case 'google-complete':
+        this.renderGoogleComplete(container);
+        break;
       case 'magic-link':
         if (queryParams.has('token')) {
           this.handleMagicLinkVerify(container, queryParams.get('token'));
@@ -1901,6 +1904,14 @@ const App = {
     return token;
   },
 
+  getOAuthNextHash() {
+    const token = sessionStorage.getItem('pendingInviteToken');
+    if (token) {
+      return `#friend-invite/${token}`;
+    }
+    return '';
+  },
+
   redirectAfterAuth(defaultHash = '#dashboard') {
     const token = this.consumePendingInviteToken();
     if (token) {
@@ -1966,8 +1977,17 @@ const App = {
     const errorMessages = {
       'invalid_link': 'This login link is invalid or has expired.',
       'link_used': 'This login link has already been used.',
+      'oauth_error': 'Google sign-in failed. Please try again.',
+      'oauth_missing': 'Google sign-in failed. Please try again.',
+      'oauth_state': 'Google sign-in failed. Please try again.',
+      'oauth_nonce': 'Google sign-in failed. Please try again.',
+      'oauth_exchange': 'Google sign-in failed. Please try again.',
+      'oauth_unverified': 'Your Google account email is not verified.',
+      'oauth_link': 'Google sign-in failed. Please try again.',
     };
     const displayError = errorMessages[errorMessage] || errorMessage;
+    const oauthNext = this.getOAuthNextHash();
+    const googleUrl = oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
 
     container.innerHTML = `
       <div class="auth-page">
@@ -1997,6 +2017,9 @@ const App = {
           <div class="auth-divider">
             <span>or</span>
           </div>
+          <a href="${googleUrl}" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
+            Continue with Google
+          </a>
           <a href="#magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
             Sign in with email link
           </a>
@@ -2034,6 +2057,9 @@ const App = {
       return;
     }
 
+    const oauthNext = this.getOAuthNextHash();
+    const googleUrl = oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
+
     container.innerHTML = `
       <div class="auth-page">
         <div class="card auth-card">
@@ -2067,6 +2093,12 @@ const App = {
               Create Account
             </button>
           </form>
+          <div class="auth-divider">
+            <span>or</span>
+          </div>
+          <a href="${googleUrl}" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
+            Continue with Google
+          </a>
           <div class="auth-footer">
             Already have an account? <a href="#login">Sign in</a>
           </div>
@@ -2090,6 +2122,61 @@ const App = {
         this.startNotificationPolling();
         this.redirectAfterAuth('#create');
         this.toast('Account created! Check your email to verify your account.', 'success');
+      } catch (error) {
+        errorEl.textContent = error.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
+  },
+
+  renderGoogleComplete(container) {
+    if (this.user) {
+      window.location.hash = '#dashboard';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="auth-page">
+        <div class="card auth-card">
+          <div class="auth-header">
+            <h2 class="auth-title">Complete Your Signup</h2>
+            <p class="text-muted">Pick a username to finish creating your account</p>
+          </div>
+          <form id="google-complete-form">
+            <div class="form-group">
+              <label class="form-label" for="google-username">Username</label>
+              <input type="text" id="google-username" class="form-input" required minlength="2" maxlength="100">
+            </div>
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="google-searchable">
+                <span>Allow others to find me by username</span>
+              </label>
+              <small class="text-muted">You can change this later in your account settings</small>
+            </div>
+            <div id="google-complete-error" class="form-error hidden"></div>
+            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+              Finish Signup
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('google-complete-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('google-username').value;
+      const searchable = document.getElementById('google-searchable').checked;
+      const errorEl = document.getElementById('google-complete-error');
+
+      try {
+        const response = await API.auth.providerComplete('google', username, searchable);
+        this.user = response.user;
+        this.setupNavigation();
+        await this.refreshNotificationCount();
+        this.startNotificationPolling();
+        this.redirectAfterAuth(response.next || '#create');
+        this.toast('Account created! Welcome!', 'success');
       } catch (error) {
         errorEl.textContent = error.message;
         errorEl.classList.remove('hidden');

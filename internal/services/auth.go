@@ -52,8 +52,11 @@ func (s *AuthService) HashPassword(password string) (string, error) {
 	return string(hash), nil
 }
 
-func (s *AuthService) VerifyPassword(hash, password string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+func (s *AuthService) VerifyPassword(hash *string, password string) bool {
+	if hash == nil || *hash == "" {
+		return false
+	}
+	err := bcrypt.CompareHashAndPassword([]byte(*hash), []byte(password))
 	return err == nil
 }
 

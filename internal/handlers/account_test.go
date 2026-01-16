@@ -30,11 +30,11 @@ func (m *mockAccountService) Delete(ctx context.Context, userID uuid.UUID) error
 
 type mockAccountAuthService struct {
 	services.AuthServiceInterface
-	VerifyPasswordFunc func(hash, password string) bool
+	VerifyPasswordFunc func(hash *string, password string) bool
 	DeleteSessionFunc  func(ctx context.Context, token string) error
 }
 
-func (m *mockAccountAuthService) VerifyPassword(hash, password string) bool {
+func (m *mockAccountAuthService) VerifyPassword(hash *string, password string) bool {
 	return m.VerifyPasswordFunc(hash, password)
 }
 
@@ -92,9 +92,10 @@ func TestAccountHandler_Delete_Unauthorized(t *testing.T) {
 }
 
 func TestAccountHandler_Delete_Validation(t *testing.T) {
-	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: "hash"}
+	hash := "hash"
+	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: &hash}
 	handler := NewAccountHandler(&mockAccountService{}, &mockAccountAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool {
+		VerifyPasswordFunc: func(hash *string, password string) bool {
 			return true
 		},
 	}, false)
@@ -112,9 +113,10 @@ func TestAccountHandler_Delete_Validation(t *testing.T) {
 }
 
 func TestAccountHandler_Delete_WrongPassword(t *testing.T) {
-	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: "hash"}
+	hash := "hash"
+	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: &hash}
 	handler := NewAccountHandler(&mockAccountService{}, &mockAccountAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool {
+		VerifyPasswordFunc: func(hash *string, password string) bool {
 			return false
 		},
 	}, false)
@@ -137,13 +139,14 @@ func TestAccountHandler_Delete_WrongPassword(t *testing.T) {
 }
 
 func TestAccountHandler_Delete_Success(t *testing.T) {
-	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: "hash"}
+	hash := "hash"
+	user := &models.User{ID: uuid.New(), Username: "tester", PasswordHash: &hash}
 	handler := NewAccountHandler(&mockAccountService{
 		DeleteFunc: func(ctx context.Context, userID uuid.UUID) error {
 			return nil
 		},
 	}, &mockAccountAuthService{
-		VerifyPasswordFunc: func(hash, password string) bool {
+		VerifyPasswordFunc: func(hash *string, password string) bool {
 			return true
 		},
 		DeleteSessionFunc: func(ctx context.Context, token string) error {

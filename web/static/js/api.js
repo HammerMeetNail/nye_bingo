@@ -238,6 +238,13 @@ const API = {
       return API.request('POST', '/api/auth/reset-password', { token, password });
     },
 
+    async providerComplete(provider, username, searchable) {
+      return API.request('POST', `/api/auth/${encodeURIComponent(provider)}/complete`, {
+        username,
+        searchable,
+      });
+    },
+
     async updateSearchable(searchable) {
       return API.request('PUT', '/api/auth/searchable', { searchable });
     },
