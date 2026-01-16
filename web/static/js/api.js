@@ -81,9 +81,11 @@ const API = {
           throw new APIError(data?.error || 'Access denied.', response.status, data);
         }
         if (response.status === 409) {
-          // Conflict - return the data so caller can handle it
-          // This is used for card import conflicts
-          return data;
+          // Conflict: by default treat as an error, but allow specific callers to handle it.
+          if (options.allowConflictResponse) {
+            return data;
+          }
+          throw new APIError(data?.error || 'Conflict', response.status, data);
         }
         if (response.status >= 500) {
           throw new APIError(data?.error || 'Server error. Please try again later.', response.status, data);
@@ -264,7 +266,7 @@ const API = {
       if (options && typeof options.gridSize === 'number') body.grid_size = options.gridSize;
       if (options && typeof options.headerText === 'string') body.header_text = options.headerText;
       if (options && typeof options.hasFreeSpace === 'boolean') body.has_free_space = options.hasFreeSpace;
-      return API.request('POST', '/api/cards', body);
+      return API.request('POST', '/api/cards', body, { allowConflictResponse: true });
     },
 
     async list() {
@@ -400,7 +402,7 @@ const API = {
     },
 
     async import(cardData) {
-      return API.request('POST', '/api/cards/import', cardData);
+      return API.request('POST', '/api/cards/import', cardData, { allowConflictResponse: true });
     },
   },
 
