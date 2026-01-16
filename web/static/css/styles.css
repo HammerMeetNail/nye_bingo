@@ -210,7 +210,7 @@ a:hover {
 
 .main-content {
   flex: 1;
-  padding: var(--spacing-xl) 0;
+  padding: var(--spacing-lg) 0 var(--spacing-md);
 }
 
 .page--compact-main .main-content {
@@ -1201,10 +1201,10 @@ a:hover {
 /* Auth Pages */
 .auth-page {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  min-height: 100vh;
-  padding: var(--spacing-lg);
+  min-height: 0;
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-xl);
 }
 
 .auth-card {
@@ -1264,10 +1264,66 @@ a:hover {
 .mb-lg { margin-bottom: var(--spacing-lg); }
 .hidden { display: none !important; }
 
+/* Home */
+.page--home .main-content {
+  padding-top: 0;
+}
+
+.home-hero {
+  padding: 1.75rem 0 1.5rem;
+}
+
+.home-title {
+  margin-bottom: 1rem;
+}
+
+.home-subtitle {
+  font-size: 1.25rem;
+  max-width: 600px;
+  margin: 0 auto 2rem;
+}
+
+.home-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.home-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.home-feature-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.create-card-shell {
+  max-width: 500px;
+  margin: var(--spacing-md) auto 0;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   :root {
     --cell-gap: 6px;
+  }
+
+  .home-hero {
+    padding: 1.5rem 0 1.25rem;
+  }
+
+  .home-subtitle {
+    margin-bottom: 1.5rem;
+  }
+
+  .home-features {
+    margin-top: 1.5rem;
+    gap: 1.25rem;
   }
 
   .container {
@@ -1416,7 +1472,7 @@ a:hover {
   }
 
   .main-content {
-    padding: var(--spacing-md) 0;
+    padding: var(--spacing-md) 0 var(--spacing-md);
   }
 
 
@@ -1481,6 +1537,15 @@ a:hover {
 @media (max-width: 480px) {
   :root {
     --cell-gap: 4px;
+  }
+
+  .home-hero {
+    padding: 1.25rem 0 1rem;
+  }
+
+  .home-features {
+    margin-top: 1rem;
+    gap: 1rem;
   }
 
   .bingo-header {
