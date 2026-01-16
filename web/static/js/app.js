@@ -24,6 +24,8 @@ const App = {
   _pendingNavigationHash: null,
   _revertingHashChange: false,
   _allowNextHashRoute: false,
+  _addItemInFlight: false,
+  _itemEditInFlightPositions: new Set(),
 
   async init() {
     await API.init();
@@ -386,7 +388,7 @@ const App = {
         break;
       case 'save-item-edit': {
         const position = parseInt(form.dataset.position, 10);
-        if (!Number.isNaN(position)) this.saveItemEdit(event, position);
+        if (!Number.isNaN(position)) this.saveItemEdit(event, position, form);
         break;
       }
       case 'clone-card':
@@ -4543,7 +4545,7 @@ const App = {
     }
   },
 
-  async saveItemEdit(event, position) {
+  async saveItemEdit(event, position, form = null) {
     event.preventDefault();
 
     const textarea = document.getElementById(`edit-item-content-${position}`);
@@ -4559,19 +4561,28 @@ const App = {
       return;
     }
 
+    if (this._itemEditInFlightPositions.has(position)) return;
+    this._itemEditInFlightPositions.add(position);
+    const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+    const submitLabel = submitBtn ? submitBtn.textContent : '';
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+    }
+
     const item = this.currentCard.items?.find(i => i.position === position);
-    if (!item) {
-      await this.addItemAtPosition(position, newContent);
-      return;
-    }
-    const oldContent = item.content || '';
-
-    if (newContent === oldContent) {
-      this.closeModal();
-      return;
-    }
-
     try {
+      if (!item) {
+        await this.addItemAtPosition(position, newContent);
+        return;
+      }
+      const oldContent = item.content || '';
+
+      if (newContent === oldContent) {
+        this.closeModal();
+        return;
+      }
+
       if (this.isAnonymousMode) {
         const ok = AnonymousCard.updateItem(position, newContent);
         if (!ok) throw new Error('Failed to update goal');
@@ -4602,6 +4613,12 @@ const App = {
       this.toast('Goal updated', 'success');
     } catch (error) {
       this.toast(error.message, 'error');
+    } finally {
+      this._itemEditInFlightPositions.delete(position);
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = submitLabel || 'Save';
+      }
     }
   },
 
@@ -4612,6 +4629,15 @@ const App = {
     if (!content) {
       this.toast('Please enter a goal', 'error');
       return;
+    }
+
+    if (this._addItemInFlight) return;
+    this._addItemInFlight = true;
+    const addBtn = document.getElementById('add-btn');
+    const addLabel = addBtn ? addBtn.textContent : '';
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.textContent = 'Adding...';
     }
 
     try {
@@ -4689,6 +4715,15 @@ const App = {
       this.confetti();
     } catch (error) {
       this.toast(error.message, 'error');
+    } finally {
+      this._addItemInFlight = false;
+      const itemCount = this.currentCard?.items ? this.currentCard.items.length : 0;
+      const capacity = this.getCardCapacity(this.currentCard);
+      const isFull = capacity > 0 && itemCount >= capacity;
+      if (addBtn) {
+        addBtn.disabled = isFull;
+        addBtn.textContent = addLabel || 'Add';
+      }
     }
   },
 
