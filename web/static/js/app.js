@@ -1777,7 +1777,8 @@ const App = {
     window.scrollTo(0, 0);
     this.currentView = null;
     this.isSharedView = false;
-    document.querySelector('.page')?.classList.remove('page--compact-main');
+    const pageEl = document.querySelector('.page');
+    pageEl?.classList.remove('page--compact-main', 'page--home');
     const hash = window.location.hash.slice(1) || 'home';
     // Parse hash with query parameters: page?param=value
     const [pagePart, queryPart] = hash.split('?');
@@ -1790,6 +1791,7 @@ const App = {
 
     switch (page) {
       case 'home':
+        pageEl?.classList.add('page--home');
         this.renderHome(container);
         break;
       case 'login':
@@ -1911,16 +1913,16 @@ const App = {
   // Page Renderers
   renderHome(container) {
     container.innerHTML = `
-      <div class="text-center" style="padding: 4rem 0;">
-        <h1 style="margin-bottom: 1rem;">
+      <div class="home-hero text-center">
+        <h1 class="home-title">
           Year of <span class="text-gold">Bingo</span>
         </h1>
-        <p style="font-size: 1.25rem; max-width: 600px; margin: 0 auto 2rem;">
+        <p class="home-subtitle">
           Turn your goals into an exciting game! Create a bingo card
           with 24 goals and track your progress throughout the year.
         </p>
         ${this.user ? `
-          <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+          <div class="home-actions">
             <a href="#dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
             <button class="btn btn-secondary btn-lg" data-action="show-create-card-modal">Create New Card</button>
           </div>
@@ -1935,19 +1937,19 @@ const App = {
           </p>
         `}
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 2rem; margin-top: 4rem;">
+      <div class="home-features">
         <div class="card text-center">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">🎯</div>
+          <div class="home-feature-icon">🎯</div>
           <h3>24 Goals</h3>
           <p>Fill your bingo card with 24 meaningful goals for the year ahead.</p>
         </div>
         <div class="card text-center">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">✨</div>
+          <div class="home-feature-icon">✨</div>
           <h3>Track Progress</h3>
           <p>Mark items complete throughout the year with a satisfying stamp.</p>
         </div>
         <div class="card text-center">
-          <div style="font-size: 3rem; margin-bottom: 1rem;">🎉</div>
+          <div class="home-feature-icon">🎉</div>
           <h3>Celebrate Wins</h3>
           <p>Get bingos, share with friends, and celebrate your achievements.</p>
         </div>
@@ -2999,7 +3001,7 @@ const App = {
     ).join('');
 
     container.innerHTML = `
-      <div class="card" style="max-width: 500px; margin: 2rem auto;">
+      <div class="card create-card-shell">
         <div class="card-header text-center">
           <h2 class="card-title">Create Your Bingo Card</h2>
           <p class="card-subtitle">Set up your bingo card - no account needed to start!</p>
@@ -3184,7 +3186,7 @@ const App = {
     ).join('');
 
     container.innerHTML = `
-      <div class="card" style="max-width: 500px; margin: 2rem auto;">
+      <div class="card create-card-shell">
         <div class="text-center mb-lg" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
             <button class="btn btn-secondary btn-lg" data-action="open-ai-wizard" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
                 <span>✨</span> Generate with AI Wizard
