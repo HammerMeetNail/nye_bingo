@@ -1,0 +1,343 @@
+# Provider Authentication (OIDC/OAuth2) — Google First
+
+## Goal
+
+Add “Continue with Google” (OAuth 2.0 + OpenID Connect) alongside existing email/password auth, using a provider-agnostic architecture so Apple/Facebook can be added later without redesign.
+
+Requirements:
+- Users can sign in via email/password or Google.
+- If a user already has an email/password account and later signs in with Google using the same email, they should be signed in seamlessly (account linking happens automatically).
+- If a user first creates an account via Google, they can later set a password (optional) using the existing password-reset flow (reset == set).
+- No “email verification” step is required for Google sign-in; Google sign-in marks the account as verified.
+- Preserve existing security constraints (no inline scripts; avoid CSP changes).
+
+Scope notes:
+- This plan implements Google only.
+- Apple and Facebook are explicitly out of scope for implementation, but the DB schema, service abstractions, and routes are designed so additional providers can be added later by implementing an `OAuthProvider` adapter and enabling config.
+
+Non-goals (for this plan):
+- Supporting additional providers (Apple, GitHub, etc.) beyond a design that doesn’t block them later.
+- “Disconnect Google” UI and account recovery beyond existing flows.
+
+## Chosen Approach (provider-agnostic)
+
+Use OpenID Connect Authorization Code flow (server-side):
+- Frontend shows a “Continue with Google” button that navigates to a backend start endpoint.
+- Backend redirects to Google with `scope=openid email profile`, plus `state` + `nonce` (and optionally PKCE).
+- Google redirects to backend callback with `code` + `state`.
+- Backend exchanges `code` for tokens, verifies `id_token`, extracts (`sub`, `email`, `email_verified`), then:
+  - links and signs in an existing local user, or
+  - starts a “complete signup” step for new users to choose a username.
+
+Rationale:
+- No Google JS SDK required → no CSP changes and no third-party scripts.
+- Consistent with existing “server manages session via HttpOnly cookie” model.
+- The “provider” abstraction is OIDC-first (Google/Apple fit well). Providers that are OAuth2-only (some Facebook setups) can be supported with a thin adapter that yields equivalent identity claims.
+
+## Design Decisions (confirmed)
+
+1) **Require Google’s `email_verified` claim**
+   - Enforce `email_verified == true` (and require `email` to be present) before linking/creating accounts.
+   - Interpretation: no local email verification flow is required for Google sign-in; we still validate Google’s verified-email claim as part of identity assurance.
+
+2) **Username on first Google login**
+   - New Google users must choose a username (and searchable/opt-in) just like email registration.
+   - Existing users keep their username; no prompt.
+
+## Data Model (provider-agnostic)
+
+### Recommended: `user_identities` table
+
+To support Apple/Facebook cleanly, store external identities in a separate table instead of adding per-provider columns.
+
+Schema sketch (`migrations/000020_provider_auth.up.sql`):
+```sql
+ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+
+CREATE TABLE user_identities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  provider VARCHAR(50) NOT NULL,            -- 'google', 'apple', 'facebook'
+  subject TEXT NOT NULL,                    -- stable provider user id (OIDC 'sub' or equivalent)
+  email_at_link_time VARCHAR(255),          -- may be NULL for providers that don't supply email reliably
+  linked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+  CONSTRAINT user_identities_provider_subject_unique UNIQUE (provider, subject)
+);
+
+CREATE INDEX idx_user_identities_user_id ON user_identities(user_id);
+CREATE INDEX idx_user_identities_provider ON user_identities(provider);
+```
+
+Down migration sketch:
+```sql
+DROP TABLE IF EXISTS user_identities;
+ALTER TABLE users ALTER COLUMN password_hash SET NOT NULL;
+```
+
+Notes:
+- Down-migrating the `password_hash NOT NULL` constraint is unsafe if any provider-only users exist; treat down-migrations as dev-only or add a remediation step.
+
+## Configuration
+
+Add a provider-generic config structure in `internal/config/config.go`, with one entry per provider:
+
+Required per provider:
+- `{PROVIDER}_OAUTH_ENABLED` (bool; default false)
+- `{PROVIDER}_OAUTH_CLIENT_ID`
+- `{PROVIDER}_OAUTH_CLIENT_SECRET` (note: Apple uses a JWT client secret; still treat as “secret”)
+- `{PROVIDER}_OAUTH_REDIRECT_URL` (full URL; e.g. `https://yearofbingo.com/api/auth/google/callback`)
+
+OIDC providers (Google/Apple) also need:
+- `{PROVIDER}_OIDC_ISSUER_URL` (Google default `https://accounts.google.com`, Apple `https://appleid.apple.com`)
+- `{PROVIDER}_OIDC_SCOPES` (default `openid,email,profile` where supported)
+
+Optionally:
+- `OAUTH_ALLOWED_PROVIDERS=google,apple,facebook` to drive UI rendering (or expose `/api/auth/providers`).
+
+Local dev:
+- By default disabled; enable only when credentials exist.
+
+## Backend: Services & Handlers
+
+### New/updated interfaces (testability)
+
+Create a small interface layer so unit tests don’t do network calls:
+
+`internal/services/oidc.go`:
+- `type Provider string` (e.g. `ProviderGoogle`, `ProviderApple`, `ProviderFacebook`)
+- `type IdentityClaims struct { Provider Provider; Subject string; Email string; EmailVerified bool }`
+- `type OAuthProvider interface { Provider() Provider; AuthCodeURL(state, nonce string) string; ExchangeAndVerify(ctx, code string, nonce string) (IdentityClaims, error) }`
+
+Provide a real implementation using:
+- `golang.org/x/oauth2` for code exchange
+- `github.com/coreos/go-oidc/v3/oidc` (or equivalent) for ID token verification
+
+Provider adapters:
+- **Google**: standard OIDC; `sub/email/email_verified` from `id_token`.
+- **Apple (future)**: standard OIDC issuer. For new signups we require email+verified; for returning users we rely on `(provider, subject)` even if email is omitted on later logins.
+- **Facebook (future)**: only enable if we can meet the same UX/safety contract as Google (stable subject + trustworthy verified email signal for email-based linking). If Facebook cannot provide that, do not enable it under this “Google-like” flow without adding an explicit email-verification step (which would be a different plan).
+
+### Account linking/creation logic (core)
+
+Implement in `internal/services/provider_auth.go` (pure logic, TDD-first):
+
+Split the flow so new users can choose a username before we create a DB row:
+
+`LinkOrFindUserFromProvider(ctx, claims)`:
+1. Normalize email: trim + lowercase.
+2. Validate: `claims.Provider` and `claims.Subject` are present.
+3. Lookup by `(provider, subject)` in `user_identities`:
+   - If exists → return that user.
+4. Enforce “Google-like” email assurance for account creation/linking:
+   - Require `claims.Email != ""`.
+   - Require `claims.EmailVerified == true`.
+5. Link-by-email:
+   - Lookup user by email:
+     - If exists: link identity by inserting `user_identities` row; mark `users.email_verified=true` (and set `email_verified_at`) for Google/Apple where appropriate.
+     - Return user.
+6. Else return a sentinel “new user” result containing `{provider, subject, email}` (no DB write yet).
+
+`CreateUserFromProviderPending(ctx, pending, username, searchable)`:
+- Validate username exactly like email registration (2–100 chars; unique case-insensitive).
+- Insert user with:
+  - `email = pending.Email` (must be non-empty)
+  - `password_hash = NULL`
+  - `username = requested username`
+  - `searchable = requested searchable`
+  - `email_verified = true`, `email_verified_at=NOW()` (for providers enabled under this plan’s contract)
+- Return user.
+
+Then insert identity row:
+- `INSERT INTO user_identities (user_id, provider, subject, email_at_link_time) VALUES (...)`
+
+Implementation notes:
+- Do linking/creation inside a transaction.
+- Handle unique constraint races (email, username, `(provider, subject)`) with retries where appropriate.
+
+### HTTP endpoints
+
+Add routes (in `cmd/server/main.go`):
+- `GET /api/auth/{provider}/start`
+- `GET /api/auth/{provider}/callback`
+- `POST /api/auth/{provider}/complete`
+
+Implement Google as `provider=google` first; keep routing and handler logic generic.
+
+Handler methods on `internal/handlers/auth.go` (or a new `auth_google.go`):
+
+`ProviderStart(w, r)`:
+- If Google auth disabled → 404 (or 501).
+- Compute `state` and `nonce` (crypto/rand).
+- Store `state` + `nonce` in **HttpOnly cookies** with `SameSite=Lax` so they are sent on the cross-site redirect back from Google.
+  - Do not reuse the session cookie (it’s `SameSite=Strict`).
+- Optional: accept `next` query param (desired SPA route after login) and store it in cookie too.
+  - Sanitize `next` using a whitelist of hash routes to prevent open redirects.
+- Redirect (302) to the provider’s `AuthCodeURL(...)`.
+
+`ProviderCallback(w, r)`:
+- Validate query params:
+  - If `error` from Google → redirect to `/#login?error=...` (sanitized).
+  - Require `code` + `state`.
+- Validate `state` cookie equals `state` query param (constant time compare).
+- Exchange `code` for tokens, verify `id_token`, validate `nonce` claim matches nonce cookie.
+- Call `LinkOrFindUserFromProvider`.
+- If existing user:
+  - Create app session cookie using existing `AuthService.CreateSession`.
+  - Clear oauth cookies (`state`, `nonce`, `next`) by expiring them.
+  - Redirect to `/#dashboard` (or stored `next`).
+- If new user:
+  - Create a short-lived “pending provider login” record in Redis keyed by a random token (TTL ~10 minutes), containing `{provider,subject,email}`.
+  - Set `{provider}_pending` HttpOnly cookie with that token (`SameSite=Lax`) so SPA can complete signup.
+  - Redirect to `/#google-complete` for Google (and preserve `next` via cookie if used).
+
+`ProviderComplete(w, r)`:
+- Reads `{provider}_pending` cookie and JSON body `{ username, searchable }`.
+- Loads pending record from Redis; if missing/expired → 400 with a friendly error telling user to restart Google login.
+- Calls `CreateUserFromProviderPending(...)`.
+- Creates session cookie.
+- Clears `{provider}_pending` (and `next`) cookies and deletes the pending record from Redis.
+- Returns 201 with `{ user }`.
+
+Cookie settings:
+- `oauth_state`, `oauth_nonce`: `HttpOnly`, `Secure=cfg.Server.Secure`, `SameSite=Lax`, short max-age (5–10 minutes).
+- Session cookie remains `SameSite=Strict` (ok because it’s set on callback response; subsequent same-site app requests include it).
+
+### Update existing password-related behavior
+
+Because `password_hash` may be NULL:
+- `AuthHandler.Login`: if `password_hash` is NULL → respond `401` with generic “Invalid email or password”.
+- `AuthHandler.ChangePassword`: if `password_hash` is NULL → `400` with message like “No password set; use password reset to set one.”
+- `AuthService.VerifyPassword`: handle empty/NULL gracefully (treat as mismatch).
+
+### Update user model/queries
+
+Update `internal/models/user.go` and DB scans:
+- Represent nullable `password_hash` safely (e.g., `*string`, `pgtype.Text`, or separate `HasPassword bool`).
+- Consider adding `has_password` to JSON response for profile UI decisions (optional but useful).
+- Extend `SELECT`/`Scan` statements in:
+  - `internal/services/user.go`
+  - `internal/services/auth.go` (`getUserByID`)
+to handle NULL password hash and new google fields.
+
+### OpenAPI documentation
+
+Update `web/static/openapi.yaml`:
+- Document `/api/auth/{provider}/start` and `/api/auth/{provider}/callback` as redirect endpoints (302), noting cookies and the final SPA redirect behavior.
+- Optionally include concrete `google` paths as examples.
+
+## Frontend (SPA)
+
+### Login/Register UI
+
+Update `web/static/js/app.js`:
+- Add a “Continue with Google” button on both `renderLogin` and `renderRegister`.
+- Implement as a normal `<a>` link to `/api/auth/google/start` (which is `/api/auth/{provider}/start`).
+- If backend exposes a “Google enabled” flag, conditionally render the button (optional). Otherwise the link can exist and backend can 404 when disabled.
+
+Future:
+- Add Apple and Facebook buttons that point to `/api/auth/apple/start` and `/api/auth/facebook/start`.
+
+### Complete Google signup route
+
+Add a new SPA route `#google-complete`:
+- UI mirrors `renderRegister` but omits email/password fields.
+- Form fields: `username` and `searchable` (same as email registration).
+- Submit calls `API.auth.providerComplete('google', username, searchable)` → `POST /api/auth/google/complete`.
+- On success: sets `App.user`, runs `setupNavigation`, then `redirectAfterAuth(...)`.
+
+Future:
+- Reuse the same screen for other providers: `#oauth-complete?provider=apple` (or keep per-provider hash routes that share one renderer).
+
+### Post-auth redirect behavior
+
+If you implement `next`:
+- When user is redirected to login, include the intended target in `next`.
+- Reuse `redirectAfterAuth` patterns already in `App`.
+
+## Testing Plan (TDD-first)
+
+### 1) Unit tests: core linking logic (no HTTP)
+
+Add `internal/services/provider_auth_test.go`:
+- `TestLinkOrFindUserFromProvider_GoogleRejectsUnverifiedEmail`
+- `TestLinkOrFindUserFromProvider_FindsByProviderSubject`
+- `TestLinkOrFindUserFromProvider_GoogleLinksByEmail`
+- `TestLinkOrFindUserFromProvider_GoogleMarksEmailVerifiedOnLink`
+- `TestLinkOrFindUserFromProvider_NewUser_ReturnsPending`
+- `TestCreateUserFromProviderPending_CreatesUserAndIdentity`
+- `TestCreateUserFromProviderPending_UsernameCollision_ReturnsConflict`
+
+Use a test DB (preferred if existing patterns exist) or mock `DBConn` and assert SQL patterns; keep it deterministic.
+
+### 2) Handler tests: redirects + cookies + error handling
+
+Add `internal/handlers/auth_google_test.go`:
+- Start endpoint:
+  - sets `oauth_state` + `oauth_nonce` cookies with `SameSite=Lax`
+  - redirects to provider URL containing expected query params (`client_id`, `redirect_uri`, `scope`, `state`, `nonce`, `response_type=code`)
+- Callback endpoint:
+  - rejects missing/invalid state (400 or redirect to login with error)
+  - handles provider `error` query param
+  - for existing users: sets session cookie and redirects to SPA route; clears oauth cookies
+  - for new users: sets `{provider}_pending` cookie (Google: `google_pending`) and redirects to `/#google-complete`
+  - rejects unverified email claims
+
+- Complete endpoint:
+  - rejects missing/expired `{provider}_pending` (Google: `google_pending`)
+  - validates username constraints and uniqueness
+  - on success: returns user and sets session cookie
+
+Mock the `OIDCExchanger` so tests do not call Google.
+
+### 3) Integration-ish tests: password reset for Google-first users
+
+Extend `internal/handlers/auth_test.go`:
+- Ensure `ResetPassword` works when the user previously had `password_hash = NULL` (this is the “set password” story).
+- Ensure `Login` rejects password attempts when `password_hash` is NULL.
+
+### 4) Playwright E2E (no external Google)
+
+Add a local fake OIDC provider for e2e:
+- Create a small service (Go or Node) that implements:
+  - `/.well-known/openid-configuration`
+  - `/authorize` (immediately redirects back with `code` + `state`)
+  - `/token` (returns `id_token` signed by a local key)
+  - `/keys` (JWKS)
+- Add it as a container in `compose.yaml` under `profiles: [e2e]`.
+- Configure the app in e2e to use it via env vars:
+  - `GOOGLE_OAUTH_ENABLED=true`
+  - `GOOGLE_OAUTH_ISSUER_URL=http://oidc:XXXX`
+  - client ID/secret can be dummy values accepted by the fake provider
+
+New spec `tests/e2e/google-auth.spec.js`:
+- “Google login prompts for username on first login” (lands on `#google-complete`, then completes signup, then dashboard; profile shows Verified badge).
+- “Google login links to existing password account by email”:
+  - register with password
+  - logout
+  - login via Google using same email
+  - assert the same account (e.g., username unchanged, cards retained)
+- “Google-first user can set password via reset flow and then login with password”.
+
+### 5) Security regression checks
+
+- Ensure CSP headers remain unchanged (`tests/e2e/csp-header.spec.js` continues to pass).
+- Ensure no user-controlled values are injected into HTML unsafely (use `escapeHtml` for any new UI strings; avoid `innerHTML` for dynamic content).
+
+## Rollout Checklist
+
+- Google Cloud Console:
+  - Create OAuth Client (Web application).
+  - Set Authorized redirect URIs:
+    - `https://yearofbingo.com/api/auth/google/callback`
+    - `http://localhost:8080/api/auth/google/callback` (dev)
+- Configure production secrets:
+  - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`
+- Deploy migration(s) before enabling the feature.
+- Enable `GOOGLE_OAUTH_ENABLED=true` only after verifying callback works in production.
+
+## Notes
+
+- “Google signup” should include the same `searchable` opt-in checkbox as email signup.
+- Apple/Facebook fit without schema churn because identities are stored in `user_identities(provider, subject, ...)` and the HTTP layer is `/api/auth/{provider}/...`.
