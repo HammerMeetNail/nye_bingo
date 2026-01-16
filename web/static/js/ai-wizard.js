@@ -1,4 +1,5 @@
 const AIWizard = {
+  _busy: false,
   state: {
     step: 'input', // input, loading, review
     inputs: {},
@@ -261,6 +262,7 @@ const AIWizard = {
 
   async handleGenerate(event) {
     event.preventDefault();
+    if (this._busy) return;
     if (!App.user) {
       App.toast('Please log in to use AI features.', 'error');
       return;
@@ -270,6 +272,8 @@ const AIWizard = {
       this.showVerificationRequiredModal();
       return;
     }
+
+    this._busy = true;
     
     const category = document.getElementById('ai-category').value;
     const focus = document.getElementById('ai-focus').value;
@@ -277,10 +281,12 @@ const AIWizard = {
     const budgetRadio = document.querySelector('input[name="budget"]:checked');
     if (!difficultyRadio) {
       App.toast('Please select a difficulty level.', 'error');
+      this._busy = false;
       return;
     }
     if (!budgetRadio) {
       App.toast('Please select a budget.', 'error');
+      this._busy = false;
       return;
     }
     const difficulty = difficultyRadio.value;
@@ -320,6 +326,8 @@ const AIWizard = {
       App.toast(error.message, 'error');
       this.state.step = 'input';
       this.render();
+    } finally {
+      this._busy = false;
     }
   },
 
@@ -390,6 +398,7 @@ const AIWizard = {
   },
 
   async createCard() {
+    if (this._busy) return;
     const year = new Date().getFullYear();
     const focus = (this.state.inputs.focus || '').trim().replace(/\s+/g, ' ').slice(0, 50);
     const title = focus ? `${focus} Bingo` : `${year} AI Bingo`;
@@ -401,6 +410,7 @@ const AIWizard = {
          throw new Error("Please log in to use AI features.");
       }
 
+      this._busy = true;
       App.showLoading(document.querySelector('.modal-body'), 'Creating card...');
 
       const response = await API.cards.create(year, title, category, {
@@ -418,17 +428,21 @@ const AIWizard = {
       App.toast(error.message, 'error');
       this.state.step = 'review';
       this.render();
+    } finally {
+      this._busy = false;
     }
   },
 
   async addToCard() {
     if (!this.state.targetCardId) return;
+    if (this._busy) return;
 
     try {
       if (!App.user) {
          throw new Error("Please log in to use AI features.");
       }
 
+      this._busy = true;
       App.showLoading(document.querySelector('.modal-body'), 'Adding goals...');
 
       await this.fillCard(this.state.targetCardId);
@@ -446,6 +460,8 @@ const AIWizard = {
       App.toast(error.message, 'error');
       this.state.step = 'review';
       this.render();
+    } finally {
+      this._busy = false;
     }
   },
 
