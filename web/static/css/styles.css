@@ -1873,6 +1873,10 @@ a:hover {
   margin: 0;
 }
 
+.friends-page > .card + .card {
+  margin-top: var(--spacing-lg);
+}
+
 .friends-search {
   margin-bottom: var(--spacing-lg);
 }
