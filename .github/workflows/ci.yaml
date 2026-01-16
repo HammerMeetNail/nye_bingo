@@ -485,6 +485,13 @@ jobs:
           IMAGE_DIGEST: ${{ needs.scan-and-push.outputs.digest }}
           IMAGE_TAG: ${{ needs.scan-and-push.outputs.tag }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_OAUTH_ENABLED: ${{ secrets.GOOGLE_OAUTH_ENABLED }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REDIRECT_URL: ${{ secrets.GOOGLE_OAUTH_REDIRECT_URL }}
+          GOOGLE_OIDC_ISSUER_URL: ${{ secrets.GOOGLE_OIDC_ISSUER_URL }}
+          GOOGLE_OIDC_SCOPES: ${{ secrets.GOOGLE_OIDC_SCOPES }}
+          OAUTH_ALLOWED_PROVIDERS: ${{ secrets.OAUTH_ALLOWED_PROVIDERS }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -525,6 +532,13 @@ jobs:
           BACKUP_NOTIFY_EMAILS=${BACKUP_NOTIFY_EMAILS}
           GEMINI_API_KEY=${GEMINI_API_KEY}
           BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
+          GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED}
+          GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+          GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+          GOOGLE_OAUTH_REDIRECT_URL=${GOOGLE_OAUTH_REDIRECT_URL}
+          GOOGLE_OIDC_ISSUER_URL=${GOOGLE_OIDC_ISSUER_URL}
+          GOOGLE_OIDC_SCOPES=${GOOGLE_OIDC_SCOPES}
+          OAUTH_ALLOWED_PROVIDERS=${OAUTH_ALLOWED_PROVIDERS}
           ENVFILE
             chmod 600 .env
             chmod 0755 scripts/*.sh

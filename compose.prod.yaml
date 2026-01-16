@@ -24,6 +24,13 @@ services:
       - REDIS_PASSWORD=
       - REDIS_DB=0
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED:-false}
+      - GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+      - GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+      - GOOGLE_OAUTH_REDIRECT_URL=${GOOGLE_OAUTH_REDIRECT_URL}
+      - GOOGLE_OIDC_ISSUER_URL=${GOOGLE_OIDC_ISSUER_URL:-https://accounts.google.com}
+      - GOOGLE_OIDC_SCOPES=${GOOGLE_OIDC_SCOPES:-openid,email,profile}
+      - OAUTH_ALLOWED_PROVIDERS=${OAUTH_ALLOWED_PROVIDERS:-google}
     depends_on:
       postgres:
         condition: service_healthy
