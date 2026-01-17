@@ -222,6 +222,12 @@ describe('parsePath', () => {
     expect(result.params).toEqual([]);
   });
 
+  test('parses path with trailing slash', () => {
+    const result = parsePath('/dashboard/');
+    expect(result.page).toBe('dashboard');
+    expect(result.params).toEqual([]);
+  });
+
   test('parses path with params', () => {
     const result = parsePath('/card/abc-123');
     expect(result.page).toBe('card');

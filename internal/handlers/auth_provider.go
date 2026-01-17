@@ -361,7 +361,9 @@ func (h *ProviderAuthHandler) readOAuthNext(r *http.Request) string {
 
 func (h *ProviderAuthHandler) redirectTarget(next, fallback string) string {
 	if next != "" {
-		return next
+		if safe := sanitizeNext(next); safe != "" {
+			return safe
+		}
 	}
 	if strings.HasPrefix(fallback, "/") {
 		return fallback
@@ -401,7 +403,7 @@ func sanitizeNext(value string) string {
 	if !strings.HasPrefix(value, "/") {
 		return ""
 	}
-	if strings.HasPrefix(value, "//") {
+	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
 		return ""
 	}
 	for _, r := range value[1:] {

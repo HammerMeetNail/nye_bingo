@@ -96,3 +96,34 @@ func TestSharePublicHandler_Serve_NotFound(t *testing.T) {
 		t.Fatalf("expected not found content and redirect meta to be present")
 	}
 }
+
+func TestSharePublicHandler_Serve_InvalidToken(t *testing.T) {
+	called := false
+	handler, err := NewSharePublicHandler("../../web/templates", &mockSharePublicService{
+		GetSharedCardFunc: func(ctx context.Context, got string) (*models.SharedCard, error) {
+			called = true
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create handler: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/s/bad-token", nil)
+	req.Host = "example.com"
+	req.SetPathValue("token", "bad-token")
+	rr := httptest.NewRecorder()
+
+	handler.Serve(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", rr.Code)
+	}
+	if called {
+		t.Fatalf("expected share lookup to be skipped for invalid token")
+	}
+	body := rr.Body.String()
+	if !containsAll(body, []string{`missing or malformed`, `url=/`}) {
+		t.Fatalf("expected invalid token messaging and redirect meta")
+	}
+}

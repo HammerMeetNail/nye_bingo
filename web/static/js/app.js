@@ -465,7 +465,11 @@ const App = {
   },
 
   resolveSpaLink(href) {
-    if (!href || href.startsWith('#')) return null;
+    if (!href) return null;
+    if (href.startsWith('#')) {
+      if (href === '#') return null;
+      return this.legacyHashToPath(href);
+    }
     if (href.startsWith('mailto:') || href.startsWith('tel:')) return null;
     let url;
     try {

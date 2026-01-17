@@ -419,3 +419,33 @@ func TestProviderAuthHandler_Complete_UsernameConflict(t *testing.T) {
 
 	assertErrorResponse(t, rr, http.StatusConflict, "Username already taken")
 }
+
+func TestSanitizeNext_RejectsUnsafePrefix(t *testing.T) {
+	for _, input := range []string{"//evil.com", "/\\evil.com"} {
+		if got := sanitizeNext(input); got != "" {
+			t.Fatalf("expected %q to be rejected, got %q", input, got)
+		}
+	}
+}
+
+func TestSanitizeNext_AllowsLegacyHash(t *testing.T) {
+	if got := sanitizeNext("#dashboard"); got != "/dashboard" {
+		t.Fatalf("expected legacy hash to normalize to /dashboard, got %q", got)
+	}
+}
+
+func TestRedirectTarget_FallsBackOnUnsafeNext(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("https://evil.com", "dashboard")
+	if target != "/dashboard" {
+		t.Fatalf("expected fallback path, got %q", target)
+	}
+}
+
+func TestRedirectTarget_UsesSafeNext(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("/card/abc-123", "/dashboard")
+	if target != "/card/abc-123" {
+		t.Fatalf("expected safe next path, got %q", target)
+	}
+}
