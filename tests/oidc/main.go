@@ -54,6 +54,10 @@ type server struct {
 }
 
 func main() {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("APP_ENV")), "production") {
+		log.Fatal("refusing to start test OIDC server in production")
+	}
+
 	srv := newServer()
 
 	http.HandleFunc("/.well-known/openid-configuration", srv.handleWellKnown)
@@ -72,6 +76,7 @@ func main() {
 	}
 
 	log.Printf("OIDC test server listening on %s", addr)
+	log.Printf("WARNING: This OIDC server is test-only and accepts any client_secret for valid auth codes.")
 	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}

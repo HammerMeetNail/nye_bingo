@@ -1979,6 +1979,13 @@ const App = {
     const errorMessages = {
       'invalid_link': 'This login link is invalid or has expired.',
       'link_used': 'This login link has already been used.',
+      'access_denied': 'Google sign-in was cancelled.',
+      'invalid_request': 'Google sign-in failed. Please try again.',
+      'invalid_scope': 'Google sign-in failed. Please try again.',
+      'unauthorized_client': 'Google sign-in failed. Please try again.',
+      'unsupported_response_type': 'Google sign-in failed. Please try again.',
+      'server_error': 'Google sign-in failed. Please try again.',
+      'temporarily_unavailable': 'Google sign-in is temporarily unavailable. Please try again.',
       'oauth_error': 'Google sign-in failed. Please try again.',
       'oauth_invalid': 'Google sign-in failed. Please try again.',
       'oauth_missing': 'Google sign-in failed. Please try again.',

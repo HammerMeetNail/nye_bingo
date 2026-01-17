@@ -86,7 +86,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 	}
 
 	if providerErr := r.URL.Query().Get("error"); providerErr != "" {
-		h.redirectToLoginError(w, r, providerErr)
+		h.redirectToLoginError(w, r, sanitizeProviderErrorParam(providerErr))
 		return
 	}
 
@@ -253,13 +253,29 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 	h.setSessionCookie(w, token)
 	h.clearOAuthCookie(w, providerPendingCookieName(providerKey))
 	h.clearOAuthCookie(w, oauthNextCookieName)
-	_ = h.redis.Del(r.Context(), pendingKey)
 
 	next := h.readOAuthNext(r)
-	writeJSON(w, http.StatusCreated, providerCompleteResponse{
+	response := providerCompleteResponse{
 		User: user,
 		Next: next,
-	})
+	}
+	payload, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("Provider complete response marshal failed: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if _, err := w.Write(payload); err != nil {
+		// Best-effort: if the client doesn't receive the response, keep the pending
+		// Redis record so a retry can succeed.
+		log.Printf("Provider complete response write failed: %v", err)
+		return
+	}
+
+	_ = h.redis.Del(r.Context(), pendingKey)
 }
 
 type providerCompleteResponse struct {
@@ -370,13 +386,43 @@ func sanitizeNext(value string) string {
 	if value == "" {
 		return ""
 	}
+	if len(value) > 512 {
+		return ""
+	}
 	if !strings.HasPrefix(value, "#") {
+		return ""
+	}
+	if len(value) < 2 {
 		return ""
 	}
 	if strings.Contains(value, "\n") || strings.Contains(value, "\r") {
 		return ""
 	}
+	for _, r := range value[1:] {
+		if !isAllowedNextRune(r) {
+			return ""
+		}
+	}
 	return value
+}
+
+func sanitizeProviderErrorParam(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return "oauth_error"
+	}
+	switch value {
+	case "access_denied",
+		"invalid_request",
+		"invalid_scope",
+		"server_error",
+		"temporarily_unavailable",
+		"unauthorized_client",
+		"unsupported_response_type":
+		return value
+	default:
+		return "oauth_error"
+	}
 }
 
 func sanitizeErrorParam(value string) string {
@@ -398,6 +444,16 @@ func sanitizeErrorParam(value string) string {
 func isAllowedErrorRune(r rune) bool {
 	return r == '-' || r == '_' ||
 		(r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9')
+}
+
+func isAllowedNextRune(r rune) bool {
+	switch r {
+	case '-', '_', '/', '.', '?', '&', '=', '%', ':', '@':
+		return true
+	}
+	return (r >= 'a' && r <= 'z') ||
 		(r >= 'A' && r <= 'Z') ||
 		(r >= '0' && r <= '9')
 }
