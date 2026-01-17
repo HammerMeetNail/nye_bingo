@@ -17,7 +17,7 @@ test('anonymous card conflicts can keep the existing card', async ({ page }, tes
   await finalizeCard(page);
   await logout(page);
 
-  await page.goto('/#create');
+  await page.goto('/create');
   await page.selectOption('#card-grid-size', '3');
   await page.getByRole('button', { name: 'Create Card' }).click();
   await expect(page.locator('#item-input')).toBeVisible();

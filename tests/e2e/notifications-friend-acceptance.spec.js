@@ -15,10 +15,10 @@ test('friend acceptance notifications are delivered', async ({ browser }, testIn
 
   await sendFriendRequest(pageB, userA.username);
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
 
-  await pageB.goto('/#notifications');
+  await pageB.goto('/notifications');
   await expect(pageB.locator('.notification-message')).toContainText('accepted your friend request');
 
   await contextA.close();

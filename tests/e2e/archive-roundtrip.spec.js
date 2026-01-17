@@ -17,7 +17,7 @@ test('cards can be archived and unarchived from dashboard', async ({ page }, tes
   const year = new Date().getFullYear();
   await createFinalizedCardFromModal(page, { title, year });
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   const preview = page.locator('.dashboard-card-preview').filter({ hasText: title });
   await expect(preview).toBeVisible();
   await expect(preview.locator('.archive-badge')).toHaveCount(0);

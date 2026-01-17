@@ -13,7 +13,7 @@ test('reminder test email sends and arrives', async ({ page, request }, testInfo
   const user = buildUser(testInfo, 'remind');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await createCardFromModal(page, { title: 'Reminder Card' });
   await fillCardWithSuggestions(page);
   await finalizeCard(page);
@@ -37,5 +37,5 @@ test('reminder test email sends and arrives', async ({ page, request }, testInfo
   });
 
   const body = message.Text || message.text || message.HTML || message.html || message.Body || message.body || '';
-  expect(body).toContain('#profile');
+  expect(body).toContain('/profile');
 });

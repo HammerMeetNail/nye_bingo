@@ -38,8 +38,8 @@ type goalReminderEmailParams struct {
 func buildCheckinEmail(params checkinEmailParams) (string, string, string) {
 	cardName := params.Card.DisplayName()
 	progress := fmt.Sprintf("%d/%d complete - %s", params.Stats.Completed, params.Stats.Total, pluralizeBingo(params.Stats.Bingos))
-	manageURL := fmt.Sprintf("%s#profile", params.BaseURL)
-	cardURL := fmt.Sprintf("%s#card/%s", params.BaseURL, params.Card.ID)
+	manageURL := fmt.Sprintf("%s/profile", params.BaseURL)
+	cardURL := fmt.Sprintf("%s/card/%s", params.BaseURL, params.Card.ID)
 	unsubscribe := params.UnsubscribeURL
 	safeManageURL := templateEscape(manageURL)
 	safeCardURL := templateEscape(cardURL)
@@ -132,8 +132,8 @@ yearofbingo.com`,
 func buildGoalReminderEmail(params goalReminderEmailParams) (string, string, string) {
 	cardName := cardDisplayName(params.CardTitle, &params.CardYear)
 	goalText := templateEscape(params.GoalText)
-	manageURL := fmt.Sprintf("%s#profile", params.BaseURL)
-	goalURL := fmt.Sprintf("%s#card/%s?item=%s", params.BaseURL, params.CardID, params.ItemID)
+	manageURL := fmt.Sprintf("%s/profile", params.BaseURL)
+	goalURL := fmt.Sprintf("%s/card/%s?item=%s", params.BaseURL, params.CardID, params.ItemID)
 	unsubscribe := params.UnsubscribeURL
 	safeManageURL := templateEscape(manageURL)
 	safeGoalURL := templateEscape(goalURL)

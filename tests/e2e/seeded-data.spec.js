@@ -23,7 +23,7 @@ test('seeded cards render with progress and FREE space', async ({ page }) => {
 test('friend card reactions can be added', async ({ page }) => {
   await loginWithCredentials(page, 'bob@test.com', 'Password1');
 
-  await page.goto('/#friends');
+  await page.goto('/friends');
   await expect(page.getByRole('heading', { name: 'Friends', level: 2 })).toBeVisible();
 
   const friendRow = page.locator('#friends-list .friend-item').first();

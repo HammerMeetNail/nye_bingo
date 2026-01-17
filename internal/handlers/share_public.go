@@ -49,13 +49,13 @@ func (h *SharePublicHandler) Serve(w http.ResponseWriter, r *http.Request) {
 		h.render(w, r, http.StatusNotFound, SharePageData{
 			Found:        false,
 			PageTitle:    "Invalid Share Link - Year of Bingo",
-			RedirectPath: "/#home",
+			RedirectPath: "/",
 			ErrorMessage: "This share link is missing or malformed.",
 		})
 		return
 	}
 
-	redirectPath := "/#share/" + token
+	redirectPath := "/share/" + token
 
 	shared, err := h.cardService.GetSharedCardByToken(r.Context(), token)
 	if err != nil {

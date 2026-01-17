@@ -104,7 +104,7 @@ func (s *EmailService) SendVerificationEmail(ctx context.Context, userID uuid.UU
 		return fmt.Errorf("storing verification token: %w", err)
 	}
 
-	verifyURL := fmt.Sprintf("%s#verify-email?token=%s", s.baseURL, token)
+	verifyURL := fmt.Sprintf("%s/verify-email?token=%s", s.baseURL, token)
 
 	html, text := s.renderVerificationEmail(verifyURL)
 
@@ -169,7 +169,7 @@ func (s *EmailService) SendMagicLinkEmail(ctx context.Context, email string) err
 		return fmt.Errorf("storing magic link token: %w", err)
 	}
 
-	loginURL := fmt.Sprintf("%s#magic-link?token=%s", s.baseURL, token)
+	loginURL := fmt.Sprintf("%s/magic-link?token=%s", s.baseURL, token)
 
 	html, text := s.renderMagicLinkEmail(loginURL)
 
@@ -232,7 +232,7 @@ func (s *EmailService) SendPasswordResetEmail(ctx context.Context, userID uuid.U
 		return fmt.Errorf("storing password reset token: %w", err)
 	}
 
-	resetURL := fmt.Sprintf("%s#reset-password?token=%s", s.baseURL, token)
+	resetURL := fmt.Sprintf("%s/reset-password?token=%s", s.baseURL, token)
 
 	html, text := s.renderPasswordResetEmail(resetURL)
 

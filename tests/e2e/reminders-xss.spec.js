@@ -14,7 +14,7 @@ test('reminder emails escape goal content', async ({ page, request }, testInfo) 
   const user = buildUser(testInfo, 'remxss');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await createCardFromModal(page, { title: 'XSS Card', gridSize: 3 });
   await fillCardWithSuggestions(page);
 
@@ -44,12 +44,12 @@ test('reminder emails escape goal content', async ({ page, request }, testInfo) 
   await expectToast(page, 'Goal reminder saved');
   await page.getByRole('button', { name: 'Cancel' }).click();
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   const reminderList = page.locator('#reminder-goal-list');
   await expect(reminderList).toContainText(xssGoal);
   await expect(reminderList.locator('img')).toHaveCount(0);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await expect(page.getByRole('button', { name: 'Send test email' })).toBeEnabled();
   const sendResponse = page.waitForResponse((response) => (
     response.url().includes('/api/reminders/test')

@@ -41,7 +41,7 @@ test('AI wizard continues after free limit for verified users', async ({ page, r
   const user = buildUser(testInfo, 'aiver');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   const banner = page.locator('.verification-banner');
   await expect(banner).toBeVisible();
   const after = Date.now();
@@ -55,10 +55,10 @@ test('AI wizard continues after free limit for verified users', async ({ page, r
   });
   const token = extractTokenFromEmail(message, 'verify-email');
 
-  await page.goto(`/#verify-email?token=${token}`);
+  await page.goto(`/verify-email?token=${token}`);
   await expect(page.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
 
-  await page.goto('/#create');
+  await page.goto('/create');
   await page.getByRole('button', { name: /Generate with AI Wizard/i }).click();
   await expect(page.locator('#modal-title')).toContainText('AI Goal Wizard');
 

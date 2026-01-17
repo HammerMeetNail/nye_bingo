@@ -18,7 +18,7 @@ test.describe.serial('google auth', () => {
       sub: `sub-${user.email}`,
     });
 
-    await page.goto('/#login');
+    await page.goto('/login');
     await page.getByRole('link', { name: 'Continue with Google' }).click();
 
     await expect(page.getByRole('heading', { name: 'Complete Your Signup' })).toBeVisible();
@@ -33,7 +33,7 @@ test.describe.serial('google auth', () => {
     await completeResponse;
 
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
-    await page.goto('/#profile');
+    await page.goto('/profile');
     await expect(page.locator('.badge').filter({ hasText: 'Verified' })).toBeVisible();
   });
 
@@ -48,7 +48,7 @@ test.describe.serial('google auth', () => {
       sub: `sub-${user.email}`,
     });
 
-    await page.goto('/#login');
+    await page.goto('/login');
     await page.getByRole('link', { name: 'Continue with Google' }).click();
 
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
@@ -63,7 +63,7 @@ test.describe.serial('google auth', () => {
       sub: `sub-${user.email}`,
     });
 
-    await page.goto('/#login');
+    await page.goto('/login');
     await page.getByRole('link', { name: 'Continue with Google' }).click();
     await expect(page.getByRole('heading', { name: 'Complete Your Signup' })).toBeVisible();
     await page.fill('#google-username', user.username);
@@ -71,7 +71,7 @@ test.describe.serial('google auth', () => {
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
     await logout(page);
 
-    await page.goto('/#forgot-password');
+    await page.goto('/forgot-password');
     await page.fill('#forgot-password-form #email', user.email);
     const after = Date.now();
     await page.getByRole('button', { name: 'Send reset link' }).click();
@@ -84,10 +84,10 @@ test.describe.serial('google auth', () => {
     });
     const token = extractTokenFromEmail(message, 'reset-password');
 
-    await page.goto(`/#reset-password?token=${token}`);
+    await page.goto(`/reset-password?token=${token}`);
     await page.fill('#reset-password-form #password', 'NewPass1');
     await page.fill('#reset-password-form #confirm-password', 'NewPass1');
-    await page.getByRole('button', { name: 'Reset Password' }).click();
+    await page.getByRole('button', { name: 'Reset Password' }).click({ noWaitAfter: true });
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
     await logout(page);
 

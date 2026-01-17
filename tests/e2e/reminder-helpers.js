@@ -5,7 +5,7 @@ const {
 } = require('./helpers');
 
 async function verifyEmail(page, request, user) {
-  await page.goto('/#profile');
+  await page.goto('/profile');
   const afterVerify = Date.now();
   await page.getByRole('button', { name: 'Resend verification email' }).click();
 
@@ -15,12 +15,12 @@ async function verifyEmail(page, request, user) {
     after: afterVerify,
   });
   const token = extractTokenFromEmail(verifyMessage, 'verify-email');
-  await page.goto(`/#verify-email?token=${token}`);
+  await page.goto(`/verify-email?token=${token}`);
   await expect(page.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
 }
 
 async function enableReminders(page) {
-  await page.goto('/#profile');
+  await page.goto('/profile');
   const toggle = page.locator('#reminder-email-enabled');
   await expect(toggle).toBeEnabled();
   if (!(await toggle.isChecked())) {

@@ -21,10 +21,8 @@ const App = {
   isSharedView: false,
   currentShareStatus: null,
   googleOAuthEnabled: false,
-  _lastHash: '',
-  _pendingNavigationHash: null,
-  _revertingHashChange: false,
-  _allowNextHashRoute: false,
+  _lastRoutePath: '',
+  _pendingNavigationPath: null,
   _addItemInFlight: false,
   _itemEditInFlightPositions: new Set(),
 
@@ -36,7 +34,8 @@ const App = {
     this.setupNavigation();
     this.setupModal();
     this.setupOfflineDetection();
-    this._lastHash = window.location.hash || '#home';
+    this.migrateLegacyHash();
+    this._lastRoutePath = this.getCurrentPath();
     this.route();
   },
 
@@ -69,14 +68,18 @@ const App = {
       if (stopEl) event.stopPropagation();
 
       const actionEl = event.target.closest ? event.target.closest('[data-action]') : null;
-      if (!actionEl) return;
-      if (actionEl.classList.contains('dropdown-item--disabled')) return;
-      const ariaDisabled = actionEl.getAttribute('aria-disabled');
-      const ariaDisabledProp = actionEl.ariaDisabled;
-      if (actionEl.disabled || ariaDisabled === 'true' || ariaDisabledProp === 'true') return;
-      const action = actionEl.dataset.action;
-      if (!action) return;
-      this.handleActionClick(action, actionEl, event);
+      if (actionEl) {
+        if (actionEl.classList.contains('dropdown-item--disabled')) return;
+        const ariaDisabled = actionEl.getAttribute('aria-disabled');
+        const ariaDisabledProp = actionEl.ariaDisabled;
+        if (actionEl.disabled || ariaDisabled === 'true' || ariaDisabledProp === 'true') return;
+        const action = actionEl.dataset.action;
+        if (action) {
+          this.handleActionClick(action, actionEl, event);
+        }
+      }
+      if (event.defaultPrevented) return;
+      this.handleNavClick(event);
     });
 
     document.addEventListener('submit', (event) => {
@@ -176,7 +179,7 @@ const App = {
         break;
       case 'resend-verification-and-route':
         this.resendVerification();
-        window.location.hash = `#check-email?type=verification&email=${encodeURIComponent(this.user?.email || '')}`;
+        this.navigate(`/check-email?type=verification&email=${encodeURIComponent(this.user?.email || '')}`, { skipWarning: true });
         break;
       case 'select-all-cards':
         this.selectAllCards();
@@ -450,6 +453,47 @@ const App = {
     }
   },
 
+  isSpaPath(pathname) {
+    let path = pathname || '/';
+    if (path !== '/' && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+    if (path === '/') return true;
+    const parts = path.split('/').filter(Boolean);
+    if (parts.length === 0) return true;
+    return this.isRoutablePage(parts[0]);
+  },
+
+  resolveSpaLink(href) {
+    if (!href) return null;
+    if (href.startsWith('#')) {
+      if (href === '#') return null;
+      return this.legacyHashToPath(href);
+    }
+    if (href.startsWith('mailto:') || href.startsWith('tel:')) return null;
+    let url;
+    try {
+      url = new URL(href, window.location.origin);
+    } catch (error) {
+      return null;
+    }
+    if (url.origin !== window.location.origin) return null;
+    if (!this.isSpaPath(url.pathname)) return null;
+    return `${url.pathname}${url.search}`;
+  },
+
+  handleNavClick(event) {
+    const link = event.target.closest ? event.target.closest('a[href]') : null;
+    if (!link) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (link.hasAttribute('download')) return;
+    if (link.target && link.target !== '_self') return;
+    const target = this.resolveSpaLink(link.getAttribute('href'));
+    if (!target) return;
+    event.preventDefault();
+    this.navigate(target);
+  },
+
   shouldWarnUnfinalizedCardNavigation() {
     if (!this.currentCard) return false;
     if (this.currentCard.is_finalized) return false;
@@ -459,32 +503,133 @@ const App = {
     return capacity > 0 && itemCount >= capacity;
   },
 
-  handleHashChange() {
-    const newHash = window.location.hash || '#home';
+  getCurrentPath() {
+    const path = window.location.pathname || '/';
+    const search = window.location.search || '';
+    return `${path}${search}`;
+  },
 
-    if (this._revertingHashChange) {
-      this._revertingHashChange = false;
-      this._lastHash = newHash;
-      return;
+  isRoutablePage(page) {
+    switch (page) {
+      case 'home':
+      case 'login':
+      case 'register':
+      case 'google-complete':
+      case 'magic-link':
+      case 'forgot-password':
+      case 'reset-password':
+      case 'verify-email':
+      case 'check-email':
+      case 'dashboard':
+      case 'create':
+      case 'card':
+      case 'share':
+      case 'friends':
+      case 'notifications':
+      case 'friend-invite':
+      case 'friend-card':
+      case 'archive':
+      case 'archive-card':
+      case 'profile':
+      case 'about':
+      case 'terms':
+      case 'privacy':
+      case 'security':
+      case 'support':
+      case 'faq':
+        return true;
+      default:
+        return false;
     }
+  },
 
-    if (this._allowNextHashRoute) {
-      this._allowNextHashRoute = false;
-      this._lastHash = newHash;
-      this.route();
-      return;
+  parseLegacyHash(hash) {
+    if (!hash || !hash.startsWith('#')) return null;
+    const raw = hash.slice(1);
+    if (!raw) return { page: 'home', params: [], query: '' };
+    const [pathPart, queryPart] = raw.split('?');
+    const [page, ...params] = (pathPart || '').split('/');
+    if (!this.isRoutablePage(page)) return null;
+    return { page, params, query: queryPart || '' };
+  },
+
+  legacyHashToPath(hash) {
+    const parsed = this.parseLegacyHash(hash);
+    if (!parsed) return null;
+    const basePath = parsed.page === 'home' ? '/' : `/${parsed.page}`;
+    const paramPath = parsed.params.length ? `/${parsed.params.join('/')}` : '';
+    const query = parsed.query ? `?${parsed.query}` : '';
+    return `${basePath}${paramPath}${query}`;
+  },
+
+  migrateLegacyHash() {
+    const legacyPath = this.legacyHashToPath(window.location.hash);
+    if (!legacyPath) return;
+    history.replaceState({}, '', legacyPath);
+  },
+
+  normalizePath(target) {
+    if (!target) return '/';
+    if (target.startsWith('#')) {
+      return this.legacyHashToPath(target) || '/';
     }
+    let url;
+    try {
+      url = new URL(target, window.location.origin);
+    } catch (error) {
+      url = null;
+    }
+    if (url && url.origin === window.location.origin) {
+      return `${url.pathname}${url.search}`;
+    }
+    if (!target.startsWith('/')) {
+      return `/${target}`;
+    }
+    return target;
+  },
 
-    const oldHash = this._lastHash || '#home';
-    if (this.shouldWarnUnfinalizedCardNavigation() && newHash !== oldHash) {
-      this._pendingNavigationHash = newHash;
-      this._revertingHashChange = true;
-      window.location.hash = oldHash;
+  navigate(target, { replace = false, skipWarning = false } = {}) {
+    const nextPath = this.normalizePath(target);
+    const currentPath = this.getCurrentPath();
+    if (!skipWarning && this.shouldWarnUnfinalizedCardNavigation() && nextPath !== currentPath) {
+      this._pendingNavigationPath = nextPath;
       this.showUnfinalizedCardNavigationModal();
       return;
     }
+    if (replace) {
+      history.replaceState({}, '', nextPath);
+    } else {
+      history.pushState({}, '', nextPath);
+    }
+    this._lastRoutePath = nextPath;
+    this.route();
+  },
 
-    this._lastHash = newHash;
+  handlePathChange() {
+    const newPath = this.getCurrentPath();
+    const oldPath = this._lastRoutePath || newPath;
+    if (this.shouldWarnUnfinalizedCardNavigation() && newPath !== oldPath) {
+      this._pendingNavigationPath = newPath;
+      history.replaceState({}, '', oldPath);
+      this.showUnfinalizedCardNavigationModal();
+      return;
+    }
+    this._lastRoutePath = newPath;
+    this.route();
+  },
+
+  handleLegacyHashChange() {
+    const legacyPath = this.legacyHashToPath(window.location.hash);
+    if (!legacyPath) return;
+    const oldPath = this._lastRoutePath || this.getCurrentPath();
+    if (this.shouldWarnUnfinalizedCardNavigation() && legacyPath !== oldPath) {
+      this._pendingNavigationPath = legacyPath;
+      history.replaceState({}, '', oldPath);
+      this.showUnfinalizedCardNavigationModal();
+      return;
+    }
+    history.replaceState({}, '', legacyPath);
+    this._lastRoutePath = legacyPath;
     this.route();
   },
 
@@ -509,12 +654,11 @@ const App = {
   },
 
   proceedPendingNavigation() {
-    const target = this._pendingNavigationHash;
-    this._pendingNavigationHash = null;
+    const target = this._pendingNavigationPath;
+    this._pendingNavigationPath = null;
     this.closeModal();
     if (!target) return;
-    this._allowNextHashRoute = true;
-    window.location.hash = target;
+    this.navigate(target, { skipWarning: true });
   },
 
   // Loading state management
@@ -582,20 +726,20 @@ const App = {
 
     if (this.user) {
       nav.innerHTML = `
-        <a href="#dashboard" class="nav-link nav-link--primary">My Cards</a>
+        <a href="/dashboard" class="nav-link nav-link--primary">My Cards</a>
         <button class="nav-hamburger" data-action="toggle-mobile-menu" aria-label="Toggle menu" aria-expanded="false">
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
         </button>
         <div class="nav-menu">
-          <a href="#profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
-          <a href="#friends" class="nav-link">Friends</a>
-          <a href="#notifications" class="nav-link nav-link--notifications">
+          <a href="/profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
+          <a href="/friends" class="nav-link">Friends</a>
+          <a href="/notifications" class="nav-link nav-link--notifications">
             <span>Notifications</span>
             <span class="nav-badge nav-badge--hidden" id="notification-badge" aria-hidden="true"></span>
           </a>
-          <a href="#faq" class="nav-link">FAQ</a>
+          <a href="/faq" class="nav-link">FAQ</a>
           <button class="btn btn-ghost" data-action="logout">Logout</button>
         </div>
       `;
@@ -607,10 +751,10 @@ const App = {
           <span class="hamburger-line"></span>
         </button>
         <div class="nav-menu">
-          <a href="#faq" class="nav-link">FAQ</a>
+          <a href="/faq" class="nav-link">FAQ</a>
         </div>
-        <a href="#login" class="btn btn-ghost nav-auth-btn">Login</a>
-        <a href="#create" class="btn btn-primary nav-auth-btn">Get Started</a>
+        <a href="/login" class="btn btn-ghost nav-auth-btn">Login</a>
+        <a href="/create" class="btn btn-primary nav-auth-btn">Get Started</a>
       `;
     }
     this.updateNotificationBadge();
@@ -663,7 +807,7 @@ const App = {
     container.innerHTML = `
       <div class="notifications-page">
         <div class="notifications-header">
-          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <a href="/dashboard" class="btn btn-ghost">&larr; Back</a>
           <h2>Notifications</h2>
           <div class="notifications-actions">
             <button class="btn btn-secondary btn-sm" data-action="mark-all-notifications-read" id="mark-all-notifications-btn">
@@ -836,10 +980,10 @@ const App = {
   getNotificationLink(notification) {
     if (notification.type === 'friend_bingo' || notification.type === 'friend_new_card') {
       if (notification.friendship_id) {
-        return `#friend-card/${notification.friendship_id}`;
+        return `/friend-card/${notification.friendship_id}`;
       }
     }
-    return '#friends';
+    return '/friends';
   },
 
   getNotificationCardName(notification) {
@@ -1685,7 +1829,7 @@ const App = {
 
       this.currentCard = response.card;
       this.closeModal();
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       const cardName = title || `${year} Bingo Card`;
       this.toast(`${cardName} created!`, 'success');
     } catch (error) {
@@ -1774,6 +1918,21 @@ const App = {
     }
   },
 
+  getRouteFromPath(pathname, search) {
+    let path = pathname || '/';
+    if (path !== '/' && path.endsWith('/')) {
+      path = path.slice(0, -1);
+    }
+    if (path === '/home') {
+      path = '/';
+    }
+    const parts = path.split('/').filter(Boolean);
+    const page = parts[0] || 'home';
+    const params = parts.slice(1);
+    const queryParams = new URLSearchParams(search || '');
+    return { page, params, queryParams };
+  },
+
   route() {
     this.closeMobileMenu();
     window.scrollTo(0, 0);
@@ -1781,11 +1940,10 @@ const App = {
     this.isSharedView = false;
     const pageEl = document.querySelector('.page');
     pageEl?.classList.remove('page--compact-main', 'page--home');
-    const hash = window.location.hash.slice(1) || 'home';
-    // Parse hash with query parameters: page?param=value
-    const [pagePart, queryPart] = hash.split('?');
-    const [page, ...params] = pagePart.split('/');
-    const queryParams = new URLSearchParams(queryPart || '');
+    const { page, params, queryParams } = this.getRouteFromPath(
+      window.location.pathname,
+      window.location.search,
+    );
     this.setRobotsMeta(page === 'share' ? 'noindex' : null);
 
     const container = document.getElementById('main-container');
@@ -1855,7 +2013,7 @@ const App = {
         break;
       case 'archive':
         // Redirect to dashboard (archive merged into dashboard)
-        window.location.hash = '#dashboard';
+        this.navigate('/dashboard', { replace: true, skipWarning: true });
         return;
       case 'archive-card':
         this.requireAuth(() => this.renderArchiveCard(container, params[0]));
@@ -1888,7 +2046,7 @@ const App = {
 
   requireAuth(callback) {
     if (!this.user) {
-      window.location.hash = '#login';
+      this.navigate('/login', { skipWarning: true });
       return;
     }
     callback();
@@ -1906,21 +2064,21 @@ const App = {
     return token;
   },
 
-  getOAuthNextHash() {
+  getOAuthNextPath() {
     const token = sessionStorage.getItem('pendingInviteToken');
     if (token) {
-      return `#friend-invite/${token}`;
+      return `/friend-invite/${token}`;
     }
     return '';
   },
 
-  redirectAfterAuth(defaultHash = '#dashboard') {
+  redirectAfterAuth(defaultPath = '/dashboard') {
     const token = this.consumePendingInviteToken();
     if (token) {
-      window.location.hash = `#friend-invite/${token}`;
+      this.navigate(`/friend-invite/${token}`, { skipWarning: true });
       return;
     }
-    window.location.hash = defaultHash;
+    this.navigate(defaultPath, { skipWarning: true });
   },
 
   // Page Renderers
@@ -1936,17 +2094,17 @@ const App = {
         </p>
         ${this.user ? `
           <div class="home-actions">
-            <a href="#dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
+            <a href="/dashboard" class="btn btn-primary btn-lg">Go to Dashboard</a>
             <button class="btn btn-secondary btn-lg" data-action="show-create-card-modal">Create New Card</button>
           </div>
         ` : `
           ${AnonymousCard.exists() ? `
-            <a href="#create" class="btn btn-primary btn-lg">Continue Your Card</a>
+            <a href="/create" class="btn btn-primary btn-lg">Continue Your Card</a>
           ` : `
-            <a href="#create" class="btn btn-primary btn-lg">Create Your Card</a>
+            <a href="/create" class="btn btn-primary btn-lg">Create Your Card</a>
           `}
           <p class="mt-md text-muted">
-            Already have an account? <a href="#login">Login</a>
+            Already have an account? <a href="/login">Login</a>
           </p>
         `}
       </div>
@@ -1972,7 +2130,7 @@ const App = {
 
   renderLogin(container, errorMessage = null) {
     if (this.user) {
-      window.location.hash = '#dashboard';
+      this.navigate('/dashboard', { replace: true, skipWarning: true });
       return;
     }
 
@@ -1997,7 +2155,7 @@ const App = {
     };
     const displayError = errorMessages[errorMessage] || errorMessage;
     const googleEnabled = this.googleOAuthEnabled;
-    const oauthNext = googleEnabled ? this.getOAuthNextHash() : '';
+    const oauthNext = googleEnabled ? this.getOAuthNextPath() : '';
     const googleUrl = googleEnabled && oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
     const googleButton = googleEnabled ? `
           <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
@@ -2029,17 +2187,17 @@ const App = {
             </button>
           </form>
           <div style="text-align: center; margin: 1rem 0;">
-            <a href="#forgot-password" class="text-muted">Forgot password?</a>
+            <a href="/forgot-password" class="text-muted">Forgot password?</a>
           </div>
           <div class="auth-divider">
             <span>or</span>
           </div>
           ${googleButton}
-          <a href="#magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
+          <a href="/magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
             Sign in with email link
           </a>
           <div class="auth-footer">
-            Don't have an account? <a href="#register">Sign up</a>
+            Don't have an account? <a href="/register">Sign up</a>
           </div>
         </div>
       </div>
@@ -2057,7 +2215,7 @@ const App = {
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
-        this.redirectAfterAuth('#dashboard');
+        this.redirectAfterAuth('/dashboard');
         this.toast('Welcome back!', 'success');
       } catch (error) {
         errorEl.textContent = error.message;
@@ -2068,12 +2226,12 @@ const App = {
 
   renderRegister(container) {
     if (this.user) {
-      window.location.hash = '#dashboard';
+      this.navigate('/dashboard', { replace: true, skipWarning: true });
       return;
     }
 
     const googleEnabled = this.googleOAuthEnabled;
-    const oauthNext = googleEnabled ? this.getOAuthNextHash() : '';
+    const oauthNext = googleEnabled ? this.getOAuthNextPath() : '';
     const googleUrl = googleEnabled && oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
     const googleBlock = googleEnabled ? `
           <div class="auth-divider">
@@ -2120,7 +2278,7 @@ const App = {
           </form>
           ${googleBlock}
           <div class="auth-footer">
-            Already have an account? <a href="#login">Sign in</a>
+            Already have an account? <a href="/login">Sign in</a>
           </div>
         </div>
       </div>
@@ -2140,7 +2298,7 @@ const App = {
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
-        this.redirectAfterAuth('#create');
+        this.redirectAfterAuth('/create');
         this.toast('Account created! Check your email to verify your account.', 'success');
       } catch (error) {
         errorEl.textContent = error.message;
@@ -2151,7 +2309,7 @@ const App = {
 
   renderGoogleComplete(container) {
     if (this.user) {
-      window.location.hash = '#dashboard';
+      this.navigate('/dashboard', { replace: true, skipWarning: true });
       return;
     }
 
@@ -2195,7 +2353,7 @@ const App = {
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
-        this.redirectAfterAuth(response.next || '#dashboard');
+        this.redirectAfterAuth(response.next || '/dashboard');
         this.toast('Account created! Welcome!', 'success');
       } catch (error) {
         errorEl.textContent = error.message;
@@ -2207,7 +2365,7 @@ const App = {
   // Magic Link Authentication
   renderMagicLinkRequest(container) {
     if (this.user) {
-      window.location.hash = '#dashboard';
+      this.navigate('/dashboard', { replace: true, skipWarning: true });
       return;
     }
 
@@ -2229,7 +2387,7 @@ const App = {
             </button>
           </form>
           <div class="auth-footer">
-            <a href="#login">Back to sign in</a>
+            <a href="/login">Back to sign in</a>
           </div>
         </div>
       </div>
@@ -2245,7 +2403,7 @@ const App = {
 
       try {
         await API.auth.requestMagicLink(email);
-        window.location.hash = `#check-email?type=magic-link&email=${encodeURIComponent(email)}`;
+        this.navigate(`/check-email?type=magic-link&email=${encodeURIComponent(email)}`, { skipWarning: true });
       } catch (error) {
         errorEl.textContent = error.message;
         errorEl.classList.remove('hidden');
@@ -2268,10 +2426,10 @@ const App = {
       const response = await API.auth.verifyMagicLink(token);
       this.user = response.user;
       this.setupNavigation();
-      this.redirectAfterAuth('#dashboard');
+      this.redirectAfterAuth('/dashboard');
       this.toast('Welcome back!', 'success');
     } catch (error) {
-      window.location.hash = `#login?error=${encodeURIComponent(error.message)}`;
+      this.navigate(`/login?error=${encodeURIComponent(error.message)}`, { replace: true, skipWarning: true });
     }
   },
 
@@ -2295,7 +2453,7 @@ const App = {
             </button>
           </form>
           <div class="auth-footer">
-            <a href="#login">Back to sign in</a>
+            <a href="/login">Back to sign in</a>
           </div>
         </div>
       </div>
@@ -2310,10 +2468,10 @@ const App = {
 
       try {
         await API.auth.forgotPassword(email);
-        window.location.hash = `#check-email?type=reset&email=${encodeURIComponent(email)}`;
+        this.navigate(`/check-email?type=reset&email=${encodeURIComponent(email)}`, { skipWarning: true });
       } catch (error) {
         // Still redirect even on error to prevent email enumeration
-        window.location.hash = `#check-email?type=reset&email=${encodeURIComponent(email)}`;
+        this.navigate(`/check-email?type=reset&email=${encodeURIComponent(email)}`, { skipWarning: true });
       }
     });
   },
@@ -2326,7 +2484,7 @@ const App = {
           <div class="card auth-card text-center">
             <h2>Invalid Reset Link</h2>
             <p class="text-muted">This password reset link is invalid or missing.</p>
-            <a href="#forgot-password" class="btn btn-primary" style="margin-top: 1rem;">Request new link</a>
+            <a href="/forgot-password" class="btn btn-primary" style="margin-top: 1rem;">Request new link</a>
           </div>
         </div>
       `;
@@ -2378,7 +2536,7 @@ const App = {
         const response = await API.auth.resetPassword(token, password);
         this.user = response.user;
         this.setupNavigation();
-        window.location.hash = '#dashboard';
+        this.navigate('/dashboard', { skipWarning: true });
         this.toast('Password reset successfully!', 'success');
       } catch (error) {
         errorEl.textContent = error.message;
@@ -2396,7 +2554,7 @@ const App = {
           <div class="card auth-card text-center">
             <h2>Invalid Link</h2>
             <p class="text-muted">This verification link is invalid or missing.</p>
-            ${this.user ? `<a href="#dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="#login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ${this.user ? `<a href="/dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2425,7 +2583,7 @@ const App = {
             <div style="font-size: 4rem; margin-bottom: 1rem;">✓</div>
             <h2>Email Verified!</h2>
             <p class="text-muted">Your email has been verified successfully.</p>
-            ${this.user ? `<a href="#dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="#login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ${this.user ? `<a href="/dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2440,7 +2598,7 @@ const App = {
               <button class="btn btn-primary" style="margin-top: 1rem;" data-action="resend-verification">
                 Resend Verification Email
               </button>
-            ` : `<a href="#login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2493,7 +2651,7 @@ const App = {
             ${msg.detail}
           </p>
           <div style="margin-top: 1.5rem;">
-            <a href="#login" class="btn btn-ghost">Back to sign in</a>
+            <a href="/login" class="btn btn-ghost">Back to sign in</a>
           </div>
         </div>
       </div>
@@ -2562,7 +2720,7 @@ const App = {
           <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
           <h3>No cards yet</h3>
           <p class="text-muted mb-lg">Create your first bingo card and start tracking your goals!</p>
-          <a href="#create" class="btn btn-primary btn-lg">Create Your First Card</a>
+          <a href="/create" class="btn btn-primary btn-lg">Create Your First Card</a>
         </div>
       `;
       return;
@@ -2639,7 +2797,7 @@ const App = {
     const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
     const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
     const isSelected = this.selectedCards.includes(card.id);
-    const cardLink = card.is_archived ? `#archive-card/${card.id}` : `#card/${card.id}`;
+    const cardLink = card.is_archived ? `/archive-card/${card.id}` : `/card/${card.id}`;
 
     return `
       <div class="card dashboard-card-preview" style="margin-bottom: 1rem;">
@@ -3011,8 +3169,7 @@ const App = {
       this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
-      this._allowNextHashRoute = true;
-      window.location.hash = '#home';
+      this.navigate('/', { skipWarning: true });
       this.toast('Account deleted', 'success');
     } catch (error) {
       if (errorEl) {
@@ -3184,7 +3341,7 @@ const App = {
           </div>
 
           <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <a href="#home" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
+            <a href="/" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
             <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
           </div>
         </form>
@@ -3335,7 +3492,7 @@ const App = {
           </div>
 
           <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <a href="#dashboard" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
+            <a href="/dashboard" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
             <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
           </div>
         </form>
@@ -3353,7 +3510,7 @@ const App = {
     try {
       const response = await API.cards.create(year, title, category);
       this.currentCard = response.card;
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       const cardName = title || `${year} Bingo Card`;
       this.toast(`${cardName} created!`, 'success');
     } catch (error) {
@@ -3366,7 +3523,7 @@ const App = {
     try {
       const response = await API.cards.create(year);
       this.currentCard = response.card;
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       this.toast(`${year} card created!`, 'success');
     } catch (error) {
       this.toast(error.message, 'error');
@@ -3406,7 +3563,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Card not found</h3>
           <p class="text-muted mb-lg" id="card-error-message"></p>
-          <a href="#dashboard" class="btn btn-primary">Back to Dashboard</a>
+          <a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
       `;
       const errorEl = document.getElementById('card-error-message');
@@ -3446,14 +3603,14 @@ const App = {
             <span class="anonymous-card-banner-icon">💾</span>
             <span>
               This card is saved locally in your browser.
-              <a href="#register" class="anonymous-card-banner-link">Create an account</a> to save it permanently and unlock the AI Goal Wizard.
+              <a href="/register" class="anonymous-card-banner-link">Create an account</a> to save it permanently and unlock the AI Goal Wizard.
             </span>
           </div>
         </div>
       ` : ''}
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <a href="${isAnon ? '#home' : '#dashboard'}" class="btn btn-ghost">&larr; Back</a>
+        <a href="${isAnon ? '/' : '/dashboard'}" class="btn btn-ghost">&larr; Back</a>
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
           <h2 style="margin: 0;">${displayName}</h2>
           <span class="year-badge">${this.currentCard.year}</span>
@@ -3637,7 +3794,7 @@ const App = {
     const anonCard = AnonymousCard.get();
     if (!anonCard) {
       // No anonymous card exists, redirect to create
-      window.location.hash = '#create';
+      this.navigate('/create', { replace: true, skipWarning: true });
       return;
     }
 
@@ -3724,7 +3881,7 @@ const App = {
       AnonymousCard.clear();
       this.isAnonymousMode = false;
       this.currentCard = null;
-      window.location.hash = '#home';
+      this.navigate('/', { skipWarning: true });
       this.toast('Card deleted', 'success');
     }
   },
@@ -3742,7 +3899,7 @@ const App = {
 
     const sharedView = !!options.shared;
     const showActions = !readOnly && this.user && !this.isAnonymousMode;
-    const backLink = sharedView ? '#home' : '#dashboard';
+    const backLink = sharedView ? '/' : '/dashboard';
     const backLabel = sharedView ? 'Home' : 'Back';
     const sharedBadge = sharedView ? '<span class="badge badge-warning">Shared view</span>' : '';
 
@@ -3807,7 +3964,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Invalid Share Link</h3>
           <p class="text-muted mb-lg">This share link is missing or malformed.</p>
-          <a href="#home" class="btn btn-primary">Back to Home</a>
+          <a href="/" class="btn btn-primary">Back to Home</a>
         </div>
       `;
       return;
@@ -3825,7 +3982,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Share Link Not Found</h3>
           <p class="text-muted mb-lg" id="share-error"></p>
-          <a href="#home" class="btn btn-primary">Back to Home</a>
+          <a href="/" class="btn btn-primary">Back to Home</a>
         </div>
       `;
       const errorEl = document.getElementById('share-error');
@@ -5213,7 +5370,7 @@ const App = {
 
       this.closeModal();
       this.currentCard = response.card;
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       if (response.message) this.toast(response.message, 'success');
     } catch (error) {
       this.toast(error.message, 'error');
@@ -5494,10 +5651,10 @@ const App = {
           This helps prevent abuse and keeps AI costs under control.
         </p>
         <div style="display: flex; flex-direction: column; gap: 1rem;">
-          <a class="btn btn-primary btn-lg" href="#register" data-action="close-modal">
+          <a class="btn btn-primary btn-lg" href="/register" data-action="close-modal">
             Create Account
           </a>
-          <a class="btn btn-secondary btn-lg" href="#login" data-action="close-modal">
+          <a class="btn btn-secondary btn-lg" href="/login" data-action="close-modal">
             I Already Have an Account
           </a>
           <button class="btn btn-ghost" data-action="close-modal">
@@ -5696,8 +5853,7 @@ const App = {
     this.currentCard = null;
     this.currentView = null;
     this.closeModal();
-    this._allowNextHashRoute = true;
-    window.location.hash = `#card/${existingCardId}`;
+    this.navigate(`/card/${existingCardId}`, { skipWarning: true });
     this.toast('Keeping your existing card. Anonymous card discarded.', 'success');
   },
 
@@ -5848,7 +6004,7 @@ const App = {
   // Handle create conflict: go to existing card
   handleCreateConflictGoToExisting(existingCardId) {
     this.closeModal();
-    window.location.hash = `#card/${existingCardId}`;
+    this.navigate(`/card/${existingCardId}`, { skipWarning: true });
   },
 
   // Handle create conflict: create with new title
@@ -5903,7 +6059,7 @@ const App = {
 
       this.currentCard = response.card;
       this.closeModal();
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       this.toast(`${newTitle} created!`, 'success');
     } catch (error) {
       errorEl.textContent = error.message;
@@ -5928,7 +6084,7 @@ const App = {
 
       this.currentCard = response.card;
       this.closeModal();
-      window.location.hash = `#card/${response.card.id}`;
+      this.navigate(`/card/${response.card.id}`);
       const cardName = `${ctx.year} Bingo Card`;
       this.toast(`${cardName} created!`, 'success');
     } catch (error) {
@@ -5983,7 +6139,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Invite link not found</h3>
           <p class="text-muted mb-lg">This invite link is missing or invalid.</p>
-          <a href="#home" class="btn btn-primary">Go Home</a>
+          <a href="/" class="btn btn-primary">Go Home</a>
         </div>
       `;
       return;
@@ -5995,8 +6151,8 @@ const App = {
         <h3>Accept Friend Invite</h3>
         <p class="text-muted mb-lg">Sign in or create an account to accept this invite.</p>
         <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-          <a href="#login" class="btn btn-primary">Sign In</a>
-          <a href="#register" class="btn btn-secondary">Create Account</a>
+          <a href="/login" class="btn btn-primary">Sign In</a>
+          <a href="/register" class="btn btn-secondary">Create Account</a>
         </div>
       </div>
     `;
@@ -6008,7 +6164,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Invite link not found</h3>
           <p class="text-muted mb-lg">This invite link is missing or invalid.</p>
-          <a href="#friends" class="btn btn-primary">Back to Friends</a>
+          <a href="/friends" class="btn btn-primary">Back to Friends</a>
         </div>
       `;
       return;
@@ -6028,7 +6184,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>You're friends now!</h3>
           <p class="text-muted mb-lg">You are now connected with ${this.escapeHtml(response.inviter.username)}.</p>
-          <a href="#friends" class="btn btn-primary">Go to Friends</a>
+          <a href="/friends" class="btn btn-primary">Go to Friends</a>
         </div>
       `;
     } catch (error) {
@@ -6036,7 +6192,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Invite Error</h3>
           <p class="text-muted mb-lg" id="invite-accept-error"></p>
-          <a href="#friends" class="btn btn-primary">Back to Friends</a>
+          <a href="/friends" class="btn btn-primary">Back to Friends</a>
         </div>
       `;
       const errorEl = document.getElementById('invite-accept-error');
@@ -6068,7 +6224,7 @@ const App = {
           <h3>Find Friends</h3>
           <p class="text-muted" style="margin-bottom: 1rem;">
             Search for friends by their username. Users must enable "Make my profile searchable"
-            in their <a href="#profile">Profile settings</a> to appear in search results.
+            in their <a href="/profile">Profile settings</a> to appear in search results.
           </p>
           <div class="search-input-group">
             <input type="text" id="friend-search" class="form-input" placeholder="Search by username...">
@@ -6329,7 +6485,7 @@ const App = {
                 <strong>${friendName}</strong>
               </div>
               <div class="friend-actions">
-                <a href="#friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
+                <a href="/friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
                 <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${friend.id}">Remove</button>
                 <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${otherUserId}">Block</button>
               </div>
@@ -6428,7 +6584,7 @@ const App = {
           <div class="card text-center" style="padding: 3rem;">
             <h3>No Cards Available</h3>
             <p class="text-muted mb-lg">This friend has no finalized cards yet.</p>
-            <a href="#friends" class="btn btn-primary">Back to Friends</a>
+            <a href="/friends" class="btn btn-primary">Back to Friends</a>
           </div>
         `;
         return;
@@ -6454,7 +6610,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Error</h3>
           <p class="text-muted mb-lg" id="friend-card-error"></p>
-          <a href="#friends" class="btn btn-primary">Back to Friends</a>
+          <a href="/friends" class="btn btn-primary">Back to Friends</a>
         </div>
       `;
       const errorEl = document.getElementById('friend-card-error');
@@ -6491,7 +6647,7 @@ const App = {
     container.innerHTML = `
       <div class="finalized-card-view">
         <div class="finalized-card-header">
-          <a href="#friends" class="btn btn-ghost">&larr; Friends</a>
+          <a href="/friends" class="btn btn-ghost">&larr; Friends</a>
           <div class="friend-card-title">
             <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
               <h2 style="margin: 0;">${this.escapeHtml(this.friendCardOwner?.username || 'Friend')}'s ${displayName}</h2>
@@ -6662,7 +6818,7 @@ const App = {
     container.innerHTML = `
       <div class="profile-page">
         <div class="profile-header">
-          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <a href="/dashboard" class="btn btn-ghost">&larr; Back</a>
           <h2>Account Settings</h2>
           <div></div>
         </div>
@@ -6849,7 +7005,7 @@ const App = {
         <div class="card text-center" style="padding: 3rem;">
           <h3>Card not found</h3>
           <p class="text-muted mb-lg" id="archive-card-error"></p>
-          <a href="#dashboard" class="btn btn-primary">Back to Dashboard</a>
+          <a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>
         </div>
       `;
       const errorEl = document.getElementById('archive-card-error');
@@ -6872,7 +7028,7 @@ const App = {
     container.innerHTML = `
       <div class="archive-card-view">
         <div class="archive-card-header">
-          <a href="#dashboard" class="btn btn-ghost">&larr; Back</a>
+          <a href="/dashboard" class="btn btn-ghost">&larr; Back</a>
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
             <h2 style="margin: 0;">${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
@@ -7005,8 +7161,7 @@ const App = {
       this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
-      this._allowNextHashRoute = true;
-      window.location.hash = '#home';
+      this.navigate('/', { skipWarning: true });
       this.toast('Logged out successfully', 'success');
     } catch (error) {
       this.toast(error.message, 'error');
@@ -7369,7 +7524,7 @@ const App = {
           </p>
 
           <div class="about-cta">
-            <a href="#register" class="btn btn-primary">Create Your Card</a>
+            <a href="/register" class="btn btn-primary">Create Your Card</a>
           </div>
         </div>
       </div>
@@ -7426,16 +7581,16 @@ const App = {
             <div class="faq-item">
               <h3>How do I find friends on the site?</h3>
               <p>
-                Go to the <a href="#friends">Friends page</a> and search for friends by their <strong>username</strong>.
+                Go to the <a href="/friends">Friends page</a> and search for friends by their <strong>username</strong>.
                 Note: Users must opt in to be searchable. If you can't find someone, ask them to enable
-                "Make my profile searchable" in their <a href="#profile">Profile settings</a>.
+                "Make my profile searchable" in their <a href="/profile">Profile settings</a>.
               </p>
             </div>
 
             <div class="faq-item">
               <h3>How do I let friends find me?</h3>
               <p>
-                By default, your profile is private. To let friends find you, go to your <a href="#profile">Profile</a>
+                By default, your profile is private. To let friends find you, go to your <a href="/profile">Profile</a>
                 and enable "Make my profile searchable". Your username will then appear in search results.
               </p>
             </div>
@@ -7500,7 +7655,7 @@ const App = {
               <h3>Do I need to verify my email?</h3>
               <p>
                 Email verification is optional but recommended. It allows you to use password reset and magic link login
-                if you forget your password. You can verify your email anytime from your <a href="#profile">Profile</a>.
+                if you forget your password. You can verify your email anytime from your <a href="/profile">Profile</a>.
               </p>
             </div>
 
@@ -7508,7 +7663,7 @@ const App = {
               <h3>What data do you collect?</h3>
               <p>
                 We only collect what's necessary to run the service: your email, username, and the content of your
-                Bingo cards. We don't use tracking cookies or sell your data. See our <a href="#privacy">Privacy Policy</a>
+                Bingo cards. We don't use tracking cookies or sell your data. See our <a href="/privacy">Privacy Policy</a>
                 for full details.
               </p>
             </div>
@@ -7516,7 +7671,7 @@ const App = {
             <div class="faq-item">
               <h3>Can I delete my account?</h3>
               <p>
-                If you need to delete your account, please <a href="#support">contact support</a> and we'll help you out.
+                If you need to delete your account, please <a href="/support">contact support</a> and we'll help you out.
               </p>
             </div>
           </div>
@@ -7546,7 +7701,7 @@ const App = {
 
           <div class="faq-cta">
             <p>Still have questions?</p>
-            <a href="#support" class="btn btn-primary">Contact Support</a>
+            <a href="/support" class="btn btn-primary">Contact Support</a>
           </div>
         </div>
       </div>
@@ -7612,7 +7767,7 @@ const App = {
 
           <h2>6. Privacy</h2>
           <p>
-            Your use of the Service is also governed by our <a href="#privacy">Privacy Policy</a>, which describes how we collect, use, and protect your personal data.
+            Your use of the Service is also governed by our <a href="/privacy">Privacy Policy</a>, which describes how we collect, use, and protect your personal data.
           </p>
 
           <h2>7. Changes to the Service</h2>
@@ -7792,7 +7947,7 @@ const App = {
             <li>Regular security updates</li>
           </ul>
           <p>
-            For more details about our security practices, see our <a href="#security">Security page</a>.
+            For more details about our security practices, see our <a href="/security">Security page</a>.
           </p>
 
           <h2 id="privacy-children">8. Children's Privacy</h2>
@@ -8007,7 +8162,10 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
 
-// Handle hash changes
+// Handle browser navigation + legacy hash routes
+window.addEventListener('popstate', () => {
+  App.handlePathChange();
+});
 window.addEventListener('hashchange', () => {
-  App.handleHashChange();
+  App.handleLegacyHashChange();
 });

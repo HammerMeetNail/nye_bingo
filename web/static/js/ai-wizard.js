@@ -421,7 +421,7 @@ const AIWizard = {
       await this.fillCard(cardId);
 
       App.closeModal();
-      window.location.hash = `#card/${cardId}`;
+      App.navigate(`/card/${cardId}`);
       App.toast('AI Card Created! 🧙‍♂️', 'success');
 
     } catch (error) {

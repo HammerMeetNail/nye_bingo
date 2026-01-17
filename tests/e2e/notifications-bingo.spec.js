@@ -21,7 +21,7 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageB, userA.username);
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
 
   await createCardFromModal(pageA, { title: 'Quick Bingo', gridSize: 2, hasFree: false });
@@ -36,7 +36,7 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
     await pageA.getByRole('button', { name: 'Mark Complete' }).click();
   }
 
-  await pageB.goto('/#notifications');
+  await pageB.goto('/notifications');
   const bingoMessages = pageB.locator('.notification-message', { hasText: 'got a bingo' });
   await expect(bingoMessages).toHaveCount(1);
 

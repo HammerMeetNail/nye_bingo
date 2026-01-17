@@ -32,7 +32,7 @@ test('share links show read-only cards and escape XSS goals', async ({ browser }
   expect(shareLink).toContain('/s/');
   const token = shareLink.split('/s/')[1];
   expect(token).toBeTruthy();
-  const shareHashLink = `${new URL(shareLink).origin}/#share/${token}`;
+  const shareHashLink = `${new URL(shareLink).origin}/share/${token}`;
 
   const publicContext = await browser.newContext();
   const publicPage = await publicContext.newPage();
@@ -69,7 +69,7 @@ test('revoked share links no longer work', async ({ browser }, testInfo) => {
   expect(shareLink).toContain('/s/');
   const token = shareLink.split('/s/')[1];
   expect(token).toBeTruthy();
-  const shareHashLink = `${new URL(shareLink).origin}/#share/${token}`;
+  const shareHashLink = `${new URL(shareLink).origin}/share/${token}`;
 
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Disable Sharing' }).click();

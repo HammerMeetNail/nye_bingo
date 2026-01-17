@@ -15,7 +15,7 @@ test('scheduled goal reminders can be created', async ({ page, request }, testIn
   const user = buildUser(testInfo, 'remdue');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await createCardFromModal(page, { title: 'Scheduled Reminder Card' });
   await fillCardWithSuggestions(page);
   await finalizeCard(page);

@@ -32,7 +32,7 @@ test('single card can be deleted from dashboard', async ({ page }, testInfo) => 
         return false;
       }
     }),
-    page.goto('/#dashboard'),
+    page.goto('/dashboard'),
   ]);
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
   const preview = page.locator('.dashboard-card-preview').filter({ hasText: title });

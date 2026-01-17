@@ -155,7 +155,7 @@ components:
           type: boolean
         url:
           type: string
-          description: Share token used to build the share URL (/s/{token}; legacy /#share/{token})
+          description: Share token used to build the share URL (/s/{token}, /share/{token}; legacy /#share/{token})
         created_at:
           type: string
           format: date-time

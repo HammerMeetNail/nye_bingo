@@ -13,7 +13,7 @@ test('card category badge persists on dashboard and editor', async ({ page }, te
 
   await expect(page.locator('.category-badge')).toContainText(/Travel/i);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   const preview = page.locator('.dashboard-card-preview').filter({ hasText: title });
   await expect(preview).toBeVisible();
   await expect(preview.locator('.category-badge')).toContainText(/Travel/i);

@@ -186,9 +186,13 @@
       return truncated + '...';
     }
 
-    function parseHash(hash) {
-      const cleanHash = hash.startsWith('#') ? hash.slice(1) : hash;
-      const [page, ...params] = cleanHash.split('/');
+    function parsePath(path) {
+      if (!path) return { page: 'home', params: [] };
+      let cleanPath = path.startsWith('/') ? path.slice(1) : path;
+      if (cleanPath.endsWith('/')) {
+        cleanPath = cleanPath.slice(0, -1);
+      }
+      const [page, ...params] = cleanPath.split('/');
       return { page: page || 'home', params };
     }
 
@@ -262,26 +266,44 @@
       });
     });
 
-    describe('parseHash', () => {
-      test('parses simple hash', () => {
-        const result = parseHash('#dashboard');
+    describe('parsePath', () => {
+      test('parses simple path', () => {
+        const result = parsePath('/dashboard');
         expect(result.page).toBe('dashboard');
         expect(result.params).toEqual([]);
       });
 
-      test('parses hash with params', () => {
-        const result = parseHash('#card/abc-123');
+      test('parses path with trailing slash', () => {
+        const result = parsePath('/dashboard/');
+        expect(result.page).toBe('dashboard');
+        expect(result.params).toEqual([]);
+      });
+
+      test('parses path with params', () => {
+        const result = parsePath('/card/abc-123');
         expect(result.page).toBe('card');
         expect(result.params).toEqual(['abc-123']);
       });
 
-      test('handles empty hash', () => {
-        const result = parseHash('');
+      test('parses path with multiple params', () => {
+        const result = parsePath('/friend-card/123/2024');
+        expect(result.page).toBe('friend-card');
+        expect(result.params).toEqual(['123', '2024']);
+      });
+
+      test('parses share path', () => {
+        const result = parsePath('/share/abc123');
+        expect(result.page).toBe('share');
+        expect(result.params).toEqual(['abc123']);
+      });
+
+      test('handles empty path', () => {
+        const result = parsePath('');
         expect(result.page).toBe('home');
       });
 
-      test('handles just #', () => {
-        const result = parseHash('#');
+      test('handles root path', () => {
+        const result = parsePath('/');
         expect(result.page).toBe('home');
       });
     });

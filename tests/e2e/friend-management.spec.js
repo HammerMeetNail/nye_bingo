@@ -17,7 +17,7 @@ test('friend requests can be canceled and rejected', async ({ browser }, testInf
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
@@ -29,10 +29,10 @@ test('friend requests can be canceled and rejected', async ({ browser }, testInf
   await expectToast(pageB, 'Friend request canceled');
   await expect(pageB.locator('#sent-requests')).toBeHidden();
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await expect(pageA.locator('#friend-requests')).toBeHidden();
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   await results.getByRole('button', { name: 'Add Friend' }).click();
@@ -63,14 +63,14 @@ test('friends can be removed after connecting', async ({ browser }, testInfo) =>
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
   await expect(results).toContainText(userA.username);
   await results.getByRole('button', { name: 'Add Friend' }).click();
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await expect(pageA.locator('#friend-requests')).toBeVisible();
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
   await expectToast(pageA, 'Friend request accepted');

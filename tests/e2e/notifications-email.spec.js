@@ -17,7 +17,7 @@ test('email notifications respect opt-in', async ({ browser, request }, testInfo
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#profile');
+  await pageB.goto('/profile');
   const afterVerify = Date.now();
   await pageB.getByRole('button', { name: 'Resend verification email' }).click();
 
@@ -27,7 +27,7 @@ test('email notifications respect opt-in', async ({ browser, request }, testInfo
     after: afterVerify,
   });
   const token = extractTokenFromEmail(verifyMessage, 'verify-email');
-  await pageB.goto(`/#verify-email?token=${token}`);
+  await pageB.goto(`/verify-email?token=${token}`);
   await expect(pageB.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
 
   const contextA = await browser.newContext();
@@ -38,7 +38,7 @@ test('email notifications respect opt-in', async ({ browser, request }, testInfo
   await sendFriendRequest(pageA, userB.username);
   await expectNoEmail(request, { to: userB.email, subject: 'New friend request', after: afterDefault });
 
-  await pageB.goto('/#profile');
+  await pageB.goto('/profile');
   const emailToggle = pageB.locator('#notify-email-enabled');
   await expect(emailToggle).toBeEnabled();
   if (!(await emailToggle.isChecked())) {
@@ -63,7 +63,7 @@ test('email notifications respect opt-in', async ({ browser, request }, testInfo
   });
 
   const body = message.Text || message.text || message.HTML || message.html || message.Body || message.body || '';
-  expect(body).toMatch(/#notifications|#friends/);
+  expect(body).toMatch(/\/(notifications|friends)/);
 
   await contextA.close();
   await contextB.close();

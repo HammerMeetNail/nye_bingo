@@ -15,7 +15,7 @@ test('magic link login signs in with emailed token', async ({ page, request }, t
   await register(page, user);
   await logout(page);
 
-  await page.goto('/#magic-link');
+  await page.goto('/magic-link');
   await page.fill('#magic-link-form #email', user.email);
   const after = Date.now();
   await page.getByRole('button', { name: 'Send login link' }).click();
@@ -28,7 +28,7 @@ test('magic link login signs in with emailed token', async ({ page, request }, t
   });
   const token = extractTokenFromEmail(message, 'magic-link');
 
-  await page.goto(`/#magic-link?token=${token}`);
+  await page.goto(`/magic-link?token=${token}`);
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
 });
 
@@ -37,7 +37,7 @@ test('password reset flow updates credentials', async ({ page, request }, testIn
   await register(page, user);
   await logout(page);
 
-  await page.goto('/#forgot-password');
+  await page.goto('/forgot-password');
   await page.fill('#forgot-password-form #email', user.email);
   const after = Date.now();
   await page.getByRole('button', { name: 'Send reset link' }).click();
@@ -50,7 +50,7 @@ test('password reset flow updates credentials', async ({ page, request }, testIn
   });
   const token = extractTokenFromEmail(message, 'reset-password');
 
-  await page.goto(`/#reset-password?token=${token}`);
+  await page.goto(`/reset-password?token=${token}`);
   await page.fill('#reset-password-form #password', 'NewPass1');
   await page.fill('#reset-password-form #confirm-password', 'NewPass1');
   const resetResponse = page.waitForResponse((response) => (
@@ -70,7 +70,7 @@ test('email verification banner clears after verifying', async ({ page, request 
   const user = buildUser(testInfo, 'verify');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   const banner = page.locator('.verification-banner');
   await expect(banner).toBeVisible();
   const after = Date.now();
@@ -84,13 +84,13 @@ test('email verification banner clears after verifying', async ({ page, request 
   });
   const token = extractTokenFromEmail(message, 'verify-email');
 
-  await page.goto(`/#verify-email?token=${token}`);
+  await page.goto(`/verify-email?token=${token}`);
   await expect(page.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.locator('.verification-banner')).toHaveCount(0);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await expect(page.locator('.badge').filter({ hasText: 'Verified' })).toBeVisible();
 });
 
@@ -114,7 +114,7 @@ test('verification link does not break authenticated actions in an already-open 
 
   const mailPage = await page.context().newPage();
   await mailPage.goto('http://mailpit:8025');
-  await mailPage.goto(`/#verify-email?token=${token}`);
+  await mailPage.goto(`/verify-email?token=${token}`);
   await expect(mailPage.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
   await mailPage.close();
 
@@ -123,5 +123,5 @@ test('verification link does not break authenticated actions in an already-open 
   await page.getByRole('link', { name: 'Create Your First Card' }).click();
 
   await createCardFromAuthenticatedCreate(page);
-  expect(page.url()).toContain('#card/');
+  expect(page.url()).toContain('/card/');
 });

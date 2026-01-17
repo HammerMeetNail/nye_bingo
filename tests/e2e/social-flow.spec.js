@@ -26,7 +26,7 @@ test('users can connect and react to friend cards', async ({ browser }, testInfo
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
@@ -40,16 +40,16 @@ test('users can connect and react to friend cards', async ({ browser }, testInfo
   await requestResponse;
   await expectToast(pageB, 'Friend request sent!');
   await pageB.reload();
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await expect(pageB.locator('#sent-requests')).toContainText(userA.username);
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await expect(pageA.locator('#friend-requests')).toBeVisible();
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
   await expect(pageA.locator('#friends-list')).toContainText(userB.username);
 
   await pageB.reload();
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await expect(pageB.locator('#friends-list')).toContainText(userA.username, { timeout: 15000 });
   const friendRow = pageB.locator('#friends-list .friend-item').filter({ hasText: userA.username });
   await friendRow.getByRole('link', { name: 'View Card' }).click();

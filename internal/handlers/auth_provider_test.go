@@ -160,7 +160,7 @@ func TestProviderAuthHandler_Callback_ErrorParam(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=access_denied") {
+	if !strings.Contains(location, "/login?error=access_denied") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -183,7 +183,7 @@ func TestProviderAuthHandler_Callback_InvalidState(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=oauth_invalid") {
+	if !strings.Contains(location, "/login?error=oauth_invalid") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -225,7 +225,7 @@ func TestProviderAuthHandler_Callback_ExistingUser(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#dashboard") {
+	if !strings.Contains(location, "/dashboard") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -268,7 +268,7 @@ func TestProviderAuthHandler_Callback_NewUser(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#google-complete") {
+	if !strings.Contains(location, "/google-complete") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 	if redis.setCalls != 1 {
@@ -307,7 +307,7 @@ func TestProviderAuthHandler_Callback_UnverifiedEmail(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=oauth_unverified") {
+	if !strings.Contains(location, "/login?error=oauth_unverified") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -418,4 +418,50 @@ func TestProviderAuthHandler_Complete_UsernameConflict(t *testing.T) {
 	handler.ProviderComplete(rr, req)
 
 	assertErrorResponse(t, rr, http.StatusConflict, "Username already taken")
+}
+
+func TestSanitizeNext_RejectsUnsafePrefix(t *testing.T) {
+	for _, input := range []string{"//evil.com", "/\\evil.com"} {
+		if got := sanitizeNext(input); got != "" {
+			t.Fatalf("expected %q to be rejected, got %q", input, got)
+		}
+	}
+}
+
+func TestSanitizeNext_AllowsLegacyHash(t *testing.T) {
+	if got := sanitizeNext("#dashboard"); got != "/dashboard" {
+		t.Fatalf("expected legacy hash to normalize to /dashboard, got %q", got)
+	}
+}
+
+func TestRedirectTarget_FallsBackOnUnsafeNext(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("https://evil.com", "dashboard")
+	if target != "/dashboard" {
+		t.Fatalf("expected fallback path, got %q", target)
+	}
+}
+
+func TestRedirectTarget_UsesSafeNext(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("/card/abc-123", "/dashboard")
+	if target != "/card/abc-123" {
+		t.Fatalf("expected safe next path, got %q", target)
+	}
+}
+
+func TestRedirectTarget_SanitizesFallback(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("", "//evil.com")
+	if target != "/" {
+		t.Fatalf("expected unsafe fallback to become /, got %q", target)
+	}
+}
+
+func TestRedirectTarget_NormalizesFallback(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("", "dashboard")
+	if target != "/dashboard" {
+		t.Fatalf("expected fallback to normalize, got %q", target)
+	}
 }

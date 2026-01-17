@@ -16,7 +16,7 @@ test('scheduled goal reminders are delivered by the background runner', async ({
   const user = buildUser(testInfo, 'remdue');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await createCardFromModal(page, { title: 'Scheduled Reminder Card' });
   await fillCardWithSuggestions(page);
   await finalizeCard(page);
@@ -59,7 +59,7 @@ test('scheduled goal reminders are delivered by the background runner', async ({
   });
 
   const body = message.Text || message.text || message.HTML || message.html || message.Body || message.body || '';
-  expect(body).toContain('#card/');
+  expect(body).toContain('/card/');
   expect(body).toContain(itemId);
-  expect(body).toContain('#profile');
+  expect(body).toContain('/profile');
 });
