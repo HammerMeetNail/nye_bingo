@@ -449,3 +449,11 @@ func TestRedirectTarget_UsesSafeNext(t *testing.T) {
 		t.Fatalf("expected safe next path, got %q", target)
 	}
 }
+
+func TestRedirectTarget_SanitizesFallback(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("", "//evil.com")
+	if target != "/" {
+		t.Fatalf("expected unsafe fallback to become /, got %q", target)
+	}
+}

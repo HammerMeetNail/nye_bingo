@@ -360,15 +360,19 @@ func (h *ProviderAuthHandler) readOAuthNext(r *http.Request) string {
 }
 
 func (h *ProviderAuthHandler) redirectTarget(next, fallback string) string {
-	if next != "" {
-		if safe := sanitizeNext(next); safe != "" {
-			return safe
-		}
+	if safe := sanitizeNext(next); safe != "" {
+		return safe
 	}
-	if strings.HasPrefix(fallback, "/") {
-		return fallback
+	if fallback == "" {
+		return "/"
 	}
-	return "/" + fallback
+	if !strings.HasPrefix(fallback, "/") {
+		fallback = "/" + fallback
+	}
+	if safe := sanitizeNext(fallback); safe != "" {
+		return safe
+	}
+	return "/"
 }
 
 func generateSecureToken(size int) (string, error) {
