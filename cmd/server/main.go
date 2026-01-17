@@ -374,9 +374,8 @@ func run() error {
 	// API Docs redirect
 	mux.Handle("GET /api/docs", http.RedirectHandler("/static/swagger/index.html", http.StatusFound))
 
-	// SPA route - serve index.html for the root path
-	// Hash-based routing (#home, #login, etc.) is handled client-side
-	mux.Handle("GET /{$}", requireSession(http.HandlerFunc(pageHandler.Index)))
+	// SPA route - serve index.html for all client-side routes
+	mux.Handle("GET /{path...}", requireSession(http.HandlerFunc(pageHandler.Index)))
 
 	// Build middleware chain (order matters: outermost first)
 	var handler http.Handler = mux

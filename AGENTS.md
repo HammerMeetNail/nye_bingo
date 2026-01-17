@@ -11,6 +11,7 @@ Year of Bingo (yearofbingo.com) is a Go + vanilla JS web app for creating annual
 - Backend code: `internal/` (handlers, services, middleware, database, models)
 - DB migrations: `migrations/`
 - Frontend SPA: `web/templates/` + `web/static/` (vanilla JS, hash routing)
+- OAuth (Google OIDC): `/api/auth/{provider}` handlers + `internal/services/oidc.go`; OIDC mock lives in `tests/oidc/`
 - Docs/specs: `agent_docs/` (how we work) and `plans/` (feature specs)
 - Tests: `make test` (wraps `./scripts/test.sh`), `tests/e2e/`, `web/static/js/tests/`
 

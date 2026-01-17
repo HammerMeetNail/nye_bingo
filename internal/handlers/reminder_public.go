@@ -70,7 +70,7 @@ func (h *ReminderPublicHandler) UnsubscribeConfirm(w http.ResponseWriter, r *htt
         <input type="hidden" name="token" value="` + escaped + `">
         <div class="profile-actions">
           <button type="submit" class="btn btn-danger-outline">Disable reminders</button>
-          <a class="btn btn-ghost" href="/#home">Cancel</a>
+          <a class="btn btn-ghost" href="/">Cancel</a>
         </div>
       </form>
     </div>
@@ -122,7 +122,7 @@ func (h *ReminderPublicHandler) UnsubscribeSubmit(w http.ResponseWriter, r *http
       <h2>Unsubscribed</h2>
       <p>` + html.EscapeString(status) + `</p>
       <div class="profile-actions">
-        <a class="btn btn-secondary" href="/#profile">Manage settings</a>
+        <a class="btn btn-secondary" href="/profile">Manage settings</a>
       </div>
     </div>
   </main>

@@ -58,7 +58,7 @@ Keep it short and upbeat:
   - Progress summary (e.g., “8/24 complete · 1 bingo”)
   - Card image (see “Card image delivery”)
   - “Suggested next goals” (up to 3) + “Open my card” button
-  - Manage reminders link (`/#profile`)
+  - Manage reminders link (`/profile`)
   - One‑click unsubscribe link (public, tokenized)
 
 ### Goal reminder email content
@@ -321,8 +321,8 @@ In `App.showItemDetailModal()`:
 - Use DOM APIs + `textContent` for user strings.
 
 ### Deep link for “Open this goal”
-Add a simple hash query contract:
-- `/#card/{id}?item={itemId}`
+Add a simple path query contract:
+- `/card/{id}?item={itemId}`
 On route load, open the modal for that item.
 
 ## Email Templates

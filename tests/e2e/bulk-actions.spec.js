@@ -23,7 +23,7 @@ test('bulk actions update visibility, export, and delete cards', async ({ page }
   await createFinalizedCardFromModal(page, { title: 'Bulk Card One', year });
   await createFinalizedCardFromModal(page, { title: 'Bulk Card Two', year: year + 1 });
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.locator('.dashboard-card-preview')).toHaveCount(2);
   await ensureSelectedCount(page, 2);
 

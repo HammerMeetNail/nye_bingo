@@ -171,8 +171,8 @@ Email content:
   - “Your friend created a new bingo card”
 - Body should include:
   - Who/what happened
-  - A link to view it: `BASE_URL/#notifications` (and/or `/#friends`)
-  - A “Manage notification settings” link to `BASE_URL/#profile`
+  - A link to view it: `BASE_URL/notifications` (and/or `/friends`)
+  - A “Manage notification settings” link to `BASE_URL/profile`
 
 ### 4. Hook points (existing services)
 
@@ -182,7 +182,7 @@ In `internal/services/friend.go` `SendRequest(...)`:
   - type: `friend_request_received`
   - actor: `userID`
   - friendship_id: new friendship row ID
-  - link target: `#friends` (frontend decides)
+  - link target: `/friends` (frontend decides)
 
 #### Friend request accepted
 In `internal/services/friend.go` `AcceptRequest(...)`:
@@ -308,7 +308,7 @@ If new E2E scenarios are added, update the coverage outline in `plans/playwright
 5. Add handlers + routes + handler tests
 6. Update `web/static/openapi.yaml`
 7. Update frontend API (`web/static/js/api.js`)
-8. Add UI (`#notifications`, navbar badge, profile toggles) + CSS
+8. Add UI (`/notifications`, navbar badge, profile toggles) + CSS
 9. Add/extend Playwright specs + XSS regression + update `plans/playwright.md`
 10. Run `./scripts/test.sh --coverage` and ensure coverage does not drop
 
@@ -320,5 +320,5 @@ If new E2E scenarios are added, update the coverage outline in `plans/playwright
 6. Email notification opt-in:
    - User B opts into email notifications for (at least) friend request received
    - Trigger the event from A → B
-   - Assert an email arrives in Mailpit with a link to `/#notifications` or `/#friends`
+   - Assert an email arrives in Mailpit with a link to `/notifications` or `/friends`
    - Assert default behavior: with email toggles off, no notification emails are sent

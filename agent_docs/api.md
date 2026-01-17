@@ -9,7 +9,7 @@ Cards: `POST /api/cards`, `GET /api/cards`, `GET /api/cards/archive`, `GET /api/
 
 Items: `PUT/DELETE /api/cards/{id}/items/{pos}`, `POST /api/cards/{id}/swap`, `PUT /api/cards/{id}/items/{pos}/{complete,uncomplete,notes}`
 
-Public share: `GET /api/share/{token}` (JSON shared card), `GET /s/{token}` (HTML OpenGraph landing + redirect to `/#share/{token}`), `GET /og/share/{token}.png` (PNG preview), `GET /og/default.png` (default preview)
+Public share: `GET /api/share/{token}` (JSON shared card), `GET /s/{token}` (HTML OpenGraph landing + redirect to `/share/{token}`; legacy `/#share/{token}`), `GET /og/share/{token}.png` (PNG preview), `GET /og/default.png` (default preview)
 
 Suggestions: `GET /api/suggestions`, `GET /api/suggestions/categories`
 
@@ -27,7 +27,7 @@ The API is documented using OpenAPI 3.0 and available at `/api/docs` (Swagger UI
 
 **Access**:
 - API access requires a Bearer token in the Authorization header.
-- Users generate tokens in their profile settings (`#profile`).
+- Users generate tokens in their profile settings (`/profile`).
 - Tokens have scopes (`read`, `write`, `read_write`) and optional expiration.
 
 **Adding New Endpoints**:

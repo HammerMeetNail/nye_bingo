@@ -10,7 +10,7 @@ const {
 test('support form sends an email to support', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'support');
 
-  await page.goto('/#support');
+  await page.goto('/support');
   await page.fill('#support-email', user.email);
   await page.selectOption('#support-category', 'Bug Report');
   const message = 'Support request message for E2E coverage.';
@@ -33,7 +33,7 @@ test('support form sends an email to support', async ({ page, request }, testInf
 test('support form validates required fields and message length', async ({ page, request }, testInfo) => {
   const user = buildUser(testInfo, 'support');
 
-  await page.goto('/#support');
+  await page.goto('/support');
   await page.fill('#support-email', user.email);
   await page.selectOption('#support-category', 'General Question');
   await page.fill('#support-message', 'Too short');
@@ -52,6 +52,6 @@ test('support form pre-fills email when logged in', async ({ page }, testInfo) =
   const user = buildUser(testInfo, 'support');
   await register(page, user);
 
-  await page.goto('/#support');
+  await page.goto('/support');
   await expect(page.locator('#support-email')).toHaveValue(user.email);
 });

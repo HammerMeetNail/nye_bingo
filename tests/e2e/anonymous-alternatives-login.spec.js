@@ -11,7 +11,7 @@ test('anonymous user can log in to save a card', async ({ page }, testInfo) => {
   await register(page, user);
   await logout(page);
 
-  await page.goto('/#create');
+  await page.goto('/create');
   await page.fill('#card-title', 'Anon Login Card');
   await page.selectOption('#card-grid-size', '3');
   await page.fill('#card-header', 'ABC');

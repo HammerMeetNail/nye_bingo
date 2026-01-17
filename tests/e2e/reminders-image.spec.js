@@ -13,7 +13,7 @@ test('reminder emails include a PNG image URL', async ({ page, request }, testIn
   const user = buildUser(testInfo, 'rempng');
   await register(page, user);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await createCardFromModal(page, { title: 'PNG Card' });
   await fillCardWithSuggestions(page);
   await finalizeCard(page);
@@ -21,7 +21,7 @@ test('reminder emails include a PNG image URL', async ({ page, request }, testIn
   await verifyEmail(page, request, user);
   await enableReminders(page);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await expect(page.getByRole('button', { name: 'Send test email' })).toBeEnabled();
   const sendResponse = page.waitForResponse((response) => (
     response.url().includes('/api/reminders/test')

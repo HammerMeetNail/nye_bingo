@@ -160,7 +160,7 @@ func TestProviderAuthHandler_Callback_ErrorParam(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=access_denied") {
+	if !strings.Contains(location, "/login?error=access_denied") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -183,7 +183,7 @@ func TestProviderAuthHandler_Callback_InvalidState(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=oauth_invalid") {
+	if !strings.Contains(location, "/login?error=oauth_invalid") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -225,7 +225,7 @@ func TestProviderAuthHandler_Callback_ExistingUser(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#dashboard") {
+	if !strings.Contains(location, "/dashboard") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -268,7 +268,7 @@ func TestProviderAuthHandler_Callback_NewUser(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#google-complete") {
+	if !strings.Contains(location, "/google-complete") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 	if redis.setCalls != 1 {
@@ -307,7 +307,7 @@ func TestProviderAuthHandler_Callback_UnverifiedEmail(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=oauth_unverified") {
+	if !strings.Contains(location, "/login?error=oauth_unverified") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }

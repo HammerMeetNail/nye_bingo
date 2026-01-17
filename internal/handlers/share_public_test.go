@@ -64,7 +64,7 @@ func TestSharePublicHandler_Serve_Found(t *testing.T) {
 		`content="My Card"`,
 		`/og/share/` + token + `.png?v=`,
 		`http-equiv="refresh"`,
-		`/#share/` + token,
+		`/share/` + token,
 	}) {
 		t.Fatalf("expected og tags and redirect meta to be present")
 	}
@@ -92,7 +92,7 @@ func TestSharePublicHandler_Serve_NotFound(t *testing.T) {
 		t.Fatalf("expected status 404, got %d", rr.Code)
 	}
 	body := rr.Body.String()
-	if !containsAll(body, []string{`Share Link Not Found`, `/#share/` + token}) {
+	if !containsAll(body, []string{`Share Link Not Found`, `/share/` + token}) {
 		t.Fatalf("expected not found content and redirect meta to be present")
 	}
 }

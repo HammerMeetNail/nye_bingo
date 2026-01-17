@@ -15,12 +15,12 @@ test('notifications can be deleted individually or all at once', async ({ browse
 
   await sendFriendRequest(pageA, userB.username);
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
 
   await createFinalizedCardFromModal(pageA, { title: 'Delete Me' });
 
-  await pageB.goto('/#notifications');
+  await pageB.goto('/notifications');
   await expect(pageB.locator('.notification-item')).toHaveCount(2);
 
   const deleteButtons = pageB.getByRole('button', { name: 'Delete notification' });

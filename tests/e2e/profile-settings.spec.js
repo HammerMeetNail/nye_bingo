@@ -13,14 +13,14 @@ test('profile searchable toggle controls friend search results', async ({ browse
   const contextA = await browser.newContext();
   const pageA = await contextA.newPage();
   await register(pageA, userA);
-  await pageA.goto('/#profile');
+  await pageA.goto('/profile');
   const toggle = pageA.locator('#searchable-toggle');
   await expect(toggle).not.toBeChecked();
 
   const contextB = await browser.newContext();
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   await expect(pageB.locator('#search-results')).toContainText('No users found');
@@ -41,7 +41,7 @@ test('user can change password and log in with new password', async ({ page }, t
   const user = buildUser(testInfo, 'password');
   await register(page, user);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await page.fill('#current-password', user.password);
   await page.fill('#new-password', 'NewPass1');
   await page.fill('#confirm-password', 'NewPass2');

@@ -320,7 +320,7 @@ Acceptance:
 - Implement `App.exportAccountData()`:
   - Calls `API.account.export()` and downloads the returned ZIP blob via existing `App.downloadBlob(...)`.
 - Add Playwright spec `tests/e2e/account-export.spec.js`:
-  - Register → go to `/#profile` → click “Download Export”
+  - Register → go to `/profile` → click “Download Export”
   - Assert a download occurred and file name matches prefix
   - Sanity-check ZIP header bytes (`PK\x03\x04`) like existing bulk export coverage
   - Optional: assert the ZIP bytes contain ASCII file names like `user.csv` and `cards.csv` (string search on the binary buffer).
@@ -354,7 +354,7 @@ Acceptance:
   - Display inline validation hints.
 - Add JS unit tests for the confirm logic helper (if extracted), especially trimming rules.
 - Implement `API.account.delete(...)` call and success flow:
-  - Clear `App.user`, reset state, route to `#home`, show toast.
+  - Clear `App.user`, reset state, route to `/`, show toast.
 
 Acceptance:
 - Manual: cannot delete without typing username correctly; wrong password shows error.
@@ -363,7 +363,7 @@ Acceptance:
 **Goal:** ensure end-to-end deletion works and is irreversible.
 - Add Playwright spec `tests/e2e/account-delete.spec.js`:
   - Register user, create a card, add at least one item, finalize (optional).
-  - Visit `/#profile`, open delete modal.
+  - Visit `/profile`, open delete modal.
   - Attempt submit with wrong username → button disabled.
   - Enter correct username + password + check checkbox → delete.
   - Assert redirected/logged out (`Year of Bingo` home heading).

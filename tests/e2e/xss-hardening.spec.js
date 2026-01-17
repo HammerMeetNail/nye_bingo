@@ -43,14 +43,14 @@ test('xss usernames render safely and friend actions still work', async ({ brows
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
   await expect(results).toContainText(userA.username);
   await results.getByRole('button', { name: 'Add Friend' }).click();
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
   await expectToast(pageA, 'Friend request accepted');
 
@@ -98,7 +98,7 @@ test('invite copy and revoke actions work with xss usernames', async ({ page }, 
   await register(page, user, { searchable: true });
   const clipboardStubbed = await page.evaluate(() => window.__clipboardStubbed);
   expect(clipboardStubbed).toBe(true);
-  await page.goto('/#friends');
+  await page.goto('/friends');
 
   await page.getByRole('button', { name: 'Create Invite Link' }).click();
   const inviteInput = page.locator('#invite-link-input');
@@ -140,7 +140,7 @@ test('xss card titles and goals render as text on editor and dashboard', async (
   await expect(goalCell.locator('.bingo-cell-content')).toContainText('<img');
   await expect(page.locator('#bingo-grid img')).toHaveCount(0);
 
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
   const card = page.locator('.dashboard-card-preview').filter({ hasText: `xss-title` });
   await expect(card).toBeVisible();

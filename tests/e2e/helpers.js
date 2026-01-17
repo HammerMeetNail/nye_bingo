@@ -25,7 +25,7 @@ function buildUser(testInfo, prefix, options = {}) {
 }
 
 async function register(page, user, { searchable = false } = {}) {
-  await page.goto('/#register', { waitUntil: 'domcontentloaded' });
+  await page.goto('/register', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Create Account' })).toBeVisible();
   await page.locator('#register-form #username').fill(user.username);
   await page.locator('#register-form #email').fill(user.email);
@@ -38,7 +38,7 @@ async function register(page, user, { searchable = false } = {}) {
 }
 
 async function loginWithCredentials(page, email, password) {
-  await page.goto('/#login');
+  await page.goto('/login');
   await page.locator('#login-form #email').fill(email);
   await page.locator('#login-form #password').fill(password);
   await page.evaluate(() => {
@@ -57,7 +57,7 @@ async function createCardFromAuthenticatedCreate(page, { title } = {}) {
 }
 
 async function createCardFromModal(page, { title, gridSize, header, hasFree = true, year } = {}) {
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
   const addButton = page.getByRole('button', { name: '+ Card' });
   if (await addButton.isVisible()) {
@@ -88,7 +88,7 @@ async function createCardFromModal(page, { title, gridSize, header, hasFree = tr
     return;
   }
 
-  await page.goto('/#create');
+  await page.goto('/create');
   await expect(page.getByRole('heading', { name: 'Create New Card' })).toBeVisible();
   if (year) {
     await page.selectOption('#card-year', String(year));
@@ -145,7 +145,7 @@ async function completeFirstItem(page) {
 }
 
 async function logout(page) {
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await page.getByRole('button', { name: 'Sign Out' }).click();
   await expect(page.getByRole('heading', { name: 'Year of Bingo' })).toBeVisible();
 }
@@ -178,7 +178,7 @@ async function ensureSelectedCount(page, expected) {
 }
 
 async function sendFriendRequest(page, username) {
-  await page.goto('/#friends');
+  await page.goto('/friends');
   await page.fill('#friend-search', username);
   await page.click('#search-btn');
   const results = page.locator('#search-results');
@@ -339,7 +339,7 @@ async function expectNoEmail(request, { to, subject, timeout = 3000, after = nul
 
 function extractTokenFromEmail(message, route) {
   const body = getMessageBody(message);
-  const tokenMatch = body.match(new RegExp(`#${route}\\?token=([a-f0-9]+)`, 'i'));
+  const tokenMatch = body.match(new RegExp(`/${route}\\?token=([a-f0-9]+)`, 'i'));
   if (!tokenMatch) {
     throw new Error(`Unable to find ${route} token in email`);
   }

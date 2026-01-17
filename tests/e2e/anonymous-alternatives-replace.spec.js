@@ -13,7 +13,7 @@ test('anonymous card conflicts can replace the existing card', async ({ page }, 
 
   const conflictYear = new Date().getFullYear() + 1;
   const conflictTitle = 'Replacement Card';
-  await page.goto('/#create');
+  await page.goto('/create');
   await page.selectOption('#card-year', String(conflictYear));
   await page.fill('#card-title', conflictTitle);
   await page.getByRole('button', { name: 'Create Card' }).click();
@@ -23,7 +23,7 @@ test('anonymous card conflicts can replace the existing card', async ({ page }, 
   await finalizeCard(page);
   await logout(page);
 
-  await page.goto('/#create');
+  await page.goto('/create');
   await page.selectOption('#card-year', String(conflictYear));
   await page.fill('#card-title', conflictTitle);
   await page.getByRole('button', { name: 'Create Card' }).click();

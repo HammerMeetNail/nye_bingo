@@ -173,12 +173,12 @@ Handler methods on `internal/handlers/auth.go` (or a new `auth_google.go`):
 - Store `state` + `nonce` in **HttpOnly cookies** with `SameSite=Lax` so they are sent on the cross-site redirect back from Google.
   - Do not reuse the session cookie (it’s `SameSite=Strict`).
 - Optional: accept `next` query param (desired SPA route after login) and store it in cookie too.
-  - Sanitize `next` using a whitelist of hash routes to prevent open redirects.
+  - Sanitize `next` using a whitelist of path routes to prevent open redirects.
 - Redirect (302) to the provider’s `AuthCodeURL(...)`.
 
 `ProviderCallback(w, r)`:
 - Validate query params:
-  - If `error` from Google → redirect to `/#login?error=...` (sanitized).
+  - If `error` from Google → redirect to `/login?error=...` (sanitized).
   - Require `code` + `state`.
 - Validate `state` cookie equals `state` query param (constant time compare).
 - Exchange `code` for tokens, verify `id_token`, validate `nonce` claim matches nonce cookie.
@@ -186,11 +186,11 @@ Handler methods on `internal/handlers/auth.go` (or a new `auth_google.go`):
 - If existing user:
   - Create app session cookie using existing `AuthService.CreateSession`.
   - Clear oauth cookies (`state`, `nonce`, `next`) by expiring them.
-  - Redirect to `/#dashboard` (or stored `next`).
+  - Redirect to `/dashboard` (or stored `next`).
 - If new user:
   - Create a short-lived “pending provider login” record in Redis keyed by a random token (TTL ~10 minutes), containing `{provider,subject,email}`.
   - Set `{provider}_pending` HttpOnly cookie with that token (`SameSite=Lax`) so SPA can complete signup.
-  - Redirect to `/#google-complete` for Google (and preserve `next` via cookie if used).
+  - Redirect to `/google-complete` for Google (and preserve `next` via cookie if used).
 
 `ProviderComplete(w, r)`:
 - Reads `{provider}_pending` cookie and JSON body `{ username, searchable }`.
@@ -281,7 +281,7 @@ Add `internal/handlers/auth_google_test.go`:
   - rejects missing/invalid state (400 or redirect to login with error)
   - handles provider `error` query param
   - for existing users: sets session cookie and redirects to SPA route; clears oauth cookies
-  - for new users: sets `{provider}_pending` cookie (Google: `google_pending`) and redirects to `/#google-complete`
+  - for new users: sets `{provider}_pending` cookie (Google: `google_pending`) and redirects to `/google-complete`
   - rejects unverified email claims
 
 - Complete endpoint:
@@ -312,7 +312,7 @@ Add a local fake OIDC provider for e2e:
   - client ID/secret can be dummy values accepted by the fake provider
 
 New spec `tests/e2e/google-auth.spec.js`:
-- “Google login prompts for username on first login” (lands on `#google-complete`, then completes signup, then dashboard; profile shows Verified badge).
+- “Google login prompts for username on first login” (lands on `/google-complete`, then completes signup, then dashboard; profile shows Verified badge).
 - “Google login links to existing password account by email”:
   - register with password
   - logout

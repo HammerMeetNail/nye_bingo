@@ -14,12 +14,12 @@ test('new card notifications link to friend cards', async ({ browser }, testInfo
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageB, userA.username);
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
 
   await createFinalizedCardFromModal(pageA, { title: 'New Friends Card' });
 
-  await pageB.goto('/#notifications');
+  await pageB.goto('/notifications');
   const newCardNotification = pageB.locator('.notification-item', { hasText: 'created a new card' });
   await expect(newCardNotification).toHaveCount(1);
   await newCardNotification.getByRole('link', { name: 'View' }).click();

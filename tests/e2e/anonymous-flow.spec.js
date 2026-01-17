@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { buildUser } = require('./helpers');
 
 test('anonymous user can create, shuffle, and save a card', async ({ page }, testInfo) => {
-  await page.goto('/#create');
+  await page.goto('/create');
 
   await page.fill('#card-title', 'Anon Card');
   await page.selectOption('#card-grid-size', '3');

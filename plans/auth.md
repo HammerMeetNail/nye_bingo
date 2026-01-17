@@ -244,9 +244,9 @@ Request a magic link to be sent to email.
 Verify magic link and create session.
 
 **Behavior:**
-- Valid token → Create session, redirect to `/#home`
-- Invalid/expired → Redirect to `/#login?error=invalid_link`
-- Already used → Redirect to `/#login?error=link_used`
+- Valid token → Create session, redirect to `/`
+- Invalid/expired → Redirect to `/login?error=invalid_link`
+- Already used → Redirect to `/login?error=link_used`
 
 #### POST /api/auth/verify-email
 
@@ -643,7 +643,7 @@ APP_BASE_URL=http://localhost:8080
 To: user@example.com
 Subject: Verify your Year of Bingo account
 ---
-Click to verify: http://localhost:8080/#verify-email?token=abc123...
+Click to verify: http://localhost:8080/verify-email?token=abc123...
 =============
 ```
 
@@ -765,7 +765,7 @@ curl -X POST http://localhost:8080/api/auth/magic-link \
 # 2. Check Mailpit or console logs for link
 
 # 3. Visit link or call verify endpoint
-open "http://localhost:8080/#magic-link?token=<token>"
+open "http://localhost:8080/magic-link?token=<token>"
 ```
 
 #### Testing Password Reset

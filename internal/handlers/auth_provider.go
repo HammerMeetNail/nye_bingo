@@ -140,7 +140,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 		h.setSessionCookie(w, token)
 		next := h.readOAuthNext(r)
 		h.clearOAuthCookie(w, oauthNextCookieName)
-		http.Redirect(w, r, h.redirectTarget(next, "#dashboard"), http.StatusFound)
+		http.Redirect(w, r, h.redirectTarget(next, "/dashboard"), http.StatusFound)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 	}
 
 	h.setOAuthCookie(w, providerPendingCookieName(providerKey), pendingToken)
-	http.Redirect(w, r, h.redirectTarget("", fmt.Sprintf("#%s-complete", providerKey)), http.StatusFound)
+	http.Redirect(w, r, h.redirectTarget("", fmt.Sprintf("/%s-complete", providerKey)), http.StatusFound)
 }
 
 func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Request) {
@@ -348,7 +348,7 @@ func (h *ProviderAuthHandler) setSessionCookie(w http.ResponseWriter, token stri
 
 func (h *ProviderAuthHandler) redirectToLoginError(w http.ResponseWriter, r *http.Request, code string) {
 	message := sanitizeErrorParam(code)
-	http.Redirect(w, r, "/#login?error="+message, http.StatusFound)
+	http.Redirect(w, r, "/login?error="+message, http.StatusFound)
 }
 
 func (h *ProviderAuthHandler) readOAuthNext(r *http.Request) string {
@@ -361,7 +361,10 @@ func (h *ProviderAuthHandler) readOAuthNext(r *http.Request) string {
 
 func (h *ProviderAuthHandler) redirectTarget(next, fallback string) string {
 	if next != "" {
-		return "/" + next
+		return next
+	}
+	if strings.HasPrefix(fallback, "/") {
+		return fallback
 	}
 	return "/" + fallback
 }
@@ -389,13 +392,16 @@ func sanitizeNext(value string) string {
 	if len(value) > 512 {
 		return ""
 	}
-	if !strings.HasPrefix(value, "#") {
-		return ""
-	}
-	if len(value) < 2 {
-		return ""
-	}
 	if strings.Contains(value, "\n") || strings.Contains(value, "\r") {
+		return ""
+	}
+	if strings.HasPrefix(value, "#") {
+		value = "/" + strings.TrimPrefix(value, "#")
+	}
+	if !strings.HasPrefix(value, "/") {
+		return ""
+	}
+	if strings.HasPrefix(value, "//") {
 		return ""
 	}
 	for _, r := range value[1:] {

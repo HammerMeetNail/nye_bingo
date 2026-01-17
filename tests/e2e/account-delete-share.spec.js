@@ -19,7 +19,7 @@ test('account delete invalidates share links', async ({ page }, testInfo) => {
   const shareUrl = await shareInput.inputValue();
   await page.keyboard.press('Escape');
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await page.getByRole('button', { name: 'Delete Account' }).click();
   await page.locator('#delete-account-username').fill(user.username);
   await page.locator('#delete-account-password').fill(user.password);

@@ -17,7 +17,7 @@ test('invite links connect friends', async ({ browser }, testInfo) => {
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.getByRole('button', { name: 'Create Invite Link' }).click();
   const inviteInput = pageA.locator('#invite-result input');
   await expect(inviteInput).toBeVisible();
@@ -47,14 +47,14 @@ test('blocking removes friendships and hides search results', async ({ browser }
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/#friends');
+  await pageB.goto('/friends');
   await pageB.fill('#friend-search', userA.username);
   await pageB.click('#search-btn');
   const results = pageB.locator('#search-results');
   await expect(results).toContainText(userA.username);
   await results.getByRole('button', { name: 'Add Friend' }).click();
 
-  await pageA.goto('/#friends');
+  await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
   await expectToast(pageA, 'Friend request accepted');
 

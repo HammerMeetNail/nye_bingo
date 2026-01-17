@@ -42,7 +42,7 @@ test('API tokens can be created, copied, and revoked', async ({ page, request },
   const user = buildUser(testInfo, 'token');
   await register(page, user);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await expect(page.locator('#api-tokens-list')).toContainText('No active tokens');
 
   const token = await createToken(page, 'CLI Token', { closeModal: false });
@@ -73,7 +73,7 @@ test('API tokens can be revoked all at once', async ({ page }, testInfo) => {
   const user = buildUser(testInfo, 'tokens');
   await register(page, user);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   await expect(page.locator('#api-tokens-list')).toContainText('No active tokens');
 
   await createToken(page, 'Token One');

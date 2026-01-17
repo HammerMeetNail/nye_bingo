@@ -6,7 +6,7 @@ test('account export downloads a zip', async ({ page }, testInfo) => {
   const user = buildUser(testInfo, 'accountexport');
   await register(page, user);
 
-  await page.goto('/#profile');
+  await page.goto('/profile');
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download Export' }).click();
   const download = await downloadPromise;
