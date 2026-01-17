@@ -70,6 +70,8 @@ func (h *ProviderAuthHandler) ProviderStart(w http.ResponseWriter, r *http.Reque
 
 	if next := sanitizeNext(r.URL.Query().Get("next")); next != "" {
 		h.setOAuthCookie(w, oauthNextCookieName, next)
+	} else {
+		h.clearOAuthCookie(w, oauthNextCookieName)
 	}
 
 	redirectURL := provider.AuthCodeURL(state, nonce)
@@ -97,13 +99,13 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 
 	stateCookie, err := r.Cookie(oauthStateCookieName)
 	if err != nil || !secureCompare(stateCookie.Value, state) {
-		h.redirectToLoginError(w, r, "oauth_state")
+		h.redirectToLoginError(w, r, "oauth_invalid")
 		return
 	}
 
 	nonceCookie, err := r.Cookie(oauthNonceCookieName)
 	if err != nil || nonceCookie.Value == "" {
-		h.redirectToLoginError(w, r, "oauth_nonce")
+		h.redirectToLoginError(w, r, "oauth_invalid")
 		return
 	}
 
@@ -182,26 +184,31 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	if GetUserFromContext(r.Context()) != nil {
+		writeError(w, http.StatusBadRequest, "Already authenticated")
+		return
+	}
+
 	pendingCookie, err := r.Cookie(providerPendingCookieName(providerKey))
 	if err != nil || pendingCookie.Value == "" {
-		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart Google login.")
+		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
 		return
 	}
 
 	pendingKey := providerPendingRedisKey(pendingCookie.Value)
 	pendingJSON, err := h.redis.Get(r.Context(), pendingKey)
 	if err != nil || pendingJSON == "" {
-		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart Google login.")
+		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
 		return
 	}
 
 	var pending providerPendingRecord
 	if err := json.Unmarshal([]byte(pendingJSON), &pending); err != nil {
-		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart Google login.")
+		writeError(w, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
 		return
 	}
 	if pending.Provider != string(provider.Provider()) {
-		writeError(w, http.StatusBadRequest, "Invalid signup session. Please restart Google login.")
+		writeError(w, http.StatusBadRequest, "Invalid signup session. Please restart OAuth login.")
 		return
 	}
 
@@ -228,7 +235,7 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 		case errors.Is(err, services.ErrInvalidUsername):
 			writeError(w, http.StatusBadRequest, "Username must be between 2 and 100 characters")
 		case errors.Is(err, services.ErrInvalidProviderPending):
-			writeError(w, http.StatusBadRequest, "Signup session expired. Please restart Google login.")
+			writeError(w, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
 		default:
 			log.Printf("Provider complete failed: %v", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")

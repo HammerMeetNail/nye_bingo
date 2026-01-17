@@ -141,7 +141,9 @@ func run() error {
 	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	accountHandler := handlers.NewAccountHandler(accountService, authService, cfg.Server.Secure)
-	pageHandler, err := handlers.NewPageHandler("web/templates")
+	pageHandler, err := handlers.NewPageHandler("web/templates", handlers.PageOAuthConfig{
+		GoogleEnabled: cfg.OAuth.Google.Enabled,
+	})
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}

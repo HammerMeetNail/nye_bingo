@@ -20,6 +20,7 @@ const App = {
   modalScrollY: null,
   isSharedView: false,
   currentShareStatus: null,
+  googleOAuthEnabled: false,
   _lastHash: '',
   _pendingNavigationHash: null,
   _revertingHashChange: false,
@@ -28,6 +29,7 @@ const App = {
   _itemEditInFlightPositions: new Set(),
 
   async init() {
+    this.googleOAuthEnabled = document.body?.dataset?.googleOauthEnabled === 'true';
     await API.init();
     await this.checkAuth();
     this.setupActionDelegation();
@@ -1978,6 +1980,7 @@ const App = {
       'invalid_link': 'This login link is invalid or has expired.',
       'link_used': 'This login link has already been used.',
       'oauth_error': 'Google sign-in failed. Please try again.',
+      'oauth_invalid': 'Google sign-in failed. Please try again.',
       'oauth_missing': 'Google sign-in failed. Please try again.',
       'oauth_state': 'Google sign-in failed. Please try again.',
       'oauth_nonce': 'Google sign-in failed. Please try again.',
@@ -1986,8 +1989,15 @@ const App = {
       'oauth_link': 'Google sign-in failed. Please try again.',
     };
     const displayError = errorMessages[errorMessage] || errorMessage;
-    const oauthNext = this.getOAuthNextHash();
-    const googleUrl = oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
+    const googleEnabled = this.googleOAuthEnabled;
+    const oauthNext = googleEnabled ? this.getOAuthNextHash() : '';
+    const googleUrl = googleEnabled && oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
+    const googleButton = googleEnabled ? `
+          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
+            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
+            Continue with Google
+          </a>
+    ` : '';
 
     container.innerHTML = `
       <div class="auth-page">
@@ -2017,10 +2027,7 @@ const App = {
           <div class="auth-divider">
             <span>or</span>
           </div>
-          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
-            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
-            Continue with Google
-          </a>
+          ${googleButton}
           <a href="#magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
             Sign in with email link
           </a>
@@ -2058,8 +2065,18 @@ const App = {
       return;
     }
 
-    const oauthNext = this.getOAuthNextHash();
-    const googleUrl = oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
+    const googleEnabled = this.googleOAuthEnabled;
+    const oauthNext = googleEnabled ? this.getOAuthNextHash() : '';
+    const googleUrl = googleEnabled && oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
+    const googleBlock = googleEnabled ? `
+          <div class="auth-divider">
+            <span>or</span>
+          </div>
+          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 1rem;">
+            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
+            Continue with Google
+          </a>
+    ` : '';
 
     container.innerHTML = `
       <div class="auth-page">
@@ -2094,13 +2111,7 @@ const App = {
               Create Account
             </button>
           </form>
-          <div class="auth-divider">
-            <span>or</span>
-          </div>
-          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 1rem;">
-            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
-            Continue with Google
-          </a>
+          ${googleBlock}
           <div class="auth-footer">
             Already have an account? <a href="#login">Sign in</a>
           </div>

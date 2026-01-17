@@ -164,7 +164,12 @@ func (s *server) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 
-	redirect, err := url.Parse(redirectURI)
+	redirectTarget := s.redirectURI
+	if redirectTarget == "" {
+		http.Error(w, "redirect_uri not configured", http.StatusBadRequest)
+		return
+	}
+	redirect, err := url.Parse(redirectTarget)
 	if err != nil {
 		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
 		return

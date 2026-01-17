@@ -183,7 +183,7 @@ func TestProviderAuthHandler_Callback_InvalidState(t *testing.T) {
 		t.Fatalf("expected status 302, got %d", rr.Code)
 	}
 	location := rr.Result().Header.Get("Location")
-	if !strings.Contains(location, "/#login?error=oauth_state") {
+	if !strings.Contains(location, "/#login?error=oauth_invalid") {
 		t.Fatalf("unexpected redirect location: %q", location)
 	}
 }
@@ -327,7 +327,23 @@ func TestProviderAuthHandler_Complete_MissingPending(t *testing.T) {
 
 	handler.ProviderComplete(rr, req)
 
-	assertErrorResponse(t, rr, http.StatusBadRequest, "Signup session expired. Please restart Google login.")
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
+}
+
+func TestProviderAuthHandler_Complete_AlreadyAuthenticated(t *testing.T) {
+	mockProvider := &mockOAuthProvider{provider: services.ProviderGoogle}
+	handler := NewProviderAuthHandler(nil, &mockAuthService{}, &fakeRedisClient{}, map[services.Provider]services.OAuthProvider{
+		services.ProviderGoogle: mockProvider,
+	}, false)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/google/complete", nil)
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New()}))
+	req.SetPathValue("provider", "google")
+	rr := httptest.NewRecorder()
+
+	handler.ProviderComplete(rr, req)
+
+	assertErrorResponse(t, rr, http.StatusBadRequest, "Already authenticated")
 }
 
 func TestProviderAuthHandler_Complete_Success(t *testing.T) {
