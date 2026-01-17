@@ -457,3 +457,11 @@ func TestRedirectTarget_SanitizesFallback(t *testing.T) {
 		t.Fatalf("expected unsafe fallback to become /, got %q", target)
 	}
 }
+
+func TestRedirectTarget_NormalizesFallback(t *testing.T) {
+	handler := &ProviderAuthHandler{}
+	target := handler.redirectTarget("", "dashboard")
+	if target != "/dashboard" {
+		t.Fatalf("expected fallback to normalize, got %q", target)
+	}
+}

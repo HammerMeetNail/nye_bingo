@@ -366,10 +366,10 @@ func (h *ProviderAuthHandler) redirectTarget(next, fallback string) string {
 	if fallback == "" {
 		return "/"
 	}
-	if !strings.HasPrefix(fallback, "/") {
-		fallback = "/" + fallback
-	}
 	if safe := sanitizeNext(fallback); safe != "" {
+		return safe
+	}
+	if safe := sanitizeNext("/" + fallback); safe != "" {
 		return safe
 	}
 	return "/"
