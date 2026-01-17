@@ -7722,7 +7722,7 @@ const App = {
 
           <h2>1. Overview</h2>
           <p>
-            Year of Bingo ("Service," "we," "us," or "our") is a web application for creating and tracking annual bingo cards with personal goals. This Terms of Service Agreement ("Agreement") is between Year of Bingo and you ("you" or "User").
+            Year of Bingo ("Service," "we," "us," or "our") is a web application for creating and tracking annual bingo cards with personal goals. The Service is owned and operated by LocalByte, LLC. This Terms of Service Agreement ("Agreement") is between Year of Bingo and you ("you" or "User").
           </p>
 
           <h2>2. Your Account</h2>
@@ -7840,7 +7840,7 @@ const App = {
 
           <h2 id="privacy-scope">1. Scope of this Privacy Policy</h2>
           <p>
-            This Privacy Policy applies to personal data collected by Year of Bingo through the yearofbingo.com website. It describes how we collect, use, and protect your personal information.
+            This Privacy Policy applies to personal data collected by Year of Bingo through the yearofbingo.com website. Year of Bingo is owned and operated by LocalByte, LLC. It describes how we collect, use, and protect your personal information.
           </p>
           <p>
             "Personal data" means any information that relates to an identified or identifiable person, such as a name, email address, or online identifier.
