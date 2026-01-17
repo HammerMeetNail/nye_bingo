@@ -11,7 +11,7 @@ import (
 )
 
 func TestPageHandler_IndexAndErrors(t *testing.T) {
-	handler, err := NewPageHandler("../../web/templates")
+	handler, err := NewPageHandler("../../web/templates", PageOAuthConfig{})
 	if err != nil {
 		t.Fatalf("failed to create page handler: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestPageHandler_IndexAndErrors(t *testing.T) {
 }
 
 func TestPageHandler_NewPageHandler_InvalidDir(t *testing.T) {
-	_, err := NewPageHandler(filepath.Join(os.TempDir(), "nope"))
+	_, err := NewPageHandler(filepath.Join(os.TempDir(), "nope"), PageOAuthConfig{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -72,7 +72,7 @@ func TestPageHandler_Index_TemplateError(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "404.html"), []byte("not found"), 0o644); err != nil {
 		t.Fatalf("write 404: %v", err)
 	}
-	handler, err := NewPageHandler(dir)
+	handler, err := NewPageHandler(dir, PageOAuthConfig{})
 	if err != nil {
 		t.Fatalf("failed to create page handler: %v", err)
 	}

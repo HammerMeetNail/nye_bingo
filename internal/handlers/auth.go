@@ -99,7 +99,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Create user
 	user, err := h.userService.Create(r.Context(), models.CreateUserParams{
 		Email:        req.Email,
-		PasswordHash: passwordHash,
+		PasswordHash: &passwordHash,
 		Username:     req.Username,
 		Searchable:   req.Searchable,
 	})
@@ -160,6 +160,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.PasswordHash == nil {
+		writeError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+
 	// Verify password
 	if !h.authService.VerifyPassword(user.PasswordHash, req.Password) {
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
@@ -211,6 +216,11 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if user.PasswordHash == nil {
+		writeError(w, http.StatusBadRequest, "No password set; use password reset to set one.")
 		return
 	}
 

@@ -13,6 +13,7 @@ type Config struct {
 	Redis    RedisConfig
 	Email    EmailConfig
 	AI       AIConfig
+	OAuth    OAuthConfig
 }
 
 type ServerConfig struct {
@@ -59,6 +60,20 @@ type EmailConfig struct {
 	// SMTP settings (for Mailpit in local dev)
 	SMTPHost string
 	SMTPPort int
+}
+
+type OAuthConfig struct {
+	AllowedProviders []string
+	Google           OAuthProviderConfig
+}
+
+type OAuthProviderConfig struct {
+	Enabled      bool
+	ClientID     string
+	ClientSecret string
+	RedirectURL  string
+	IssuerURL    string
+	Scopes       []string
 }
 
 func (d DatabaseConfig) DSN() string {
@@ -114,6 +129,17 @@ func Load() (*Config, error) {
 			GeminiMaxOutputTokens: getEnvInt("GEMINI_MAX_OUTPUT_TOKENS", 4096),
 			Stub:                  getEnvBool("AI_STUB", false),
 		},
+		OAuth: OAuthConfig{
+			AllowedProviders: getEnvList("OAUTH_ALLOWED_PROVIDERS", nil),
+			Google: OAuthProviderConfig{
+				Enabled:      getEnvBool("GOOGLE_OAUTH_ENABLED", false),
+				ClientID:     getEnv("GOOGLE_OAUTH_CLIENT_ID", ""),
+				ClientSecret: getEnv("GOOGLE_OAUTH_CLIENT_SECRET", ""),
+				RedirectURL:  getEnv("GOOGLE_OAUTH_REDIRECT_URL", ""),
+				IssuerURL:    getEnvNonEmpty("GOOGLE_OIDC_ISSUER_URL", "https://accounts.google.com"),
+				Scopes:       getEnvList("GOOGLE_OIDC_SCOPES", []string{"openid", "email", "profile"}),
+			},
+		},
 	}
 
 	return cfg, nil
@@ -161,4 +187,23 @@ func getEnvFloat64(key string, defaultValue float64) float64 {
 		}
 	}
 	return defaultValue
+}
+
+func getEnvList(key string, defaultValues []string) []string {
+	if value, exists := os.LookupEnv(key); exists {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return defaultValues
+		}
+		parts := strings.Split(trimmed, ",")
+		out := make([]string, 0, len(parts))
+		for _, part := range parts {
+			item := strings.TrimSpace(part)
+			if item != "" {
+				out = append(out, item)
+			}
+		}
+		return out
+	}
+	return defaultValues
 }

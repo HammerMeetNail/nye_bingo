@@ -195,6 +195,18 @@ jobs:
       # Speed up the background reminder runner in CI so scheduled reminder tests
       # reliably deliver within Playwright's per-test timeout.
       REMINDERS_POLL_INTERVAL: "1s"
+      GOOGLE_OAUTH_ENABLED: "true"
+      GOOGLE_OAUTH_CLIENT_ID: "oidc-test"
+      GOOGLE_OAUTH_CLIENT_SECRET: "oidc-secret"
+      GOOGLE_OAUTH_REDIRECT_URL: "http://app:8080/api/auth/google/callback"
+      GOOGLE_OIDC_ISSUER_URL: "http://oidc:5555"
+      GOOGLE_OIDC_SCOPES: "openid,email,profile"
+      OAUTH_ALLOWED_PROVIDERS: "google"
+      OIDC_ISSUER_URL: "http://oidc:5555"
+      OIDC_CLIENT_ID: "oidc-test"
+      OIDC_CLIENT_SECRET: "oidc-secret"
+      OIDC_REDIRECT_URI: "http://app:8080/api/auth/google/callback"
+      OIDC_BASE_URL: "http://oidc:5555"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -202,8 +214,24 @@ jobs:
       - name: Build web assets
         run: ./scripts/build-assets.sh
 
+      - name: Start OIDC mock
+        run: docker compose --profile e2e up -d --build oidc
+
+      - name: Wait for OIDC mock
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:5555/.well-known/openid-configuration >/dev/null 2>&1; then
+              echo "OIDC mock is healthy."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "OIDC mock did not become healthy in time."
+          docker compose logs oidc
+          exit 1
+
       - name: Start stack
-        run: docker compose up -d --build
+        run: docker compose --profile e2e up -d --build app postgres redis mailpit
 
       - name: Wait for app health
         run: |
@@ -485,6 +513,13 @@ jobs:
           IMAGE_DIGEST: ${{ needs.scan-and-push.outputs.digest }}
           IMAGE_TAG: ${{ needs.scan-and-push.outputs.tag }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_OAUTH_ENABLED: ${{ secrets.GOOGLE_OAUTH_ENABLED }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          GOOGLE_OAUTH_REDIRECT_URL: ${{ secrets.GOOGLE_OAUTH_REDIRECT_URL }}
+          GOOGLE_OIDC_ISSUER_URL: ${{ secrets.GOOGLE_OIDC_ISSUER_URL }}
+          GOOGLE_OIDC_SCOPES: ${{ secrets.GOOGLE_OIDC_SCOPES }}
+          OAUTH_ALLOWED_PROVIDERS: ${{ secrets.OAUTH_ALLOWED_PROVIDERS }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -525,6 +560,13 @@ jobs:
           BACKUP_NOTIFY_EMAILS=${BACKUP_NOTIFY_EMAILS}
           GEMINI_API_KEY=${GEMINI_API_KEY}
           BACKUP_ENCRYPTION_KEY=${BACKUP_ENCRYPTION_KEY}
+          GOOGLE_OAUTH_ENABLED=${GOOGLE_OAUTH_ENABLED}
+          GOOGLE_OAUTH_CLIENT_ID=${GOOGLE_OAUTH_CLIENT_ID}
+          GOOGLE_OAUTH_CLIENT_SECRET=${GOOGLE_OAUTH_CLIENT_SECRET}
+          GOOGLE_OAUTH_REDIRECT_URL=${GOOGLE_OAUTH_REDIRECT_URL}
+          GOOGLE_OIDC_ISSUER_URL=${GOOGLE_OIDC_ISSUER_URL}
+          GOOGLE_OIDC_SCOPES=${GOOGLE_OIDC_SCOPES}
+          OAUTH_ALLOWED_PROVIDERS=${OAUTH_ALLOWED_PROVIDERS}
           ENVFILE
             chmod 600 .env
             chmod 0755 scripts/*.sh

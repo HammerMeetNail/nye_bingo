@@ -12,6 +12,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE",
 		"REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD", "REDIS_DB",
 		"AI_STUB", "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_THINKING_LEVEL", "GEMINI_THINKING_BUDGET", "GEMINI_TEMPERATURE", "GEMINI_MAX_OUTPUT_TOKENS",
+		"OAUTH_ALLOWED_PROVIDERS", "GOOGLE_OAUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REDIRECT_URL", "GOOGLE_OIDC_ISSUER_URL", "GOOGLE_OIDC_SCOPES",
 	}
 	for _, v := range envVars {
 		os.Unsetenv(v)
@@ -95,6 +96,19 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.AI.Stub != false {
 		t.Error("expected AI.Stub to be false")
 	}
+
+	if cfg.OAuth.Google.Enabled != false {
+		t.Error("expected OAuth.Google.Enabled to be false")
+	}
+	if cfg.OAuth.Google.IssuerURL != "https://accounts.google.com" {
+		t.Errorf("expected OAuth.Google.IssuerURL to be https://accounts.google.com, got %q", cfg.OAuth.Google.IssuerURL)
+	}
+	if len(cfg.OAuth.Google.Scopes) != 3 {
+		t.Fatalf("expected default OAuth.Google.Scopes length 3, got %d", len(cfg.OAuth.Google.Scopes))
+	}
+	if cfg.OAuth.Google.Scopes[0] != "openid" {
+		t.Errorf("expected OAuth.Google.Scopes[0] to be openid, got %q", cfg.OAuth.Google.Scopes[0])
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -114,6 +128,13 @@ func TestLoad_CustomValues(t *testing.T) {
 	os.Setenv("REDIS_PORT", "6380")
 	os.Setenv("REDIS_PASSWORD", "redispass")
 	os.Setenv("REDIS_DB", "1")
+	os.Setenv("OAUTH_ALLOWED_PROVIDERS", "google,apple")
+	os.Setenv("GOOGLE_OAUTH_ENABLED", "true")
+	os.Setenv("GOOGLE_OAUTH_CLIENT_ID", "client-id")
+	os.Setenv("GOOGLE_OAUTH_CLIENT_SECRET", "client-secret")
+	os.Setenv("GOOGLE_OAUTH_REDIRECT_URL", "https://example.com/callback")
+	os.Setenv("GOOGLE_OIDC_ISSUER_URL", "https://issuer.example.com")
+	os.Setenv("GOOGLE_OIDC_SCOPES", "openid,email")
 
 	defer func() {
 		// Clean up
@@ -132,6 +153,13 @@ func TestLoad_CustomValues(t *testing.T) {
 		os.Unsetenv("REDIS_PORT")
 		os.Unsetenv("REDIS_PASSWORD")
 		os.Unsetenv("REDIS_DB")
+		os.Unsetenv("OAUTH_ALLOWED_PROVIDERS")
+		os.Unsetenv("GOOGLE_OAUTH_ENABLED")
+		os.Unsetenv("GOOGLE_OAUTH_CLIENT_ID")
+		os.Unsetenv("GOOGLE_OAUTH_CLIENT_SECRET")
+		os.Unsetenv("GOOGLE_OAUTH_REDIRECT_URL")
+		os.Unsetenv("GOOGLE_OIDC_ISSUER_URL")
+		os.Unsetenv("GOOGLE_OIDC_SCOPES")
 	}()
 
 	cfg, err := Load()
@@ -188,6 +216,31 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.Redis.DB != 1 {
 		t.Errorf("expected Redis.DB to be 1, got %d", cfg.Redis.DB)
+	}
+
+	if len(cfg.OAuth.AllowedProviders) != 2 {
+		t.Fatalf("expected OAuth.AllowedProviders length 2, got %d", len(cfg.OAuth.AllowedProviders))
+	}
+	if cfg.OAuth.AllowedProviders[0] != "google" {
+		t.Errorf("expected OAuth.AllowedProviders[0] to be google, got %q", cfg.OAuth.AllowedProviders[0])
+	}
+	if cfg.OAuth.Google.Enabled != true {
+		t.Error("expected OAuth.Google.Enabled to be true")
+	}
+	if cfg.OAuth.Google.ClientID != "client-id" {
+		t.Errorf("expected OAuth.Google.ClientID to be client-id, got %q", cfg.OAuth.Google.ClientID)
+	}
+	if cfg.OAuth.Google.ClientSecret != "client-secret" {
+		t.Errorf("expected OAuth.Google.ClientSecret to be client-secret, got %q", cfg.OAuth.Google.ClientSecret)
+	}
+	if cfg.OAuth.Google.RedirectURL != "https://example.com/callback" {
+		t.Errorf("expected OAuth.Google.RedirectURL to be https://example.com/callback, got %q", cfg.OAuth.Google.RedirectURL)
+	}
+	if cfg.OAuth.Google.IssuerURL != "https://issuer.example.com" {
+		t.Errorf("expected OAuth.Google.IssuerURL to be https://issuer.example.com, got %q", cfg.OAuth.Google.IssuerURL)
+	}
+	if len(cfg.OAuth.Google.Scopes) != 2 || cfg.OAuth.Google.Scopes[1] != "email" {
+		t.Errorf("unexpected OAuth.Google.Scopes: %#v", cfg.OAuth.Google.Scopes)
 	}
 }
 

@@ -90,6 +90,7 @@ func run() error {
 
 	userService := services.NewUserService(dbAdapter)
 	authService := services.NewAuthService(dbAdapter, redisAdapter)
+	providerAuthService := services.NewProviderAuthService(dbAdapter)
 	emailService := services.NewEmailService(&cfg.Email, dbAdapter)
 	cardService := services.NewCardService(dbAdapter)
 	suggestionService := services.NewSuggestionService(dbAdapter)
@@ -103,6 +104,22 @@ func run() error {
 	accountService := services.NewAccountService(dbAdapter)
 	aiService := ai.NewService(cfg, dbAdapter)
 
+	oauthProviders := map[services.Provider]services.OAuthProvider{}
+	if cfg.OAuth.Google.Enabled {
+		googleProvider, err := services.NewOIDCProvider(context.Background(), services.OIDCProviderConfig{
+			Provider:     services.ProviderGoogle,
+			ClientID:     cfg.OAuth.Google.ClientID,
+			ClientSecret: cfg.OAuth.Google.ClientSecret,
+			RedirectURL:  cfg.OAuth.Google.RedirectURL,
+			IssuerURL:    cfg.OAuth.Google.IssuerURL,
+			Scopes:       cfg.OAuth.Google.Scopes,
+		})
+		if err != nil {
+			return fmt.Errorf("initializing google oidc provider: %w", err)
+		}
+		oauthProviders[services.ProviderGoogle] = googleProvider
+	}
+
 	cardService.SetNotificationService(notificationService)
 	friendService.SetNotificationService(notificationService)
 	inviteService.SetNotificationService(notificationService)
@@ -110,6 +127,7 @@ func run() error {
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
 	authHandler := handlers.NewAuthHandler(userService, authService, emailService, cfg.Server.Secure)
+	providerAuthHandler := handlers.NewProviderAuthHandler(providerAuthService, authService, redisAdapter, oauthProviders, cfg.Server.Secure)
 	cardHandler := handlers.NewCardHandler(cardService)
 	suggestionHandler := handlers.NewSuggestionHandler(suggestionService)
 	friendHandler := handlers.NewFriendHandler(friendService, cardService)
@@ -123,7 +141,9 @@ func run() error {
 	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	accountHandler := handlers.NewAccountHandler(accountService, authService, cfg.Server.Secure)
-	pageHandler, err := handlers.NewPageHandler("web/templates")
+	pageHandler, err := handlers.NewPageHandler("web/templates", handlers.PageOAuthConfig{
+		GoogleEnabled: cfg.OAuth.Google.Enabled,
+	})
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
@@ -236,6 +256,9 @@ func run() error {
 	mux.Handle("POST /api/auth/forgot-password", requireSession(http.HandlerFunc(authHandler.ForgotPassword)))
 	mux.Handle("POST /api/auth/reset-password", requireSession(http.HandlerFunc(authHandler.ResetPassword)))
 	mux.Handle("PUT /api/auth/searchable", requireSession(http.HandlerFunc(authHandler.UpdateSearchable)))
+	mux.Handle("GET /api/auth/{provider}/start", requireSession(http.HandlerFunc(providerAuthHandler.ProviderStart)))
+	mux.Handle("GET /api/auth/{provider}/callback", requireSession(http.HandlerFunc(providerAuthHandler.ProviderCallback)))
+	mux.Handle("POST /api/auth/{provider}/complete", requireSession(http.HandlerFunc(providerAuthHandler.ProviderComplete)))
 
 	// Account endpoints
 	mux.Handle("GET /api/account/export", requireSession(http.HandlerFunc(accountHandler.Export)))

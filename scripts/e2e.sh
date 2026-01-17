@@ -14,7 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
+# Normalize to avoid double-slashes when building URLs.
 PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL:-http://app:8080}"
+PLAYWRIGHT_BASE_URL="${PLAYWRIGHT_BASE_URL%/}"
 PLAYWRIGHT_BROWSERS="${PLAYWRIGHT_BROWSERS:-${BROWSERS:-firefox}}"
 PLAYWRIGHT_HEADLESS="${PLAYWRIGHT_HEADLESS:-${HEADLESS:-true}}"
 PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-}"
@@ -25,6 +27,44 @@ HEALTH_ATTEMPTS="${E2E_HEALTH_ATTEMPTS:-60}"
 HEALTH_SLEEP="${E2E_HEALTH_SLEEP:-2}"
 AI_STUB="${AI_STUB:-1}"
 REMINDERS_POLL_INTERVAL="${REMINDERS_POLL_INTERVAL:-1s}"
+GOOGLE_OAUTH_ENABLED="${GOOGLE_OAUTH_ENABLED:-true}"
+
+OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}"
+OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
+GOOGLE_OAUTH_CLIENT_ID="${GOOGLE_OAUTH_CLIENT_ID:-}"
+GOOGLE_OAUTH_CLIENT_SECRET="${GOOGLE_OAUTH_CLIENT_SECRET:-}"
+
+if [[ -z "$OIDC_CLIENT_ID" && -z "$GOOGLE_OAUTH_CLIENT_ID" ]]; then
+  OIDC_CLIENT_ID="oidc-test"
+  GOOGLE_OAUTH_CLIENT_ID="$OIDC_CLIENT_ID"
+elif [[ -z "$OIDC_CLIENT_ID" ]]; then
+  OIDC_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID"
+elif [[ -z "$GOOGLE_OAUTH_CLIENT_ID" ]]; then
+  GOOGLE_OAUTH_CLIENT_ID="$OIDC_CLIENT_ID"
+elif [[ "$OIDC_CLIENT_ID" != "$GOOGLE_OAUTH_CLIENT_ID" ]]; then
+  echo "OIDC_CLIENT_ID and GOOGLE_OAUTH_CLIENT_ID must match for E2E." >&2
+  exit 1
+fi
+
+if [[ -z "$OIDC_CLIENT_SECRET" && -z "$GOOGLE_OAUTH_CLIENT_SECRET" ]]; then
+  OIDC_CLIENT_SECRET="oidc-secret"
+  GOOGLE_OAUTH_CLIENT_SECRET="$OIDC_CLIENT_SECRET"
+elif [[ -z "$OIDC_CLIENT_SECRET" ]]; then
+  OIDC_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET"
+elif [[ -z "$GOOGLE_OAUTH_CLIENT_SECRET" ]]; then
+  GOOGLE_OAUTH_CLIENT_SECRET="$OIDC_CLIENT_SECRET"
+elif [[ "$OIDC_CLIENT_SECRET" != "$GOOGLE_OAUTH_CLIENT_SECRET" ]]; then
+  echo "OIDC_CLIENT_SECRET and GOOGLE_OAUTH_CLIENT_SECRET must match for E2E." >&2
+  exit 1
+fi
+
+GOOGLE_OAUTH_REDIRECT_URL="${PLAYWRIGHT_BASE_URL}/api/auth/google/callback"
+GOOGLE_OIDC_ISSUER_URL="${GOOGLE_OIDC_ISSUER_URL:-http://oidc:5555}"
+GOOGLE_OIDC_SCOPES="${GOOGLE_OIDC_SCOPES:-openid,email,profile}"
+OAUTH_ALLOWED_PROVIDERS="${OAUTH_ALLOWED_PROVIDERS:-google}"
+OIDC_ISSUER_URL="${OIDC_ISSUER_URL:-http://oidc:5555}"
+OIDC_REDIRECT_URI="${GOOGLE_OAUTH_REDIRECT_URL}"
+OIDC_BASE_URL="${OIDC_BASE_URL:-http://oidc:5555}"
 
 cd "$PROJECT_DIR"
 
@@ -40,10 +80,40 @@ echo "Building assets..."
 ./scripts/build-assets.sh
 
 echo ""
-echo "Starting containers..."
+echo "Starting OIDC mock..."
 export AI_STUB
 export REMINDERS_POLL_INTERVAL
-podman compose up -d --build
+export GOOGLE_OAUTH_ENABLED
+export GOOGLE_OAUTH_CLIENT_ID
+export GOOGLE_OAUTH_CLIENT_SECRET
+export GOOGLE_OAUTH_REDIRECT_URL
+export GOOGLE_OIDC_ISSUER_URL
+export GOOGLE_OIDC_SCOPES
+export OAUTH_ALLOWED_PROVIDERS
+export OIDC_ISSUER_URL
+export OIDC_CLIENT_ID
+export OIDC_CLIENT_SECRET
+export OIDC_REDIRECT_URI
+export OIDC_BASE_URL
+podman compose --profile e2e up -d --build oidc
+
+echo ""
+echo "Waiting for OIDC mock..."
+for ((i=1; i<=HEALTH_ATTEMPTS; i++)); do
+  if curl -fsS "http://localhost:5555/.well-known/openid-configuration" >/dev/null 2>&1; then
+    echo "OIDC mock is healthy."
+    break
+  fi
+  if [[ "$i" -eq "$HEALTH_ATTEMPTS" ]]; then
+    echo "OIDC mock did not become healthy in time."
+    exit 1
+  fi
+  sleep "$HEALTH_SLEEP"
+done
+
+echo ""
+echo "Starting containers..."
+podman compose --profile e2e up -d --build app postgres redis mailpit
 
 echo ""
 echo "Waiting for health check at ${BASE_URL}/health ..."

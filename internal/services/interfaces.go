@@ -22,12 +22,18 @@ type UserServiceInterface interface {
 // AuthServiceInterface defines the contract for authentication operations.
 type AuthServiceInterface interface {
 	HashPassword(password string) (string, error)
-	VerifyPassword(hash, password string) bool
+	VerifyPassword(hash *string, password string) bool
 	GenerateSessionToken() (token string, hash string, err error)
 	CreateSession(ctx context.Context, userID uuid.UUID) (token string, err error)
 	ValidateSession(ctx context.Context, token string) (*models.User, error)
 	DeleteSession(ctx context.Context, token string) error
 	DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error
+}
+
+// ProviderAuthServiceInterface defines the contract for OAuth/OIDC provider auth flows.
+type ProviderAuthServiceInterface interface {
+	LinkOrFindUserFromProvider(ctx context.Context, claims IdentityClaims) (*ProviderLinkResult, error)
+	CreateUserFromProviderPending(ctx context.Context, pending PendingProviderUser, username string, searchable bool) (*models.User, error)
 }
 
 // CardServiceInterface defines the contract for bingo card operations used by handlers.

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 
 const MAILPIT_BASE_URL = process.env.MAILPIT_BASE_URL || 'http://mailpit:8025';
 const MAILPIT_WAIT_TIMEOUT_MS = Number.parseInt(process.env.MAILPIT_WAIT_TIMEOUT_MS || '30000', 10);
+const OIDC_BASE_URL = process.env.OIDC_BASE_URL || 'http://oidc:5555';
 
 function buildUser(testInfo, prefix, options = {}) {
   const workerIndex = testInfo && Number.isInteger(testInfo.workerIndex) ? testInfo.workerIndex : 0;
@@ -199,6 +200,21 @@ async function clearMailpit(request) {
   }
 }
 
+async function setOIDCNextUser(request, { email, emailVerified = true, sub } = {}) {
+  const payload = {
+    email,
+    email_verified: emailVerified,
+  };
+  if (sub) {
+    payload.sub = sub;
+  }
+
+  const response = await request.post(`${OIDC_BASE_URL}/test/next-user`, { data: payload });
+  if (!response.ok()) {
+    throw new Error(`Failed to set OIDC user: ${response.status()}`);
+  }
+}
+
 function getMessageId(message) {
   return message.ID || message.id || message.Id || null;
 }
@@ -345,6 +361,7 @@ module.exports = {
   ensureSelectedCount,
   sendFriendRequest,
   clearMailpit,
+  setOIDCNextUser,
   waitForEmail,
   expectNoEmail,
   extractTokenFromEmail,

@@ -504,6 +504,114 @@ paths:
                 properties:
                   user:
                     $ref: '#/components/schemas/User'
+  /auth/{provider}/start:
+    get:
+      summary: Start OAuth provider login
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            example: google
+        - name: next
+          in: query
+          required: false
+          schema:
+            type: string
+            example: "#dashboard"
+      responses:
+        '302':
+          description: Redirect to provider authorization URL
+  /auth/{provider}/callback:
+    get:
+      summary: OAuth provider callback
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            example: google
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: error
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to SPA route after login
+  /auth/{provider}/complete:
+    post:
+      summary: Complete provider signup
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            example: google
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - searchable
+              properties:
+                username:
+                  type: string
+                searchable:
+                  type: boolean
+      responses:
+        '201':
+          description: User created and signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: '#/components/schemas/User'
+                  next:
+                    type: string
+                    nullable: true
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
   /account/export:
     get:
       summary: Export account data as ZIP

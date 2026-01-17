@@ -14,9 +14,14 @@ import (
 type PageHandler struct {
 	templates *template.Template
 	manifest  *assets.Manifest
+	oauth     PageOAuthConfig
 }
 
-func NewPageHandler(templatesDir string) (*PageHandler, error) {
+type PageOAuthConfig struct {
+	GoogleEnabled bool
+}
+
+func NewPageHandler(templatesDir string, oauth PageOAuthConfig) (*PageHandler, error) {
 	templates, err := template.ParseGlob(filepath.Join(templatesDir, "*.html"))
 	if err != nil {
 		return nil, err
@@ -32,6 +37,7 @@ func NewPageHandler(templatesDir string) (*PageHandler, error) {
 	return &PageHandler{
 		templates: templates,
 		manifest:  manifest,
+		oauth:     oauth,
 	}, nil
 }
 
@@ -46,6 +52,7 @@ type PageData struct {
 	AnonymousCardJSPath string
 	AppJSPath           string
 	AIWizardJSPath      string
+	GoogleOAuthEnabled  bool
 }
 
 func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +66,7 @@ func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 		AnonymousCardJSPath: h.manifest.GetAnonymousCardJS(),
 		AppJSPath:           h.manifest.GetAppJS(),
 		AIWizardJSPath:      h.manifest.GetAIWizardJS(),
+		GoogleOAuthEnabled:  h.oauth.GoogleEnabled,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
