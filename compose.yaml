@@ -79,6 +79,7 @@ services:
       - PWDEBUG=${PWDEBUG:-}
       - PLAYWRIGHT_OUTPUT_DIR=${PLAYWRIGHT_OUTPUT_DIR:-/test-results}
       - PLAYWRIGHT_REPORT_DIR=${PLAYWRIGHT_REPORT_DIR:-/playwright-report}
+      - OIDC_BASE_URL=${OIDC_BASE_URL:-http://oidc:5555}
     volumes:
       - ./:/app:ro
       - ./test-results:/test-results
@@ -122,6 +123,27 @@ services:
     environment:
       - MP_SMTP_AUTH_ACCEPT_ANY=1
       - MP_SMTP_AUTH_ALLOW_INSECURE=1
+
+  oidc:
+    build:
+      context: .
+      dockerfile: Containerfile.oidc
+    profiles:
+      - e2e
+    environment:
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-http://oidc:5555}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-oidc-test}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-oidc-secret}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-http://app:8080/api/auth/google/callback}
+    expose:
+      - "5555"
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5555/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   postgres_data:

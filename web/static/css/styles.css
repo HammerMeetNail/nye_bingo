@@ -455,6 +455,27 @@ a:hover {
   border-color: #dc2626;
 }
 
+.btn-google {
+  background: #ffffff;
+  color: #3c4043;
+  border: 1px solid #dadce0;
+  font-family: "Roboto", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 500;
+}
+
+.btn-google:hover:not(:disabled) {
+  background: #f7f8f8;
+  border-color: #d2d6dc;
+  color: #3c4043;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.2);
+}
+
+.btn-google .google-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .btn-lg {
   padding: var(--spacing-md) var(--spacing-xl);
   font-size: var(--font-size-base);

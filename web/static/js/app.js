@@ -2017,7 +2017,8 @@ const App = {
           <div class="auth-divider">
             <span>or</span>
           </div>
-          <a href="${googleUrl}" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
+          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
+            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
             Continue with Google
           </a>
           <a href="#magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
@@ -2096,7 +2097,8 @@ const App = {
           <div class="auth-divider">
             <span>or</span>
           </div>
-          <a href="${googleUrl}" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
+          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 1rem;">
+            <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
             Continue with Google
           </a>
           <div class="auth-footer">
@@ -2175,7 +2177,7 @@ const App = {
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
-        this.redirectAfterAuth(response.next || '#create');
+        this.redirectAfterAuth(response.next || '#dashboard');
         this.toast('Account created! Welcome!', 'success');
       } catch (error) {
         errorEl.textContent = error.message;

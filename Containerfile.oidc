@@ -1,0 +1,16 @@
+FROM golang:1.24-alpine AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY tests/oidc ./tests/oidc
+WORKDIR /src/tests/oidc
+RUN go build -o /oidc-server .
+
+FROM alpine:3.20
+RUN adduser -D oidc
+USER oidc
+COPY --from=build /oidc-server /usr/local/bin/oidc-server
+EXPOSE 5555
+ENTRYPOINT ["/usr/local/bin/oidc-server"]
