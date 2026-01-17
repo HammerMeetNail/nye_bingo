@@ -200,7 +200,6 @@ func TestProviderAuth_CreateUserFromProviderPending_UsernameCollision(t *testing
 	}
 }
 
-
 func TestProviderAuth_CreateUserFromProviderPending_Success(t *testing.T) {
 	now := time.Now()
 	userID := uuid.New()

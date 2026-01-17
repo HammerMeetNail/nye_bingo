@@ -20,10 +20,10 @@ import (
 )
 
 const (
-	defaultIssuer      = "http://oidc:5555"
-	defaultClientID    = "oidc-test"
+	defaultIssuer       = "http://oidc:5555"
+	defaultClientID     = "oidc-test"
 	defaultClientSecret = "oidc-secret"
-	defaultRedirectURI = "http://app:8080/api/auth/google/callback"
+	defaultRedirectURI  = "http://app:8080/api/auth/google/callback"
 )
 
 type nextUser struct {
@@ -48,9 +48,9 @@ type server struct {
 	privateKey   *rsa.PrivateKey
 	keyID        string
 
-	mu         sync.Mutex
-	nextUser   *nextUser
-	authCodes  map[string]authCodeData
+	mu        sync.Mutex
+	nextUser  *nextUser
+	authCodes map[string]authCodeData
 }
 
 func main() {
@@ -63,8 +63,16 @@ func main() {
 	http.HandleFunc("/test/next-user", srv.handleNextUser)
 
 	addr := ":5555"
+	server := &http.Server{
+		Addr:              addr,
+		ReadTimeout:       10 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
+
 	log.Printf("OIDC test server listening on %s", addr)
-	if err := http.ListenAndServe(addr, nil); err != nil {
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }
@@ -99,13 +107,13 @@ func newServer() *server {
 func (s *server) handleWellKnown(w http.ResponseWriter, r *http.Request) {
 	cfg := map[string]any{
 		"issuer":                                s.issuer,
-		"authorization_endpoint":               s.issuer + "/authorize",
-		"token_endpoint":                       s.issuer + "/token",
-		"jwks_uri":                             s.issuer + "/keys",
-		"response_types_supported":             []string{"code"},
-		"subject_types_supported":              []string{"public"},
+		"authorization_endpoint":                s.issuer + "/authorize",
+		"token_endpoint":                        s.issuer + "/token",
+		"jwks_uri":                              s.issuer + "/keys",
+		"response_types_supported":              []string{"code"},
+		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
-		"scopes_supported":                     []string{"openid", "email", "profile"},
+		"scopes_supported":                      []string{"openid", "email", "profile"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post"},
 	}
 	writeJSON(w, cfg)
@@ -180,17 +188,11 @@ func (s *server) handleToken(w http.ResponseWriter, r *http.Request) {
 
 	code := r.Form.Get("code")
 	clientID := r.Form.Get("client_id")
-	clientSecret := r.Form.Get("client_secret")
 	redirectURI := r.Form.Get("redirect_uri")
 
-	if clientID == "" || clientSecret == "" {
-		if id, secret, ok := parseBasicAuth(r.Header.Get("Authorization")); ok {
-			if clientID == "" {
-				clientID = id
-			}
-			if clientSecret == "" {
-				clientSecret = secret
-			}
+	if clientID == "" {
+		if id, _, ok := parseBasicAuth(r.Header.Get("Authorization")); ok {
+			clientID = id
 		}
 	}
 
@@ -242,7 +244,7 @@ func (s *server) handleToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handleKeys(w http.ResponseWriter, r *http.Request) {
-	n := base64.RawURLEncoding.EncodeToString(s.privateKey.PublicKey.N.Bytes())
+	n := base64.RawURLEncoding.EncodeToString(s.privateKey.N.Bytes())
 	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(s.privateKey.PublicKey.E)).Bytes())
 	keys := map[string]any{
 		"keys": []map[string]any{

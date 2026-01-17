@@ -381,9 +381,16 @@ func sanitizeErrorParam(value string) string {
 		value = value[:60]
 	}
 	for _, r := range value {
-		if !(r == '-' || r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')) {
+		if !isAllowedErrorRune(r) {
 			return "oauth_error"
 		}
 	}
 	return value
+}
+
+func isAllowedErrorRune(r rune) bool {
+	return r == '-' || r == '_' ||
+		(r >= 'a' && r <= 'z') ||
+		(r >= 'A' && r <= 'Z') ||
+		(r >= '0' && r <= '9')
 }

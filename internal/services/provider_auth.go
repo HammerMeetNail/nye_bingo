@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrInvalidProviderClaims  = errors.New("invalid provider claims")
+	ErrInvalidProviderClaims   = errors.New("invalid provider claims")
 	ErrProviderEmailUnverified = errors.New("provider email not verified")
 	ErrProviderIdentityExists  = errors.New("provider identity already linked")
 	ErrInvalidProviderPending  = errors.New("invalid provider pending record")
