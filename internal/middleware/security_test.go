@@ -99,7 +99,7 @@ func TestSecurityHeaders_CSP(t *testing.T) {
 	requiredDirectives := []string{
 		"default-src 'self'",
 		"script-src 'self'",
-		"style-src 'self' 'unsafe-inline'",
+		"style-src 'self'",
 		"font-src 'self'",
 		"img-src 'self'",
 		"connect-src 'self'",
@@ -116,6 +116,9 @@ func TestSecurityHeaders_CSP(t *testing.T) {
 
 	if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") {
 		t.Error("CSP script-src should not include unsafe-inline")
+	}
+	if strings.Contains(csp, "style-src 'self' 'unsafe-inline'") {
+		t.Error("CSP style-src should not include unsafe-inline")
 	}
 	if strings.Contains(csp, "unsafe-hashes") {
 		t.Error("CSP should not include unsafe-hashes")

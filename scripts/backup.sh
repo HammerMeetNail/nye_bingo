@@ -90,7 +90,7 @@ if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
         podman exec -e PGPASSWORD="$DB_PASSWORD" "$POSTGRES_CONTAINER" \
             pg_dump -U "$DB_USER" -d "$DB_NAME" --format=plain --no-owner --no-acl \
             | gzip \
-            | gpg --symmetric --cipher-algo AES256 --batch --passphrase "$BACKUP_ENCRYPTION_KEY" \
+            | gpg --symmetric --cipher-algo AES256 --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" \
             > "${BACKUP_DIR}/${BACKUP_FILE}"
     else
         # Direct connection
@@ -103,7 +103,7 @@ if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
             --no-owner \
             --no-acl \
             | gzip \
-            | gpg --symmetric --cipher-algo AES256 --batch --passphrase "$BACKUP_ENCRYPTION_KEY" \
+            | gpg --symmetric --cipher-algo AES256 --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" \
             > "${BACKUP_DIR}/${BACKUP_FILE}"
     fi
 else
@@ -117,7 +117,7 @@ else
         --no-owner \
         --no-acl \
         | gzip \
-        | gpg --symmetric --cipher-algo AES256 --batch --passphrase "$BACKUP_ENCRYPTION_KEY" \
+        | gpg --symmetric --cipher-algo AES256 --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" \
         > "${BACKUP_DIR}/${BACKUP_FILE}"
 fi
 

@@ -26,12 +26,22 @@ Year of Bingo (yearofbingo.com) is a Go + vanilla JS web app for creating annual
 
 ## Non‑negotiables (security + correctness)
 - No inline `<script>` and no HTML event handlers (`onclick=`, `onsubmit=`, etc.); use existing `data-action` delegation in `web/static/js/app.js`.
+- No inline `style="..."` attributes; use CSS classes instead (CSP disallows `style-src 'unsafe-inline'`).
 - Treat all server/user data as untrusted; prefer DOM APIs (`textContent`, `createElement`) or escape with `App.escapeHtml` (avoid `innerHTML`).
-- For values used in routing decisions, class names, or `data-*` attributes, prefer whitelists/mappings over “escaping”.
+- For values used in routing decisions, class names, or `data-*` attributes, prefer whitelists/mappings over "escaping".
 - Preserve strict CSP (no `unsafe-inline` / `unsafe-hashes`); if CSP changes, update/add tests accordingly.
 - When rendering user-controlled content, add/extend Playwright XSS regression coverage (assert payload is rendered as text, no DOM nodes created).
-- Keep tests passing and don’t reduce coverage.
+- Keep tests passing and don't reduce coverage.
 - Never commit secrets; explain destructive shell commands before running them.
+
+## Security hardening (from `temp/sec_audit.md`)
+The following security controls are in place; be aware of them when modifying related code:
+
+- **Rate limiting on auth endpoints**: Registration, login, magic-link, forgot-password, and reset-password endpoints are rate-limited per-IP and per-email via Redis. Limits are relaxed in `APP_ENV=development` (see `resolveAuthRateLimits()` in `cmd/server/main.go`) to avoid breaking E2E tests.
+- **Request body size limits**: JSON API endpoints enforce a 1MiB max body size (`internal/middleware/max_body.go`).
+- **Trusted proxy headers**: `X-Forwarded-*` headers are only honored when the request comes from a trusted proxy CIDR (`TRUSTED_PROXY_CIDRS` env var); see `internal/middleware/trusted_proxy.go` and `internal/httpx/`.
+- **Query string redaction**: Sensitive query parameters (`token`, `code`, `state`, etc.) are not logged; see `internal/middleware/logging.go`.
+- **OAuth redirect validation**: The `sanitizeNext()` function in `internal/handlers/auth_provider.go` blocks open-redirect attacks including percent-encoded `//` variants.
 
 ## Progressive Disclosure Index (open only when relevant)
 - Releases, tagging, CI/CD, version bumps: `agent_docs/ops.md`

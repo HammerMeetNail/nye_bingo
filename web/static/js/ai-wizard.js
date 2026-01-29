@@ -52,25 +52,25 @@ const AIWizard = {
     return used >= 5;
   },
 
-  showVerificationRequiredModal() {
-    const email = App.user?.email ? App.escapeHtml(App.user.email) : 'your email';
-    App.openModal('Verify Email Required', `
-      <div class="finalize-confirm-modal">
-        <p style="margin-bottom: 1rem;">
-          You've used your 5 free AI generations. Verify your email to keep using the AI Goal Wizard.
-        </p>
-        <p class="text-muted" style="margin-bottom: 1.5rem;">
-          A verification email was sent to <strong>${email}</strong>.
-        </p>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
-          <button class="btn btn-ghost" data-action="close-modal">Close</button>
-          <button class="btn btn-primary" data-action="resend-verification-and-route">
-            Resend Verification Email
-          </button>
-        </div>
-      </div>
-    `);
-  },
+	  showVerificationRequiredModal() {
+	    const email = App.user?.email ? App.escapeHtml(App.user.email) : 'your email';
+	    App.openModal('Verify Email Required', `
+	      <div class="finalize-confirm-modal">
+	        <p class="mb-md">
+	          You've used your 5 free AI generations. Verify your email to keep using the AI Goal Wizard.
+	        </p>
+	        <p class="text-muted mb-lg">
+	          A verification email was sent to <strong>${email}</strong>.
+	        </p>
+	        <div class="flex gap-md justify-end flex-wrap">
+	          <button class="btn btn-ghost" data-action="close-modal">Close</button>
+	          <button class="btn btn-primary" data-action="resend-verification-and-route">
+	            Resend Verification Email
+	          </button>
+	        </div>
+	      </div>
+	    `);
+	  },
 
   mapWizardCategoryToCardCategory(category) {
     const map = {
@@ -128,18 +128,18 @@ const AIWizard = {
     const goalWord = desiredCount === 1 ? 'goal' : 'goals';
     const createGridSize = Number(this.state.inputs.grid_size) || 5;
     const createCapacity = this.computeCreateGoalCountFromGridSize(createGridSize);
-    return `
-      <div class="text-muted mb-md">
-        ${this.state.mode === 'append'
-          ? `Describe what you want, and we'll generate <strong>${desiredCount}</strong> ${goalWord} to fill your empty squares.`
-          : `Describe what you want, and we'll generate <strong><span id="ai-create-capacity">${createCapacity}</span></strong> custom Bingo goals for your <strong><span id="ai-create-grid">${createGridSize}x${createGridSize}</span></strong> card.`}
-      </div>
-      ${showQuota ? `
-        <div class="text-muted mb-md" style="font-size: 0.9rem;">
-          Free AI generations left before verification is required: <strong>${remaining}</strong>
-        </div>
-      ` : ''}
-      <form id="ai-wizard-form" data-action="ai-generate">
+	    return `
+	      <div class="text-muted mb-md">
+	        ${this.state.mode === 'append'
+	          ? `Describe what you want, and we'll generate <strong>${desiredCount}</strong> ${goalWord} to fill your empty squares.`
+	          : `Describe what you want, and we'll generate <strong><span id="ai-create-capacity">${createCapacity}</span></strong> custom Bingo goals for your <strong><span id="ai-create-grid">${createGridSize}x${createGridSize}</span></strong> card.`}
+	      </div>
+	      ${showQuota ? `
+	        <div class="text-muted mb-md text-sm">
+	          Free AI generations left before verification is required: <strong>${remaining}</strong>
+	        </div>
+	      ` : ''}
+	      <form id="ai-wizard-form" data-action="ai-generate">
         <div class="form-group">
             <label class="form-label">What area of life is this for?</label>
             <select id="ai-category" class="form-input" required>
@@ -169,60 +169,60 @@ const AIWizard = {
             </select>
             <small class="text-muted">FREE space is included by default.</small>
           </div>
-        ` : ''}
+	        ` : ''}
 
-        <div class="form-group">
-            <label class="form-label">Difficulty Level</label>
-            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="difficulty" value="easy"> 
-                    <span>Chill 😌</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="difficulty" value="medium" checked> 
-                    <span>Balanced ⚖️</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-                    <input type="radio" name="difficulty" value="hard"> 
-                    <span>Hardcore 🔥</span>
-                </label>
-            </div>
-        </div>
-
-        <div class="form-group">
-	            <label class="form-label">Budget Level</label>
-	            <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
-	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-	                    <input type="radio" name="budget" value="free" checked> 
-	                    <span>$</span>
+	        <div class="form-group">
+	            <label class="form-label">Difficulty Level</label>
+	            <div class="flex gap-md mt-sm">
+	                <label class="flex items-center gap-sm cursor-pointer">
+	                    <input type="radio" name="difficulty" value="easy"> 
+	                    <span>Chill 😌</span>
 	                </label>
-	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-	                    <input type="radio" name="budget" value="low"> 
-	                    <span>$$</span>
+	                <label class="flex items-center gap-sm cursor-pointer">
+	                    <input type="radio" name="difficulty" value="medium" checked> 
+	                    <span>Balanced ⚖️</span>
 	                </label>
-	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-	                    <input type="radio" name="budget" value="medium"> 
-	                    <span>$$$</span>
-	                </label>
-	                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-	                    <input type="radio" name="budget" value="high"> 
-	                    <span>$$$$</span>
+	                <label class="flex items-center gap-sm cursor-pointer">
+	                    <input type="radio" name="difficulty" value="hard"> 
+	                    <span>Hardcore 🔥</span>
 	                </label>
 	            </div>
 	        </div>
 
-        <div class="form-group">
-            <label class="form-label">Any other context?</label>
-            <textarea id="ai-context" class="form-input" rows="2" placeholder="e.g. I live in a city, I don't drive..."></textarea>
-        </div>
+	        <div class="form-group">
+		            <label class="form-label">Budget Level</label>
+		            <div class="flex gap-md mt-sm">
+		                <label class="flex items-center gap-sm cursor-pointer">
+		                    <input type="radio" name="budget" value="free" checked> 
+		                    <span>$</span>
+		                </label>
+		                <label class="flex items-center gap-sm cursor-pointer">
+		                    <input type="radio" name="budget" value="low"> 
+		                    <span>$$</span>
+		                </label>
+		                <label class="flex items-center gap-sm cursor-pointer">
+		                    <input type="radio" name="budget" value="medium"> 
+		                    <span>$$$</span>
+		                </label>
+		                <label class="flex items-center gap-sm cursor-pointer">
+		                    <input type="radio" name="budget" value="high"> 
+		                    <span>$$$$</span>
+		                </label>
+		            </div>
+		        </div>
 
-        <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-            <button type="submit" class="btn btn-primary" style="flex: 1;">Generate Goals ✨</button>
-        </div>
-      </form>
-    `;
-  },
+	        <div class="form-group">
+	            <label class="form-label">Any other context?</label>
+	            <textarea id="ai-context" class="form-input" rows="2" placeholder="e.g. I live in a city, I don't drive..."></textarea>
+	        </div>
+
+	        <div class="flex gap-md mt-xl">
+	            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+	            <button type="submit" class="btn btn-primary flex-1">Generate Goals ✨</button>
+	        </div>
+	      </form>
+	    `;
+	  },
 
   setupInputEvents() {
     if (this.state.mode !== 'create') return;
@@ -249,16 +249,16 @@ const AIWizard = {
     apply();
   },
 
-  renderLoadingStep() {
-    return `
-      <div class="text-center" style="padding: 2rem;">
-        <div class="spinner" style="margin-bottom: 1.5rem;"></div>
-        <h3>Consulting the Oracle...</h3>
-        <p class="text-muted">This usually takes about 5-10 seconds.</p>
-        <p class="text-muted" style="font-size: 0.8rem; margin-top: 1rem;">Powered by AI</p>
-      </div>
-    `;
-  },
+	  renderLoadingStep() {
+	    return `
+	      <div class="text-center p-xl">
+	        <div class="spinner mb-lg"></div>
+	        <h3>Consulting the Oracle...</h3>
+	        <p class="text-muted">This usually takes about 5-10 seconds.</p>
+	        <p class="text-muted text-xs mt-md">Powered by AI</p>
+	      </div>
+	    `;
+	  },
 
   async handleGenerate(event) {
     event.preventDefault();
@@ -331,31 +331,31 @@ const AIWizard = {
     }
   },
 
-  renderReviewStep() {
-    const goalsList = this.state.results.map((goal, index) => `
-      <div class="ai-goal-item" style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-        <span class="text-muted" style="width: 20px;">${index + 1}.</span>
-        <input type="text" class="form-input form-input--sm ai-goal-input" value="${App.escapeHtml(goal)}" data-index="${index}">
-      </div>
-    `).join('');
+	  renderReviewStep() {
+	    const goalsList = this.state.results.map((goal, index) => `
+	      <div class="ai-goal-item">
+	        <span class="text-muted ai-goal-index">${index + 1}.</span>
+	        <input type="text" class="form-input form-input--sm ai-goal-input" value="${App.escapeHtml(goal)}" data-index="${index}">
+	      </div>
+	    `).join('');
 
     const actionButtonText = this.state.mode === 'append' ? 'Add to Card →' : 'Create Card →';
     const actionType = this.state.mode === 'append' ? 'ai-add-to-card' : 'ai-create-card';
     const startOverCardId = App.escapeHtml(this.state.targetCardId || '');
 
-    return `
-      <p class="text-muted">Review and edit your generated goals.</p>
-      
-      <div class="ai-results-list" style="max-height: 400px; overflow-y: auto; margin: 1rem 0; padding-right: 0.5rem;">
-        ${goalsList}
-      </div>
+	    return `
+	      <p class="text-muted">Review and edit your generated goals.</p>
+	      
+	      <div class="ai-results-list">
+	        ${goalsList}
+	      </div>
 
-      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" data-action="open-ai-wizard" data-card-id="${startOverCardId}">Start Over</button>
-        <button type="button" class="btn btn-primary" style="flex: 1;" data-action="${actionType}">${actionButtonText}</button>
-      </div>
-    `;
-  },
+	      <div class="flex gap-md mt-lg">
+	        <button type="button" class="btn btn-secondary" data-action="open-ai-wizard" data-card-id="${startOverCardId}">Start Over</button>
+	        <button type="button" class="btn btn-primary flex-1" data-action="${actionType}">${actionButtonText}</button>
+	      </div>
+	    `;
+	  },
 
   getDesiredCountSync() {
     if (this.state.mode !== 'append') return 24;

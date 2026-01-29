@@ -124,7 +124,7 @@ fi
 # Step 2: Decrypt
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Decrypting backup..."
 DECRYPT_LOG="${BACKUP_DIR}/verify_decrypt.log"
-if ! gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" 2>"$DECRYPT_LOG" \
+if ! gpg --decrypt --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" 2>"$DECRYPT_LOG" \
     | gunzip > "${BACKUP_DIR}/verify_restore.sql" 2>>"$DECRYPT_LOG"; then
     write_error "Failed to decrypt/decompress backup. Encryption key may be wrong or file corrupted.
 

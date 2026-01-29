@@ -12,8 +12,6 @@ packages:
 
 users:
   - name: deploy
-    groups: [wheel]
-    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
     shell: /bin/bash
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICkOhxkw7DF9PYJep6cSBBpvqMWjVZZYKl8ZrLAaBV9i yearofbingo-ci
@@ -25,6 +23,12 @@ mounts:
   - [/dev/sdb, /mnt/data, ext4, "defaults,nofail", "0", "2"]
 
 write_files:
+  # Restrictive sudo for deploy user (avoid passwordless full root).
+  - path: /etc/sudoers.d/deploy
+    permissions: "0440"
+    content: |
+      deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart yearofbingo.service, /usr/bin/systemctl restart cloudflared.service, /usr/bin/systemctl status yearofbingo.service, /usr/bin/systemctl status cloudflared.service, /usr/bin/journalctl -u yearofbingo.service -n 200 --no-pager, /usr/bin/journalctl -u cloudflared.service -n 200 --no-pager
+
   # Allow unprivileged ports from 80
   - path: /etc/sysctl.d/99-unprivileged-ports.conf
     content: |
@@ -230,8 +234,12 @@ runcmd:
   - chown deploy:deploy /opt/yearofbingo
 
   # Install cloudflared
-  - curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared
-  - chmod +x /usr/local/bin/cloudflared
+  - |
+    CLOUDFLARED_VERSION="2026.1.2"
+    CLOUDFLARED_SHA256="e157c54e929cc289cbd53860453168c2fe3439eb55e2e965a56579252585d9c1"
+    curl -fsSL "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64" -o /usr/local/bin/cloudflared
+    echo "${CLOUDFLARED_SHA256}  /usr/local/bin/cloudflared" | sha256sum -c -
+    chmod +x /usr/local/bin/cloudflared
 
   # Create .cloudflared directory
   - mkdir -p /home/deploy/.cloudflared

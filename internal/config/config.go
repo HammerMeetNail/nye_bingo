@@ -17,12 +17,13 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Host          string
-	Port          int
-	Secure        bool   // Use HTTPS-only cookies
-	Environment   string // "development", "production", "test"
-	Debug         bool
-	DebugMaxChars int
+	Host              string
+	Port              int
+	Secure            bool   // Use HTTPS-only cookies
+	Environment       string // "development", "production", "test"
+	Debug             bool
+	DebugMaxChars     int
+	TrustedProxyCIDRs []string // Optional: CIDRs allowed to set X-Forwarded-* headers
 }
 
 type DatabaseConfig struct {
@@ -90,12 +91,13 @@ func (r RedisConfig) Addr() string {
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
-			Host:          getEnv("SERVER_HOST", "0.0.0.0"),
-			Port:          getEnvInt("SERVER_PORT", 8080),
-			Secure:        getEnvBool("SERVER_SECURE", false),
-			Environment:   getEnv("APP_ENV", "development"),
-			Debug:         getEnvBool("DEBUG", false),
-			DebugMaxChars: getEnvInt("DEBUG_LOG_MAX_CHARS", 8000),
+			Host:              getEnv("SERVER_HOST", "0.0.0.0"),
+			Port:              getEnvInt("SERVER_PORT", 8080),
+			Secure:            getEnvBool("SERVER_SECURE", false),
+			Environment:       getEnv("APP_ENV", "development"),
+			Debug:             getEnvBool("DEBUG", false),
+			DebugMaxChars:     getEnvInt("DEBUG_LOG_MAX_CHARS", 8000),
+			TrustedProxyCIDRs: getEnvList("TRUSTED_PROXY_CIDRS", nil),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),

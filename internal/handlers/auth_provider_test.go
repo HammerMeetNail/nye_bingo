@@ -230,6 +230,84 @@ func TestProviderAuthHandler_Callback_ExistingUser(t *testing.T) {
 	}
 }
 
+func TestSanitizeNext(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		// Valid paths
+		{name: "Allow rooted path", in: "/dashboard", expected: "/dashboard"},
+		{name: "Allow rooted path with query", in: "/friend-invite/abc?x=y", expected: "/friend-invite/abc?x=y"},
+		{name: "Allow legacy hash at start", in: "#share/xyz", expected: "/share/xyz"},
+		{name: "Allow legacy hash in path", in: "/#share/xyz", expected: "/#share/xyz"},
+		{name: "Allow root path", in: "/", expected: "/"},
+		{name: "Allow nested path", in: "/card/abc-123/edit", expected: "/card/abc-123/edit"},
+		{name: "Allow path with fragment", in: "/page#section", expected: "/page#section"},
+		{name: "Allow path with query and fragment", in: "/page?foo=bar#section", expected: "/page?foo=bar#section"},
+		{name: "Trim whitespace", in: "  /dashboard  ", expected: "/dashboard"},
+
+		// Scheme-relative / double-slash attacks
+		{name: "Reject scheme-relative", in: "//evil.example", expected: ""},
+		{name: "Reject backslash variant", in: "/\\evil.example", expected: ""},
+		{name: "Reject encoded scheme-relative (slashes)", in: "/%2f%2fevil.example", expected: ""},
+		{name: "Reject encoded backslash scheme-relative", in: "/%5c%5cevil.example", expected: ""},
+		{name: "Reject mixed encoded slash backslash", in: "/%2f%5cevil.example", expected: ""},
+		{name: "Reject uppercase encoded slashes", in: "/%2F%2Fevil.example", expected: ""},
+		{name: "Reject uppercase encoded backslashes", in: "/%5C%5Cevil.example", expected: ""},
+		{name: "Reject triple slash", in: "///evil.example", expected: ""},
+
+		// Absolute URLs
+		{name: "Reject absolute URL", in: "https://evil.example/", expected: ""},
+		{name: "Reject http URL", in: "http://evil.example/", expected: ""},
+		{name: "Reject javascript scheme", in: "javascript:alert(1)", expected: ""},
+		{name: "Reject data scheme", in: "data:text/html,<script>alert(1)</script>", expected: ""},
+		{name: "Reject vbscript scheme", in: "vbscript:msgbox(1)", expected: ""},
+		{name: "Reject file scheme", in: "file:///etc/passwd", expected: ""},
+
+		// URLs with credentials
+		{name: "Reject URL with user info", in: "//user@evil.example", expected: ""},
+		{name: "Reject URL with user:pass", in: "//user:pass@evil.example", expected: ""},
+
+		// Path without leading slash
+		{name: "Reject relative path", in: "dashboard", expected: ""},
+		{name: "Reject relative path with dots", in: "../admin", expected: ""},
+
+		// Backslash attacks
+		{name: "Reject backslash in path", in: "/foo\\bar", expected: ""},
+		{name: "Reject encoded backslash in path", in: "/foo%5cbar", expected: ""},
+
+		// Newline / carriage return injection
+		{name: "Reject newline", in: "/foo\nbar", expected: ""},
+		{name: "Reject carriage return", in: "/foo\rbar", expected: ""},
+		{name: "Reject CRLF", in: "/foo\r\nbar", expected: ""},
+
+		// Length limits
+		{name: "Reject too long value", in: "/" + string(make([]byte, 600)), expected: ""},
+
+		// Empty / whitespace
+		{name: "Reject empty string", in: "", expected: ""},
+		{name: "Reject whitespace only", in: "   ", expected: ""},
+
+		// Path traversal
+		{name: "Normalize path traversal", in: "/foo/../bar", expected: "/bar"},
+		{name: "Normalize double dots", in: "/foo/bar/../baz", expected: "/foo/baz"},
+		{name: "Normalize current dir", in: "/foo/./bar", expected: "/foo/bar"},
+
+		// Opaque URLs
+		{name: "Reject mailto", in: "mailto:foo@bar.com", expected: ""},
+		{name: "Reject tel", in: "tel:+1234567890", expected: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeNext(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeNext(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestProviderAuthHandler_Callback_NewUser(t *testing.T) {
 	mockProvider := &mockOAuthProvider{
 		provider: services.ProviderGoogle,
@@ -463,5 +541,92 @@ func TestRedirectTarget_NormalizesFallback(t *testing.T) {
 	target := handler.redirectTarget("", "dashboard")
 	if target != "/dashboard" {
 		t.Fatalf("expected fallback to normalize, got %q", target)
+	}
+}
+
+func TestSanitizeProviderErrorParam(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		// Valid OAuth error codes (should pass through)
+		{name: "access_denied", in: "access_denied", expected: "access_denied"},
+		{name: "invalid_request", in: "invalid_request", expected: "invalid_request"},
+		{name: "invalid_scope", in: "invalid_scope", expected: "invalid_scope"},
+		{name: "server_error", in: "server_error", expected: "server_error"},
+		{name: "temporarily_unavailable", in: "temporarily_unavailable", expected: "temporarily_unavailable"},
+		{name: "unauthorized_client", in: "unauthorized_client", expected: "unauthorized_client"},
+		{name: "unsupported_response_type", in: "unsupported_response_type", expected: "unsupported_response_type"},
+
+		// Case insensitivity
+		{name: "uppercase ACCESS_DENIED", in: "ACCESS_DENIED", expected: "access_denied"},
+		{name: "mixed case Access_Denied", in: "Access_Denied", expected: "access_denied"},
+
+		// Whitespace handling
+		{name: "with leading space", in: "  access_denied", expected: "access_denied"},
+		{name: "with trailing space", in: "access_denied  ", expected: "access_denied"},
+		{name: "with both spaces", in: "  access_denied  ", expected: "access_denied"},
+
+		// Invalid/unknown errors (should return oauth_error)
+		{name: "empty string", in: "", expected: "oauth_error"},
+		{name: "whitespace only", in: "   ", expected: "oauth_error"},
+		{name: "unknown error", in: "some_unknown_error", expected: "oauth_error"},
+		{name: "injection attempt", in: "<script>alert(1)</script>", expected: "oauth_error"},
+		{name: "sql injection", in: "'; DROP TABLE users; --", expected: "oauth_error"},
+		{name: "newline injection", in: "access_denied\nevil", expected: "oauth_error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeProviderErrorParam(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeProviderErrorParam(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSanitizeErrorParam(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		// Valid error strings
+		{name: "simple error", in: "invalid_token", expected: "invalid_token"},
+		{name: "with hyphen", in: "auth-failed", expected: "auth-failed"},
+		{name: "with numbers", in: "error123", expected: "error123"},
+		{name: "mixed case", in: "InvalidToken", expected: "InvalidToken"},
+		{name: "underscore and hyphen", in: "auth_error-code", expected: "auth_error-code"},
+
+		// Empty/whitespace
+		{name: "empty string", in: "", expected: "oauth_error"},
+		{name: "whitespace only", in: "   ", expected: "oauth_error"},
+
+		// Whitespace trimming
+		{name: "leading space", in: "  error", expected: "error"},
+		{name: "trailing space", in: "error  ", expected: "error"},
+
+		// Length limits
+		{name: "exactly 60 chars", in: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890", expected: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890"},
+		{name: "over 60 chars truncated", in: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890extra", expected: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890"},
+
+		// Invalid characters (should return oauth_error)
+		{name: "with space in middle", in: "invalid token", expected: "oauth_error"},
+		{name: "with special chars", in: "error<script>", expected: "oauth_error"},
+		{name: "with colon", in: "error:code", expected: "oauth_error"},
+		{name: "with slash", in: "error/code", expected: "oauth_error"},
+		{name: "with dot", in: "error.code", expected: "oauth_error"},
+		{name: "with newline", in: "error\ncode", expected: "oauth_error"},
+		{name: "with unicode", in: "error\u200b", expected: "oauth_error"},
+		{name: "with emoji", in: "error😀", expected: "oauth_error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeErrorParam(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeErrorParam(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
 	}
 }

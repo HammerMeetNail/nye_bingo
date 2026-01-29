@@ -72,24 +72,6 @@ func TestSupportHandler_checkRateLimit(t *testing.T) {
 	})
 }
 
-func TestSupportHandler_getClientIP(t *testing.T) {
-	t.Run("x-forwarded-for", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/support", nil)
-		req.Header.Set("X-Forwarded-For", "203.0.113.1, 203.0.113.2")
-		if got := getClientIP(req); got != "203.0.113.1" {
-			t.Fatalf("expected first ip, got %q", got)
-		}
-	})
-
-	t.Run("x-real-ip", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/support", nil)
-		req.Header.Set("X-Real-IP", "203.0.113.9")
-		if got := getClientIP(req); got != "203.0.113.9" {
-			t.Fatalf("expected x-real-ip, got %q", got)
-		}
-	})
-}
-
 func TestSupportHandler_Submit_Success(t *testing.T) {
 	var called bool
 	mockEmail := &mockEmailService{

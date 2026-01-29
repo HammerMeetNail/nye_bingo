@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 )
 
@@ -62,13 +63,15 @@ func (l *RequestLogger) Apply(next http.Handler) http.Handler {
 			"status":      recorder.statusCode,
 			"size":        recorder.size,
 			"duration_ms": duration.Milliseconds(),
+			"client_ip":   httpx.ClientIP(r),
 			"remote_addr": r.RemoteAddr,
 			"user_agent":  r.UserAgent(),
 		}
 
-		// Add query string if present
+		// Never log raw query strings: they frequently contain secrets (OAuth codes/state,
+		// magic-link tokens, unsubscribe tokens, etc).
 		if r.URL.RawQuery != "" {
-			fields["query"] = r.URL.RawQuery
+			fields["query_present"] = true
 		}
 
 		// Choose log level based on status code
