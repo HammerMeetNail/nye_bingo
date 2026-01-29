@@ -237,37 +237,40 @@ func run() error {
 	}, false)
 
 	// Auth rate limiting (per-IP + per-email where available).
-	authLoginIPLimiter := middleware.NewRateLimiter(redisDB.Client, 30, 15*time.Minute, "ratelimit:auth:login:ip:", func(r *http.Request) string {
+	// Use relaxed limits in development to avoid breaking e2e tests.
+	authLimits := resolveAuthRateLimits(cfg)
+
+	authLoginIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.loginIP, 15*time.Minute, "ratelimit:auth:login:ip:", func(r *http.Request) string {
 		return ""
 	}, false)
-	authLoginEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 15*time.Minute, "ratelimit:auth:login:email:", func(r *http.Request) string {
+	authLoginEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.loginEmail, 15*time.Minute, "ratelimit:auth:login:email:", func(r *http.Request) string {
 		if email := middleware.RateLimitEmailKey(r); email != "" {
 			return email
 		}
 		return "no_email:" + httpx.ClientIP(r)
 	}, false)
 
-	authRegisterIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:register:ip:", func(r *http.Request) string {
+	authRegisterIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.registerIP, 1*time.Hour, "ratelimit:auth:register:ip:", func(r *http.Request) string {
 		return ""
 	}, false)
-	authRegisterEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 5, 1*time.Hour, "ratelimit:auth:register:email:", func(r *http.Request) string {
+	authRegisterEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.registerEmail, 1*time.Hour, "ratelimit:auth:register:email:", func(r *http.Request) string {
 		if email := middleware.RateLimitEmailKey(r); email != "" {
 			return email
 		}
 		return "no_email:" + httpx.ClientIP(r)
 	}, false)
 
-	authEmailFlowIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:emailflow:ip:", func(r *http.Request) string {
+	authEmailFlowIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.emailFlowIP, 1*time.Hour, "ratelimit:auth:emailflow:ip:", func(r *http.Request) string {
 		return ""
 	}, false)
-	authEmailFlowEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 5, 1*time.Hour, "ratelimit:auth:emailflow:email:", func(r *http.Request) string {
+	authEmailFlowEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.emailFlowEmail, 1*time.Hour, "ratelimit:auth:emailflow:email:", func(r *http.Request) string {
 		if email := middleware.RateLimitEmailKey(r); email != "" {
 			return email
 		}
 		return "no_email:" + httpx.ClientIP(r)
 	}, false)
 
-	authResetPasswordIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:reset:ip:", func(r *http.Request) string {
+	authResetPasswordIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.resetPasswordIP, 1*time.Hour, "ratelimit:auth:reset:ip:", func(r *http.Request) string {
 		return ""
 	}, false)
 
@@ -497,6 +500,44 @@ func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv fu
 		}
 	}
 	return aiRateLimit
+}
+
+// authRateLimits holds rate limit values for auth endpoints.
+type authRateLimits struct {
+	loginIP         int64
+	loginEmail      int64
+	registerIP      int64
+	registerEmail   int64
+	emailFlowIP     int64
+	emailFlowEmail  int64
+	resetPasswordIP int64
+}
+
+// resolveAuthRateLimits returns rate limit values for auth endpoints.
+// In development mode, limits are significantly higher to avoid breaking e2e tests.
+func resolveAuthRateLimits(cfg *config.Config) authRateLimits {
+	if cfg.Server.Environment == "development" {
+		// Development: high limits to allow e2e tests to run without hitting rate limits
+		return authRateLimits{
+			loginIP:         1000,
+			loginEmail:      500,
+			registerIP:      1000,
+			registerEmail:   500,
+			emailFlowIP:     1000,
+			emailFlowEmail:  500,
+			resetPasswordIP: 1000,
+		}
+	}
+	// Production: strict limits to prevent abuse
+	return authRateLimits{
+		loginIP:         30,
+		loginEmail:      10,
+		registerIP:      10,
+		registerEmail:   5,
+		emailFlowIP:     10,
+		emailFlowEmail:  5,
+		resetPasswordIP: 10,
+	}
 }
 
 func resolveRemindersPollInterval(logger *logging.Logger, lookupEnv func(string) (string, bool)) time.Duration {
