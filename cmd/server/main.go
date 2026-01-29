@@ -13,6 +13,7 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/config"
 	"github.com/HammerMeetNail/yearofbingo/internal/database"
 	"github.com/HammerMeetNail/yearofbingo/internal/handlers"
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 	"github.com/HammerMeetNail/yearofbingo/internal/middleware"
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -158,6 +159,7 @@ func run() error {
 		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
 	}
 	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	defer cleanupCancel()
 	notificationService.SetAsyncContext(cleanupCtx)
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
@@ -178,6 +180,7 @@ func run() error {
 		logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
 	}
 	reminderCtx, reminderCancel := context.WithCancel(context.Background())
+	defer reminderCancel()
 	go func() {
 		interval := resolveRemindersPollInterval(logger, os.LookupEnv)
 		ticker := time.NewTicker(interval)
@@ -215,6 +218,12 @@ func run() error {
 	cacheControl := middleware.NewCacheControl()
 	compress := middleware.NewCompress()
 	requestLogger := middleware.NewRequestLogger(logger)
+	trustedProxyChecker, err := httpx.NewTrustedProxyChecker(cfg.Server.TrustedProxyCIDRs)
+	if err != nil {
+		return fmt.Errorf("parsing TRUSTED_PROXY_CIDRS: %w", err)
+	}
+	trustedProxyHeaders := middleware.NewTrustedProxyHeaders(trustedProxyChecker)
+	maxBodySize := middleware.NewMaxBodySize(1 << 20) // 1MiB for JSON APIs
 
 	// AI Rate Limit configuration
 	aiRateLimit := resolveAIRateLimit(cfg, logger, os.LookupEnv)
@@ -224,6 +233,41 @@ func run() error {
 		if user != nil {
 			return user.ID.String()
 		}
+		return ""
+	}, false)
+
+	// Auth rate limiting (per-IP + per-email where available).
+	authLoginIPLimiter := middleware.NewRateLimiter(redisDB.Client, 30, 15*time.Minute, "ratelimit:auth:login:ip:", func(r *http.Request) string {
+		return ""
+	}, false)
+	authLoginEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 15*time.Minute, "ratelimit:auth:login:email:", func(r *http.Request) string {
+		if email := middleware.RateLimitEmailKey(r); email != "" {
+			return email
+		}
+		return "no_email:" + httpx.ClientIP(r)
+	}, false)
+
+	authRegisterIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:register:ip:", func(r *http.Request) string {
+		return ""
+	}, false)
+	authRegisterEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 5, 1*time.Hour, "ratelimit:auth:register:email:", func(r *http.Request) string {
+		if email := middleware.RateLimitEmailKey(r); email != "" {
+			return email
+		}
+		return "no_email:" + httpx.ClientIP(r)
+	}, false)
+
+	authEmailFlowIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:emailflow:ip:", func(r *http.Request) string {
+		return ""
+	}, false)
+	authEmailFlowEmailLimiter := middleware.NewRateLimiter(redisDB.Client, 5, 1*time.Hour, "ratelimit:auth:emailflow:email:", func(r *http.Request) string {
+		if email := middleware.RateLimitEmailKey(r); email != "" {
+			return email
+		}
+		return "no_email:" + httpx.ClientIP(r)
+	}, false)
+
+	authResetPasswordIPLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:auth:reset:ip:", func(r *http.Request) string {
 		return ""
 	}, false)
 
@@ -244,17 +288,17 @@ func run() error {
 	mux.Handle("GET /api/csrf", requireSession(http.HandlerFunc(csrfMiddleware.GetToken)))
 
 	// Auth endpoints
-	mux.Handle("POST /api/auth/register", requireSession(http.HandlerFunc(authHandler.Register)))
-	mux.Handle("POST /api/auth/login", requireSession(http.HandlerFunc(authHandler.Login)))
+	mux.Handle("POST /api/auth/register", requireSession(authRegisterIPLimiter.Middleware(authRegisterEmailLimiter.Middleware(http.HandlerFunc(authHandler.Register)))))
+	mux.Handle("POST /api/auth/login", requireSession(authLoginIPLimiter.Middleware(authLoginEmailLimiter.Middleware(http.HandlerFunc(authHandler.Login)))))
 	mux.Handle("POST /api/auth/logout", requireSession(http.HandlerFunc(authHandler.Logout)))
 	mux.Handle("GET /api/auth/me", requireRead(http.HandlerFunc(authHandler.Me)))
 	mux.Handle("POST /api/auth/password", requireSession(http.HandlerFunc(authHandler.ChangePassword)))
-	mux.Handle("POST /api/auth/verify-email", requireSession(http.HandlerFunc(authHandler.VerifyEmail)))
-	mux.Handle("POST /api/auth/resend-verification", requireSession(http.HandlerFunc(authHandler.ResendVerification)))
-	mux.Handle("POST /api/auth/magic-link", requireSession(http.HandlerFunc(authHandler.MagicLink)))
+	mux.Handle("POST /api/auth/verify-email", requireSession(authEmailFlowIPLimiter.Middleware(http.HandlerFunc(authHandler.VerifyEmail))))
+	mux.Handle("POST /api/auth/resend-verification", requireSession(authEmailFlowIPLimiter.Middleware(http.HandlerFunc(authHandler.ResendVerification))))
+	mux.Handle("POST /api/auth/magic-link", requireSession(authEmailFlowIPLimiter.Middleware(authEmailFlowEmailLimiter.Middleware(http.HandlerFunc(authHandler.MagicLink)))))
 	mux.Handle("GET /api/auth/magic-link/verify", requireSession(http.HandlerFunc(authHandler.MagicLinkVerify)))
-	mux.Handle("POST /api/auth/forgot-password", requireSession(http.HandlerFunc(authHandler.ForgotPassword)))
-	mux.Handle("POST /api/auth/reset-password", requireSession(http.HandlerFunc(authHandler.ResetPassword)))
+	mux.Handle("POST /api/auth/forgot-password", requireSession(authEmailFlowIPLimiter.Middleware(authEmailFlowEmailLimiter.Middleware(http.HandlerFunc(authHandler.ForgotPassword)))))
+	mux.Handle("POST /api/auth/reset-password", requireSession(authResetPasswordIPLimiter.Middleware(http.HandlerFunc(authHandler.ResetPassword))))
 	mux.Handle("PUT /api/auth/searchable", requireSession(http.HandlerFunc(authHandler.UpdateSearchable)))
 	mux.Handle("GET /api/auth/{provider}/start", requireSession(http.HandlerFunc(providerAuthHandler.ProviderStart)))
 	mux.Handle("GET /api/auth/{provider}/callback", requireSession(http.HandlerFunc(providerAuthHandler.ProviderCallback)))
@@ -380,11 +424,13 @@ func run() error {
 	// Build middleware chain (order matters: outermost first)
 	var handler http.Handler = mux
 	handler = authMiddleware.Authenticate(handler)
+	handler = maxBodySize.Apply(handler)
 	handler = csrfMiddleware.Protect(handler)
 	handler = cacheControl.Apply(handler)
 	handler = compress.Apply(handler)
 	handler = securityHeaders.Apply(handler)
 	handler = requestLogger.Apply(handler)
+	handler = trustedProxyHeaders.Apply(handler)
 
 	// Create server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)

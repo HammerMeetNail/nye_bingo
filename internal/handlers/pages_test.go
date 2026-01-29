@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 )
 
 func TestPageHandler_IndexAndErrors(t *testing.T) {
@@ -88,12 +90,13 @@ func TestPageHandler_Index_TemplateError(t *testing.T) {
 
 func TestResolveBaseURL(t *testing.T) {
 	cases := []struct {
-		name    string
-		url     string
-		host    string
-		tls     bool
-		headers map[string]string
-		want    string
+		name           string
+		url            string
+		host           string
+		tls            bool
+		headers        map[string]string
+		trustForwarded bool
+		want           string
 	}{
 		{
 			name: "direct request uses host + http",
@@ -112,7 +115,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Proto": "https",
 			},
-			want: "https://example.com",
+			trustForwarded: true,
+			want:           "https://example.com",
 		},
 		{
 			name: "x-forwarded-proto uses first value",
@@ -120,7 +124,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Proto": "https, http",
 			},
-			want: "https://example.com",
+			trustForwarded: true,
+			want:           "https://example.com",
 		},
 		{
 			name: "invalid x-forwarded-proto is ignored",
@@ -128,7 +133,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Proto": "ftp",
 			},
-			want: "http://example.com",
+			trustForwarded: true,
+			want:           "http://example.com",
 		},
 		{
 			name: "x-forwarded-host overrides host",
@@ -136,7 +142,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Host": "proxy.example.com",
 			},
-			want: "http://proxy.example.com",
+			trustForwarded: true,
+			want:           "http://proxy.example.com",
 		},
 		{
 			name: "x-forwarded-host uses first value",
@@ -144,7 +151,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Host": "proxy.example.com, evil.example.com",
 			},
-			want: "http://proxy.example.com",
+			trustForwarded: true,
+			want:           "http://proxy.example.com",
 		},
 		{
 			name: "malformed forwarded host is ignored",
@@ -152,7 +160,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Host": "evil.example.com/path",
 			},
-			want: "http://example.com",
+			trustForwarded: true,
+			want:           "http://example.com",
 		},
 		{
 			name: "host with port is preserved",
@@ -165,7 +174,8 @@ func TestResolveBaseURL(t *testing.T) {
 			headers: map[string]string{
 				"X-Forwarded-Host": "example.com:8443",
 			},
-			want: "http://example.com:8443",
+			trustForwarded: true,
+			want:           "http://example.com:8443",
 		},
 		{
 			name: "invalid host falls back to localhost",
@@ -187,6 +197,7 @@ func TestResolveBaseURL(t *testing.T) {
 			for k, v := range tc.headers {
 				req.Header.Set(k, v)
 			}
+			req = httpx.WithTrustedForwardedHeaders(req, tc.trustForwarded)
 
 			got := resolveBaseURL(req)
 			if got != tc.want {

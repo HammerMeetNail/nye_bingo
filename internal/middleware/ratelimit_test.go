@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 )
 
 func TestRateLimiter_Middleware_NilRedis(t *testing.T) {
@@ -29,41 +31,54 @@ func TestRateLimiter_Middleware_NilRedis(t *testing.T) {
 	}
 }
 
-func TestGetClientIP(t *testing.T) {
+func TestClientIP(t *testing.T) {
 	tests := []struct {
 		name     string
 		headers  map[string]string
 		remote   string
+		trusted  bool
 		expected string
 	}{
 		{
 			name:     "X-Forwarded-For Single",
 			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1"},
 			remote:   "192.168.1.1:1234",
+			trusted:  true,
 			expected: "10.0.0.1",
 		},
 		{
 			name:     "X-Forwarded-For Multiple",
 			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1, 10.0.0.2"},
 			remote:   "192.168.1.1:1234",
+			trusted:  true,
 			expected: "10.0.0.1",
 		},
 		{
 			name:     "X-Real-IP",
 			headers:  map[string]string{"X-Real-IP": "10.0.0.2"},
 			remote:   "192.168.1.1:1234",
+			trusted:  true,
 			expected: "10.0.0.2",
 		},
 		{
 			name:     "XFF Preference over X-Real-IP",
 			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1", "X-Real-IP": "10.0.0.2"},
 			remote:   "192.168.1.1:1234",
+			trusted:  true,
 			expected: "10.0.0.1",
+		},
+		{
+			name:     "Spoofed XFF ignored when untrusted",
+			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1"},
+			remote:   "203.0.113.9:1234",
+			trusted:  false,
+			expected: "203.0.113.9",
 		},
 		{
 			name:     "No Headers",
 			headers:  map[string]string{},
 			remote:   "192.168.1.1:1234",
+			trusted:  false,
 			expected: "192.168.1.1",
 		},
 	}
@@ -75,8 +90,9 @@ func TestGetClientIP(t *testing.T) {
 				req.Header.Set(k, v)
 			}
 			req.RemoteAddr = tt.remote
+			req = httpx.WithTrustedForwardedHeaders(req, tt.trusted)
 
-			ip := GetClientIP(req)
+			ip := httpx.ClientIP(req)
 			if ip != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, ip)
 			}

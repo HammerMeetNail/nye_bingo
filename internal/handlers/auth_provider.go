@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -404,18 +406,57 @@ func sanitizeNext(value string) string {
 	if strings.HasPrefix(value, "#") {
 		value = "/" + strings.TrimPrefix(value, "#")
 	}
-	if !strings.HasPrefix(value, "/") {
+
+	u, err := url.Parse(value)
+	if err != nil {
 		return ""
 	}
-	if len(value) > 1 && (value[1] == '/' || value[1] == '\\') {
+	// Disallow absolute URLs or scheme-relative redirects.
+	if u.Scheme != "" || u.Host != "" || u.User != nil || u.Opaque != "" {
 		return ""
 	}
-	for _, r := range value[1:] {
-		if !isAllowedNextRune(r) {
-			return ""
-		}
+
+	// Ensure the path is rooted and does not begin with '//' or '/\' (including via percent-encoding).
+	escapedPath := u.EscapedPath()
+	decodedPath, err := url.PathUnescape(escapedPath)
+	if err != nil {
+		return ""
 	}
-	return value
+	if decodedPath == "" {
+		decodedPath = "/"
+	}
+	if !strings.HasPrefix(decodedPath, "/") {
+		return ""
+	}
+	if len(decodedPath) > 1 && (decodedPath[1] == '/' || decodedPath[1] == '\\') {
+		return ""
+	}
+	if strings.Contains(decodedPath, "\\") {
+		return ""
+	}
+
+	cleanPath := path.Clean(decodedPath)
+	if cleanPath == "." || cleanPath == "" {
+		cleanPath = "/"
+	}
+	if !strings.HasPrefix(cleanPath, "/") {
+		return ""
+	}
+	if len(cleanPath) > 1 && cleanPath[1] == '/' {
+		return ""
+	}
+
+	out := cleanPath
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	if u.Fragment != "" {
+		out += "#" + u.Fragment
+	}
+	if len(out) > 512 {
+		return ""
+	}
+	return out
 }
 
 func sanitizeProviderErrorParam(value string) string {
@@ -456,16 +497,6 @@ func sanitizeErrorParam(value string) string {
 func isAllowedErrorRune(r rune) bool {
 	return r == '-' || r == '_' ||
 		(r >= 'a' && r <= 'z') ||
-		(r >= 'A' && r <= 'Z') ||
-		(r >= '0' && r <= '9')
-}
-
-func isAllowedNextRune(r rune) bool {
-	switch r {
-	case '-', '_', '/', '.', '?', '&', '=', '%', ':', '@':
-		return true
-	}
-	return (r >= 'a' && r <= 'z') ||
 		(r >= 'A' && r <= 'Z') ||
 		(r >= '0' && r <= '9')
 }

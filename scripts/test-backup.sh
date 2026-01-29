@@ -92,7 +92,7 @@ rclone copy "r2:${R2_BUCKET}/${BACKUP_FILE}" "${BACKUP_DIR}/" --progress
 
 # Step 2: Decrypt and decompress
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Step 2/5: Decrypting backup..."
-gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
+gpg --decrypt --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
     | gunzip > "${BACKUP_DIR}/test_restore.sql"
 
 SQL_SIZE=$(du -h "${BACKUP_DIR}/test_restore.sql" | cut -f1)

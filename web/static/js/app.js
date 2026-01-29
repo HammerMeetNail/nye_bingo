@@ -636,10 +636,10 @@ const App = {
   showUnfinalizedCardNavigationModal() {
     this.openModal('Draft Saved', `
       <div class="finalize-confirm-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           Your card is saved as a draft. You can leave and come back later without losing your goals. Finalizing locks the layout so you can start tracking completion.
         </p>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
+        <div class="flex gap-md justify-end flex-wrap">
           <button class="btn btn-ghost" data-action="close-modal">Stay</button>
           <button class="btn btn-secondary" data-action="proceed-pending-navigation">Leave</button>
           <button class="btn btn-primary" data-action="open-finalize-from-navigation-warning">Finalize Card</button>
@@ -819,7 +819,7 @@ const App = {
           </div>
         </div>
         <div id="notifications-list" class="notifications-list">
-          <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+          <div class="text-center"><div class="spinner spinner--spaced"></div></div>
         </div>
       </div>
     `;
@@ -838,7 +838,7 @@ const App = {
     } catch (error) {
       if (listEl) {
         listEl.innerHTML = `
-          <div class="card text-center" style="padding: 2rem;">
+          <div class="card text-center p-xl">
             <p class="text-muted">${this.escapeHtml(error.message)}</p>
           </div>
         `;
@@ -1719,11 +1719,11 @@ const App = {
     ).join('');
 
     this.openModal('Create New Card', `
-      <div class="text-center mb-lg" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
-        <button class="btn btn-secondary btn-lg" data-action="open-ai-wizard-from-modal" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+      <div class="text-center mb-lg section-divider">
+        <button class="btn btn-secondary btn-lg btn-full flex items-center justify-center gap-sm" data-action="open-ai-wizard-from-modal">
             <span>✨</span> Generate with AI Wizard
         </button>
-        <p class="text-muted mt-sm" style="font-size: 0.9rem;">Let AI create a custom card for you!</p>
+        <p class="text-muted mt-sm text-sm">Let AI create a custom card for you!</p>
       </div>
 
       <form data-action="create-card-modal">
@@ -1737,7 +1737,7 @@ const App = {
 
         <div class="form-group">
           <label for="modal-card-title">
-            Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            Title <span class="text-muted fw-normal">(optional)</span>
           </label>
           <input type="text" id="modal-card-title" class="form-input"
                  placeholder="e.g., Life Goals, Foods to Try"
@@ -1747,7 +1747,7 @@ const App = {
 
         <div class="form-group">
           <label for="modal-card-category">
-            Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            Category <span class="text-muted fw-normal">(optional)</span>
           </label>
           <select id="modal-card-category" class="form-input">
             <option value="">None</option>
@@ -1766,7 +1766,7 @@ const App = {
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+          <label class="checkbox-label">
             <input type="checkbox" id="modal-card-free-space" checked>
             <span>Include FREE space</span>
           </label>
@@ -1778,9 +1778,9 @@ const App = {
           <small class="text-muted" id="modal-card-header-help">1-5 characters.</small>
         </div>
 
-        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Create Card</button>
+        <div class="flex gap-sm mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="close-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Create Card</button>
         </div>
       </form>
     `);
@@ -1884,7 +1884,7 @@ const App = {
           </select>
         </div>
 
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <div class="flex gap-md justify-end">
           <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
@@ -2158,7 +2158,7 @@ const App = {
     const oauthNext = googleEnabled ? this.getOAuthNextPath() : '';
     const googleUrl = googleEnabled && oauthNext ? `/api/auth/google/start?next=${encodeURIComponent(oauthNext)}` : '/api/auth/google/start';
     const googleButton = googleEnabled ? `
-          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 0.75rem;">
+          <a href="${googleUrl}" class="btn btn-google btn-lg btn-full mb-md">
             <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
             Continue with Google
           </a>
@@ -2171,7 +2171,7 @@ const App = {
             <h2 class="auth-title">Welcome Back</h2>
             <p class="text-muted">Sign in to your account</p>
           </div>
-          ${displayError ? `<div class="form-error" style="margin-bottom: 1rem;">${this.escapeHtml(displayError)}</div>` : ''}
+          ${displayError ? `<div class="form-error mb-md">${this.escapeHtml(displayError)}</div>` : ''}
           <form id="login-form">
             <div class="form-group">
               <label class="form-label" for="email">Email</label>
@@ -2182,18 +2182,18 @@ const App = {
               <input type="password" id="password" class="form-input" required autocomplete="current-password">
             </div>
             <div id="login-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Sign In
             </button>
           </form>
-          <div style="text-align: center; margin: 1rem 0;">
+          <div class="text-center my-md">
             <a href="/forgot-password" class="text-muted">Forgot password?</a>
           </div>
           <div class="auth-divider">
             <span>or</span>
           </div>
           ${googleButton}
-          <a href="/magic-link" class="btn btn-secondary btn-lg" style="width: 100%; margin-bottom: 1rem;">
+          <a href="/magic-link" class="btn btn-secondary btn-lg btn-full mb-md">
             Sign in with email link
           </a>
           <div class="auth-footer">
@@ -2237,7 +2237,7 @@ const App = {
           <div class="auth-divider">
             <span>or</span>
           </div>
-          <a href="${googleUrl}" class="btn btn-google btn-lg" style="width: 100%; margin-bottom: 1rem;">
+          <a href="${googleUrl}" class="btn btn-google btn-lg btn-full mb-md">
             <img class="google-icon" src="/static/img/google-g.svg" alt="" aria-hidden="true">
             Continue with Google
           </a>
@@ -2272,7 +2272,7 @@ const App = {
               <small class="text-muted">You can change this later in your account settings</small>
             </div>
             <div id="register-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Create Account
             </button>
           </form>
@@ -2333,7 +2333,7 @@ const App = {
               <small class="text-muted">You can change this later in your account settings</small>
             </div>
             <div id="google-complete-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Finish Signup
             </button>
           </form>
@@ -2382,7 +2382,7 @@ const App = {
               <input type="email" id="email" class="form-input" required autocomplete="email">
             </div>
             <div id="magic-link-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Send login link
             </button>
           </form>
@@ -2416,7 +2416,7 @@ const App = {
     container.innerHTML = `
       <div class="auth-page">
         <div class="card auth-card text-center">
-          <div class="spinner" style="margin: 2rem auto;"></div>
+          <div class="spinner spinner--spaced"></div>
           <p>Signing you in...</p>
         </div>
       </div>
@@ -2448,7 +2448,7 @@ const App = {
               <input type="email" id="email" class="form-input" required autocomplete="email">
             </div>
             <div id="forgot-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Send reset link
             </button>
           </form>
@@ -2484,7 +2484,7 @@ const App = {
           <div class="card auth-card text-center">
             <h2>Invalid Reset Link</h2>
             <p class="text-muted">This password reset link is invalid or missing.</p>
-            <a href="/forgot-password" class="btn btn-primary" style="margin-top: 1rem;">Request new link</a>
+            <a href="/forgot-password" class="btn btn-primary mt-md">Request new link</a>
           </div>
         </div>
       `;
@@ -2509,7 +2509,7 @@ const App = {
               <input type="password" id="confirm-password" class="form-input" required minlength="8" autocomplete="new-password">
             </div>
             <div id="reset-error" class="form-error hidden"></div>
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
+            <button type="submit" class="btn btn-primary btn-lg btn-full">
               Reset Password
             </button>
           </form>
@@ -2554,7 +2554,7 @@ const App = {
           <div class="card auth-card text-center">
             <h2>Invalid Link</h2>
             <p class="text-muted">This verification link is invalid or missing.</p>
-            ${this.user ? `<a href="/dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ${this.user ? `<a href="/dashboard" class="btn btn-primary mt-md">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary mt-md">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2564,7 +2564,7 @@ const App = {
     container.innerHTML = `
       <div class="auth-page">
         <div class="card auth-card text-center">
-          <div class="spinner" style="margin: 2rem auto;"></div>
+          <div class="spinner spinner--spaced"></div>
           <p>Verifying your email...</p>
         </div>
       </div>
@@ -2580,10 +2580,10 @@ const App = {
       container.innerHTML = `
         <div class="auth-page">
           <div class="card auth-card text-center">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">✓</div>
+            <div class="status-icon">✓</div>
             <h2>Email Verified!</h2>
             <p class="text-muted">Your email has been verified successfully.</p>
-            ${this.user ? `<a href="/dashboard" class="btn btn-primary" style="margin-top: 1rem;">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ${this.user ? `<a href="/dashboard" class="btn btn-primary mt-md">Go to Dashboard</a>` : `<a href="/login" class="btn btn-primary mt-md">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2591,14 +2591,14 @@ const App = {
       container.innerHTML = `
         <div class="auth-page">
           <div class="card auth-card text-center">
-            <div style="font-size: 4rem; margin-bottom: 1rem;">✗</div>
+            <div class="status-icon">✗</div>
             <h2>Verification Failed</h2>
             <p class="text-muted" id="verify-error-message"></p>
             ${this.user ? `
-              <button class="btn btn-primary" style="margin-top: 1rem;" data-action="resend-verification">
+              <button class="btn btn-primary mt-md" data-action="resend-verification">
                 Resend Verification Email
               </button>
-            ` : `<a href="/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In</a>`}
+            ` : `<a href="/login" class="btn btn-primary mt-md">Sign In</a>`}
           </div>
         </div>
       `;
@@ -2641,16 +2641,16 @@ const App = {
     container.innerHTML = `
       <div class="auth-page">
         <div class="card auth-card text-center">
-          <div style="font-size: 4rem; margin-bottom: 1rem;">✉️</div>
+          <div class="status-icon">✉️</div>
           <h2>${msg.title}</h2>
           <p class="text-muted">
             ${msg.description}<br>
             <strong>${email ? this.escapeHtml(email) : 'your email'}</strong>
           </p>
-          <p class="text-muted" style="margin-top: 1rem;">
+          <p class="text-muted mt-md">
             ${msg.detail}
           </p>
-          <div style="margin-top: 1.5rem;">
+          <div class="mt-lg">
             <a href="/login" class="btn btn-ghost">Back to sign in</a>
           </div>
         </div>
@@ -2665,11 +2665,11 @@ const App = {
     const used = typeof this.user.ai_free_generations_used === 'number' ? this.user.ai_free_generations_used : 0;
     const remaining = Math.max(0, freeLimit - used);
     return `
-      <div class="verification-banner" style="background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;">
-        <div style="color: #fff;">
-          <strong style="color: #ffd700;">Please verify your email</strong>
-          <span style="color: #b0b0c0;"> to enable all features.</span>
-          <div class="text-muted" style="margin-top: 0.35rem; font-size: 0.9rem;">
+      <div class="verification-banner">
+        <div>
+          <strong class="verification-banner-title">Please verify your email</strong>
+          <span class="verification-banner-subtitle"> to enable all features.</span>
+          <div class="text-muted verification-banner-detail">
             AI Goal Wizard: <strong>${remaining}</strong> free generations left before verification is required.
           </div>
         </div>
@@ -2695,7 +2695,7 @@ const App = {
           <h2>My Bingo Cards</h2>
         </div>
         <div id="cards-list">
-          <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+          <div class="text-center"><div class="spinner spinner--spaced"></div></div>
         </div>
       </div>
     `;
@@ -2716,8 +2716,8 @@ const App = {
 
     if (cards.length === 0) {
       listEl.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
-          <div style="font-size: 4rem; margin-bottom: 1rem;">🎯</div>
+        <div class="card text-center p-2xl">
+          <div class="status-icon">🎯</div>
           <h3>No cards yet</h3>
           <p class="text-muted mb-lg">Create your first bingo card and start tracking your goals!</p>
           <a href="/create" class="btn btn-primary btn-lg">Create Your First Card</a>
@@ -2731,7 +2731,7 @@ const App = {
     listEl.innerHTML = `
       <div class="dashboard-controls">
         <div class="dashboard-sort">
-          <label for="sort-select" class="text-muted" style="font-size: 0.875rem;">Sort:</label>
+          <label for="sort-select" class="text-muted text-sm">Sort:</label>
           <select id="sort-select" class="form-input form-input--sm" data-change-action="dashboard-sort">
             <option value="updated" ${this.dashboardSortKey === 'updated' ? 'selected' : ''}>Recently Updated</option>
             <option value="year-desc" ${this.dashboardSortKey === 'year-desc' ? 'selected' : ''}>Year (newest)</option>
@@ -2787,56 +2787,54 @@ const App = {
     this.setupDropdowns();
   },
 
-  renderDashboardCardPreview(card) {
-    const itemCount = card.items ? card.items.length : 0;
-    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
-    const capacity = this.getCardCapacity(card);
-    const progress = capacity ? (card.is_finalized ? Math.round((completedCount / capacity) * 100) : Math.round((itemCount / capacity) * 100)) : 0;
-    const displayName = this.getCardDisplayName(card);
-    const categoryBadge = this.getCategoryBadge(card);
-    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
-    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
-    const isSelected = this.selectedCards.includes(card.id);
-    const cardLink = card.is_archived ? `/archive-card/${card.id}` : `/card/${card.id}`;
+	  renderDashboardCardPreview(card) {
+	    const itemCount = card.items ? card.items.length : 0;
+	    const completedCount = card.items ? card.items.filter(i => i.is_completed).length : 0;
+	    const capacity = this.getCardCapacity(card);
+	    const progressValue = card.is_finalized ? completedCount : itemCount;
+	    const displayName = this.getCardDisplayName(card);
+	    const categoryBadge = this.getCategoryBadge(card);
+	    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
+	    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
+	    const isSelected = this.selectedCards.includes(card.id);
+	    const cardLink = card.is_archived ? `/archive-card/${card.id}` : `/card/${card.id}`;
 
     return `
-      <div class="card dashboard-card-preview" style="margin-bottom: 1rem;">
+      <div class="card dashboard-card-preview">
         <div class="dashboard-card-preview-header">
-          <div style="display: flex; align-items: flex-start; gap: 0.75rem;">
+          <div class="dashboard-card-preview-main">
             <label class="dashboard-checkbox-label" data-stop-propagation="true">
               <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
             </label>
-            <a href="${cardLink}" style="text-decoration: none; flex: 1;">
-              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.25rem;">
-                <h3 style="margin: 0;">${displayName}</h3>
+            <a href="${cardLink}" class="dashboard-card-preview-link">
+              <div class="dashboard-card-preview-title-row">
+                <h3 class="m-0">${displayName}</h3>
                 <span class="year-badge">${card.year}</span>
                 ${categoryBadge}
               </div>
-              <p class="text-muted" style="margin: 0;">
+              <p class="text-muted dashboard-card-preview-meta">
                 ${card.is_finalized
                   ? `${completedCount}/${capacity} completed`
                   : `${itemCount}/${capacity} items added`}
               </p>
             </a>
           </div>
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <div class="dashboard-card-preview-actions">
             <span class="visibility-badge visibility-badge--${card.visible_to_friends ? 'visible' : 'private'}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
             </span>
             ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
-            <button class="btn btn-ghost btn-sm dashboard-delete-btn" style="color: var(--color-danger);" data-action="delete-card" data-card-id="${card.id}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
+            <button class="btn btn-ghost btn-sm dashboard-delete-btn" data-action="delete-card" data-card-id="${card.id}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
               <i class="fas fa-trash"></i>
             </button>
           </div>
-        </div>
-        <a href="${cardLink}" style="text-decoration: none; display: block;">
-          <div class="progress-bar mt-md">
-            <div class="progress-fill" style="width: ${progress}%"></div>
-          </div>
-        </a>
-      </div>
-    `;
-  },
+	        </div>
+	        <a href="${cardLink}" class="no-underline block">
+	          <progress class="progress-bar mt-md" value="${progressValue}" max="${capacity}"></progress>
+	        </a>
+	      </div>
+	    `;
+	  },
 
   getSortedCards() {
     const cards = [...this.dashboardCards];
@@ -3271,16 +3269,16 @@ const App = {
           <p class="card-subtitle">Set up your bingo card - no account needed to start!</p>
         </div>
 
-        <div class="card" style="margin: 0 0 1rem 0; padding: 1rem; background: var(--bg-secondary); border: 1px solid var(--border-color);">
-          <div style="display: flex; gap: 0.75rem; align-items: flex-start;">
-            <div style="font-size: 1.25rem; line-height: 1;">🧙</div>
+        <div class="card ai-upsell">
+          <div class="ai-upsell-content">
+            <div class="ai-upsell-icon">🧙</div>
             <div>
-              <div style="font-weight: 600; margin-bottom: 0.25rem;">Want AI-generated goals?</div>
-              <div class="text-muted" style="font-size: 0.95rem; margin-bottom: 0.75rem;">
+              <div class="ai-upsell-title">Want AI-generated goals?</div>
+              <div class="text-muted ai-upsell-text">
                 The AI Goal Wizard is available after you create an account.
               </div>
-              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" data-action="show-ai-auth-modal" style="display: flex; align-items: center; gap: 0.35rem;">
+              <div class="ai-upsell-actions">
+                <button type="button" class="btn btn-secondary btn-sm ai-upsell-btn" data-action="show-ai-auth-modal">
                   <span>✨</span> Generate with AI Wizard
                 </button>
               </div>
@@ -3299,7 +3297,7 @@ const App = {
 
           <div class="form-group">
             <label for="card-title">
-              Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+              Title <span class="text-muted fw-normal">(optional)</span>
             </label>
             <input type="text" id="card-title" class="form-input"
                    placeholder="e.g., Life Goals, Foods to Try"
@@ -3309,7 +3307,7 @@ const App = {
 
           <div class="form-group">
             <label for="card-category">
-              Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+              Category <span class="text-muted fw-normal">(optional)</span>
             </label>
             <select id="card-category" class="form-input">
               <option value="">None</option>
@@ -3328,7 +3326,7 @@ const App = {
           </div>
 
           <div class="form-group">
-            <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+            <label class="checkbox-label">
               <input type="checkbox" id="card-free-space" checked>
               <span>Include FREE space</span>
             </label>
@@ -3336,13 +3334,13 @@ const App = {
 
           <div class="form-group">
             <label for="card-header">Header</label>
-            <input type="text" id="card-header" class="form-input" maxlength="5" value="BINGO" required>
-            <small class="text-muted" id="card-header-help">1-5 characters.</small>
+          <input type="text" id="card-header" class="form-input" maxlength="5" value="BINGO" required>
+          <small class="text-muted" id="card-header-help">1-5 characters.</small>
           </div>
 
-          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <a href="/" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
-            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
+          <div class="flex gap-sm mt-md">
+            <a href="/" class="btn btn-ghost btn-lg flex-1 text-center">Cancel</a>
+            <button type="submit" class="btn btn-primary btn-lg flex-1">Create Card</button>
           </div>
         </form>
       </div>
@@ -3451,11 +3449,11 @@ const App = {
 
     container.innerHTML = `
       <div class="card create-card-shell">
-        <div class="text-center mb-lg" style="padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
-            <button class="btn btn-secondary btn-lg" data-action="open-ai-wizard" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+        <div class="text-center mb-lg section-divider">
+            <button class="btn btn-secondary btn-lg btn-full flex items-center justify-center gap-sm" data-action="open-ai-wizard">
                 <span>✨</span> Generate with AI Wizard
             </button>
-            <p class="text-muted mt-sm" style="font-size: 0.9rem;">Let AI create a custom card for you!</p>
+            <p class="text-muted mt-sm text-sm">Let AI create a custom card for you!</p>
         </div>
 
         <div class="card-header text-center">
@@ -3473,7 +3471,7 @@ const App = {
 
           <div class="form-group">
             <label for="card-title">
-              Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+              Title <span class="text-muted fw-normal">(optional)</span>
             </label>
             <input type="text" id="card-title" class="form-input"
                    placeholder="e.g., Life Goals, Foods to Try"
@@ -3483,7 +3481,7 @@ const App = {
 
           <div class="form-group">
             <label for="card-category">
-              Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+              Category <span class="text-muted fw-normal">(optional)</span>
             </label>
             <select id="card-category" class="form-input">
               <option value="">None</option>
@@ -3491,9 +3489,9 @@ const App = {
             </select>
           </div>
 
-          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <a href="/dashboard" class="btn btn-ghost btn-lg" style="flex: 1; text-align: center;">Cancel</a>
-            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Card</button>
+          <div class="flex gap-sm mt-md">
+            <a href="/dashboard" class="btn btn-ghost btn-lg flex-1 text-center">Cancel</a>
+            <button type="submit" class="btn btn-primary btn-lg flex-1">Create Card</button>
           </div>
         </form>
       </div>
@@ -3532,7 +3530,7 @@ const App = {
 
   async renderCard(container, cardId, itemId = null) {
     container.innerHTML = `
-      <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+      <div class="text-center"><div class="spinner spinner--spaced"></div></div>
     `;
 
     try {
@@ -3560,7 +3558,7 @@ const App = {
       }
     } catch (error) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Card not found</h3>
           <p class="text-muted mb-lg" id="card-error-message"></p>
           <a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>
@@ -3584,15 +3582,14 @@ const App = {
     this.showItemDetailModal(item.position, content, isCompleted);
   },
 
-  renderCardEditor(container) {
-    this.currentView = 'card-editor';
-    const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
-    const gridSize = this.getGridSize(this.currentCard);
-    const capacity = this.getCardCapacity(this.currentCard);
-    const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-    const displayName = this.getCardDisplayName(this.currentCard);
-    const categoryBadge = this.getCategoryBadge(this.currentCard);
-    const isAnon = this.isAnonymousMode;
+	  renderCardEditor(container) {
+	    this.currentView = 'card-editor';
+	    const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
+	    const gridSize = this.getGridSize(this.currentCard);
+	    const capacity = this.getCardCapacity(this.currentCard);
+	    const displayName = this.getCardDisplayName(this.currentCard);
+	    const categoryBadge = this.getCategoryBadge(this.currentCard);
+	    const isAnon = this.isAnonymousMode;
 
     container.innerHTML = `
       ${this.user && !this.user.email_verified
@@ -3609,10 +3606,10 @@ const App = {
         </div>
       ` : ''}
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+      <div class="flex justify-between items-center mb-md">
         <a href="${isAnon ? '/' : '/dashboard'}" class="btn btn-ghost">&larr; Back</a>
-        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-          <h2 style="margin: 0;">${displayName}</h2>
+        <div class="flex items-center gap-sm flex-wrap justify-center">
+          <h2 class="m-0">${displayName}</h2>
           <span class="year-badge">${this.currentCard.year}</span>
           ${categoryBadge}
           <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
@@ -3625,14 +3622,12 @@ const App = {
         ` : '<div></div>'}
       </div>
 
-      <div class="progress-bar">
-        <div class="progress-fill" style="width: ${progress}%"></div>
-      </div>
-      <p class="progress-text mb-lg">${itemCount}/${capacity} items added</p>
+	      <progress class="progress-bar" value="${itemCount}" max="${capacity}"></progress>
+	      <p class="progress-text mb-lg">${itemCount}/${capacity} items added</p>
 
       <div class="card-editor-layout">
         <div class="bingo-container editor-grid">
-          <div class="bingo-grid" id="bingo-grid" style="--grid-size: ${gridSize};">
+          <div class="bingo-grid bingo-grid--size-${gridSize}" id="bingo-grid">
             ${this.renderGrid()}
           </div>
         </div>
@@ -3643,13 +3638,13 @@ const App = {
             <button class="btn btn-primary" id="add-btn" ${itemCount >= capacity ? 'disabled' : ''}>Add</button>
           </div>
 
-          <div class="card-config-panel" style="margin-top: 0.75rem;">
-            <div class="form-group" style="margin-bottom: 0.75rem;">
+          <div class="card-config-panel mt-075">
+            <div class="form-group mb-075">
               <label class="form-label">Header</label>
               <input type="text" id="card-header-input" class="form-input" maxlength="${gridSize}">
               <small class="text-muted">1-${gridSize} characters.</small>
             </div>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none;">
+            <label class="checkbox-label no-select">
               <input type="checkbox" id="card-free-toggle" ${this.getHasFreeSpace(this.currentCard) ? 'checked' : ''}>
               <span>Include FREE space</span>
             </label>
@@ -3675,7 +3670,7 @@ const App = {
           <div class="suggestions-panel editor-suggestions">
             <div class="suggestions-header">
               <h3 class="suggestions-title">Suggestions</h3>
-              <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <div class="flex gap-sm flex-wrap">
                 ${isAnon ? `
                   <button class="btn btn-secondary btn-sm" data-action="show-ai-auth-modal" title="Create an account to use AI features">
                     🧙 AI
@@ -3704,7 +3699,7 @@ const App = {
 
           ${isAnon ? `
             <div class="editor-delete">
-              <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="confirm-delete-anonymous-card">
+              <button class="btn btn-ghost btn-ghost-danger" data-action="confirm-delete-anonymous-card">
                 Delete Card
               </button>
             </div>
@@ -3725,12 +3720,12 @@ const App = {
 
     this.openModal('Clear Card', `
       <div class="finalize-confirm-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           Clear all ${itemCount} items from this card? This can't be undone.
         </p>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <div class="flex gap-md justify-end">
           <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
-          <button class="btn btn-primary" style="background: var(--color-danger); border-color: var(--color-danger);" data-action="clear-card-items">Clear All</button>
+          <button class="btn btn-danger" data-action="clear-card-items">Clear All</button>
         </div>
       </div>
     `);
@@ -3850,7 +3845,7 @@ const App = {
           </select>
         </div>
 
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <div class="flex gap-md justify-end">
           <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button type="submit" class="btn btn-primary">Save</button>
         </div>
@@ -3886,16 +3881,15 @@ const App = {
     }
   },
 
-  renderFinalizedCard(container, options = {}) {
-    const readOnly = !!options.readOnly;
-    this.currentView = readOnly ? 'shared-card' : 'finalized-card';
-    document.querySelector('.page')?.classList.add('page--compact-main');
-    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const gridSize = this.getGridSize(this.currentCard);
-    const capacity = this.getCardCapacity(this.currentCard);
-    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
-    const displayName = this.getCardDisplayName(this.currentCard);
-    const categoryBadge = this.getCategoryBadge(this.currentCard);
+	  renderFinalizedCard(container, options = {}) {
+	    const readOnly = !!options.readOnly;
+	    this.currentView = readOnly ? 'shared-card' : 'finalized-card';
+	    document.querySelector('.page')?.classList.add('page--compact-main');
+	    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
+	    const gridSize = this.getGridSize(this.currentCard);
+	    const capacity = this.getCardCapacity(this.currentCard);
+	    const displayName = this.getCardDisplayName(this.currentCard);
+	    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
     const sharedView = !!options.shared;
     const showActions = !readOnly && this.user && !this.isAnonymousMode;
@@ -3934,19 +3928,17 @@ const App = {
         </div>
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized" id="bingo-grid" style="--grid-size: ${gridSize};">
+          <div class="bingo-grid bingo-grid--finalized bingo-grid--size-${gridSize}" id="bingo-grid">
             ${this.renderGrid(true)}
           </div>
-        </div>
+	        </div>
 
-        <div class="finalized-card-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progress}%"></div>
-          </div>
-          <p class="progress-text">${completedCount}/${capacity} completed</p>
-        </div>
-      </div>
-    `;
+	        <div class="finalized-card-progress">
+	          <progress class="progress-bar" value="${completedCount}" max="${capacity}"></progress>
+	          <p class="progress-text">${completedCount}/${capacity} completed</p>
+	        </div>
+	      </div>
+	    `;
 
     this.setupFinalizedCardEvents({ readOnly });
     if (this.user && !this.isAnonymousMode && !readOnly) {
@@ -3961,7 +3953,7 @@ const App = {
 
     if (!token) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Invalid Share Link</h3>
           <p class="text-muted mb-lg">This share link is missing or malformed.</p>
           <a href="/" class="btn btn-primary">Back to Home</a>
@@ -3979,7 +3971,7 @@ const App = {
       this.renderFinalizedCard(container, { readOnly: true, shared: true });
     } catch (error) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Share Link Not Found</h3>
           <p class="text-muted mb-lg" id="share-error"></p>
           <a href="/" class="btn btn-primary">Back to Home</a>
@@ -4197,10 +4189,10 @@ const App = {
     this.openModal(isCompleted ? 'Completed Goal' : 'Goal', `
       <div class="item-detail">
         <p class="item-detail-content">${this.escapeHtml(content)}</p>
-        <p style="margin-top: 1rem;"><span class="${statusClass}">${statusText}</span></p>
+        <p class="mt-md"><span class="${statusClass}">${statusText}</span></p>
       </div>
-      <div style="margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
+      <div class="mt-lg">
+        <button type="button" class="btn btn-secondary btn-full" data-action="close-modal">
           Close
         </button>
       </div>
@@ -4256,11 +4248,11 @@ const App = {
           ${notes ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
         </div>
         ${reminderControls}
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-secondary flex-1" data-action="close-modal">
             Close
           </button>
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="uncomplete-item" data-position="${position}">
+          <button type="button" class="btn btn-ghost flex-1" data-action="uncomplete-item" data-position="${position}">
             Mark Incomplete
           </button>
         </div>
@@ -4272,15 +4264,15 @@ const App = {
         </div>
         ${reminderControls}
         <form id="complete-form">
-          <div class="form-group" style="margin-top: 1rem;">
+          <div class="form-group mt-md">
             <label class="form-label">Notes (optional)</label>
             <textarea id="complete-notes" class="form-input" rows="3" placeholder="How did you accomplish this?"></textarea>
           </div>
-          <div style="display: flex; gap: 1rem;">
-            <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
+          <div class="flex gap-md">
+            <button type="button" class="btn btn-secondary flex-1" data-action="close-modal">
               Cancel
             </button>
-            <button type="submit" class="btn btn-primary" style="flex: 1;">
+            <button type="submit" class="btn btn-primary flex-1">
               Mark Complete
             </button>
           </div>
@@ -4303,12 +4295,15 @@ const App = {
       this.closeModal();
       this.toast('Item marked incomplete', 'success');
 
-      // Update progress
-      const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
-      const capacity = this.getCardCapacity(this.currentCard);
-      const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
-      document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
+	      // Update progress
+	      const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
+	      const capacity = this.getCardCapacity(this.currentCard);
+	      const progressEl = document.querySelector('progress.progress-bar');
+	      if (progressEl) {
+	        progressEl.max = capacity;
+	        progressEl.value = completedCount;
+	      }
+	      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
 
       // Update local state
       const item = this.currentCard.items?.find(i => i.position === position);
@@ -4335,12 +4330,15 @@ const App = {
         item.notes = notes || '';
       }
 
-      // Update progress
-      const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
-      const capacity = this.getCardCapacity(this.currentCard);
-      const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
-      document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
+	      // Update progress
+	      const completedCount = document.querySelectorAll('.bingo-cell--completed').length;
+	      const capacity = this.getCardCapacity(this.currentCard);
+	      const progressEl = document.querySelector('progress.progress-bar');
+	      if (progressEl) {
+	        progressEl.max = capacity;
+	        progressEl.value = completedCount;
+	      }
+	      document.querySelector('.progress-text').textContent = `${completedCount}/${capacity} completed`;
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -4589,7 +4587,7 @@ const App = {
         </div>
     `;
     const removeButton = `
-          <button type="button" class="btn btn-primary" style="flex: 1; background: var(--color-error);" data-action="remove-item" data-position="${position}" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : ''}>
+          <button type="button" class="btn btn-danger flex-1" data-action="remove-item" data-position="${position}" ${isEmpty ? 'disabled aria-disabled="true" title="No goal to remove"' : ''}>
             Remove
           </button>
     `;
@@ -4601,12 +4599,12 @@ const App = {
           <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
         </div>
         ${aiSection}
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-secondary" style="flex: 1;" data-action="close-modal">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-secondary flex-1" data-action="close-modal">
             Cancel
           </button>
           ${removeButton}
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
+          <button type="submit" class="btn btn-primary flex-1">
             Save
           </button>
         </div>
@@ -4780,10 +4778,13 @@ const App = {
         cell.appendChild(contentEl);
       }
 
-      const itemCount = this.currentCard.items.length;
-      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-      document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+	      const itemCount = this.currentCard.items.length;
+	      const progressEl = document.querySelector('progress.progress-bar');
+	      if (progressEl) {
+	        progressEl.max = capacity;
+	        progressEl.value = itemCount;
+	      }
+	      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
       const isFull = itemCount >= capacity;
       const input = document.getElementById('item-input');
@@ -4953,12 +4954,15 @@ const App = {
       contentEl.textContent = this.truncateText(content, 50);
       cell.appendChild(contentEl);
 
-      // Update progress
-      const itemCount = this.currentCard.items.length;
-      const capacity = this.getCardCapacity(this.currentCard);
-      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-      document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+	      // Update progress
+	      const itemCount = this.currentCard.items.length;
+	      const capacity = this.getCardCapacity(this.currentCard);
+	      const progressEl = document.querySelector('progress.progress-bar');
+	      if (progressEl) {
+	        progressEl.max = capacity;
+	        progressEl.value = itemCount;
+	      }
+	      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
       // Update buttons
       if (itemCount >= capacity) {
@@ -5087,11 +5091,14 @@ const App = {
       }
     }
 
-    // Update progress
-    const itemCount = this.currentCard.items.length;
-    const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-    document.querySelector('.progress-fill').style.width = `${progress}%`;
-    document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+	    // Update progress
+	    const itemCount = this.currentCard.items.length;
+	    const progressEl = document.querySelector('progress.progress-bar');
+	    if (progressEl) {
+	      progressEl.max = capacity;
+	      progressEl.value = itemCount;
+	    }
+	    document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
     // Update buttons
     const isFull = itemCount >= capacity;
@@ -5142,12 +5149,15 @@ const App = {
       cell.removeAttribute('draggable');
       cell.innerHTML = '';
 
-      // Update progress
-      const itemCount = this.currentCard.items.length;
-      const capacity = this.getCardCapacity(this.currentCard);
-      const progress = capacity ? Math.round((itemCount / capacity) * 100) : 0;
-      document.querySelector('.progress-fill').style.width = `${progress}%`;
-      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
+	      // Update progress
+	      const itemCount = this.currentCard.items.length;
+	      const capacity = this.getCardCapacity(this.currentCard);
+	      const progressEl = document.querySelector('progress.progress-bar');
+	      if (progressEl) {
+	        progressEl.max = capacity;
+	        progressEl.value = itemCount;
+	      }
+	      document.querySelector('.progress-text').textContent = `${itemCount}/${capacity} items added`;
 
       // Update buttons
       document.getElementById('item-input').disabled = false;
@@ -5282,7 +5292,7 @@ const App = {
 
         <div class="form-group">
           <label for="clone-card-title">
-            Title <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            Title <span class="text-muted fw-normal">(optional)</span>
           </label>
           <input type="text" id="clone-card-title" class="form-input"
                  maxlength="100">
@@ -5290,7 +5300,7 @@ const App = {
 
         <div class="form-group">
           <label for="clone-card-category">
-            Category <span class="text-muted" style="font-weight: normal;">(optional)</span>
+            Category <span class="text-muted fw-normal">(optional)</span>
           </label>
           <select id="clone-card-category" class="form-input">
             <option value="" ${!currentCategory ? 'selected' : ''}>None</option>
@@ -5310,7 +5320,7 @@ const App = {
         </div>
 
         <div class="form-group">
-          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem;">
+          <label class="checkbox-label">
             <input type="checkbox" id="clone-card-free-space" ${hasFree ? 'checked' : ''}>
             <span>Include FREE space</span>
           </label>
@@ -5322,9 +5332,9 @@ const App = {
           <small class="text-muted" id="clone-card-header-help">1-${gridSize} characters.</small>
         </div>
 
-        <div style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">Clone</button>
+        <div class="flex gap-sm mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="close-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Clone</button>
         </div>
       </form>
     `);
@@ -5382,7 +5392,7 @@ const App = {
 
     this.openModal('Share Card', `
       <div id="share-modal-content">
-        <div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>
+        <div class="text-center"><div class="spinner spinner--compact"></div></div>
       </div>
     `);
 
@@ -5393,7 +5403,7 @@ const App = {
     const content = document.getElementById('share-modal-content');
     if (!content) return;
 
-    content.innerHTML = '<div class="text-center"><div class="spinner" style="margin: 1rem auto;"></div></div>';
+    content.innerHTML = '<div class="text-center"><div class="spinner spinner--compact"></div></div>';
     try {
       const response = await API.cards.shareStatus(this.currentCard.id);
       this.currentShareStatus = response || { enabled: false };
@@ -5483,13 +5493,13 @@ const App = {
           <option value="90">90 days</option>
           <option value="custom">Custom…</option>
         </select>
-        <div id="share-expiry-custom-group" style="margin-top: 0.75rem; display: none;">
+        <div id="share-expiry-custom-group" class="mt-075 hidden">
           <input type="number" id="share-expiry-custom" class="form-input" min="1" max="3650" placeholder="Enter days">
         </div>
       </div>
     `;
     const expirationNote = isEnabled
-      ? '<p class="text-muted" style="margin-top: 0.5rem;">Disable sharing to change the expiration.</p>'
+      ? '<p class="text-muted mt-sm">Disable sharing to change the expiration.</p>'
       : '';
 
     return `
@@ -5497,7 +5507,7 @@ const App = {
       ${expirationNote}
       ${linkSection}
       ${expirationControls}
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
+      <div class="flex gap-sm flex-wrap justify-end">
         ${disableAction}
         ${primaryAction}
       </div>
@@ -5509,7 +5519,7 @@ const App = {
     const customGroup = document.getElementById('share-expiry-custom-group');
     if (!select || !customGroup) return;
     const toggle = () => {
-      customGroup.style.display = select.value === 'custom' ? 'block' : 'none';
+      customGroup.classList.toggle('hidden', select.value !== 'custom');
     };
     select.addEventListener('change', toggle);
     toggle();
@@ -5585,19 +5595,19 @@ const App = {
   showFinalizeConfirmModal() {
     this.openModal('Finalize Card', `
       <div class="finalize-confirm-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           Are you sure you want to finalize this card? You won't be able to change the items after this.
         </p>
-        <div style="margin-bottom: 1.5rem;">
-          <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+        <div class="mb-lg">
+          <label class="checkbox-label">
             <input type="checkbox" id="finalize-visibility" checked>
             <span>Visible to friends</span>
           </label>
-          <p class="text-muted" style="margin-top: 0.5rem; font-size: 0.875rem;">
+          <p class="text-muted mt-sm text-sm">
             If unchecked, friends won't be able to see this card.
           </p>
         </div>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <div class="flex gap-md justify-end">
           <button class="btn btn-ghost" data-action="close-modal">Cancel</button>
           <button class="btn btn-primary" data-action="confirm-finalize">Finalize Card</button>
         </div>
@@ -5625,10 +5635,10 @@ const App = {
   showFinalizeAuthModal() {
     this.openModal('Save Your Card', `
       <div class="finalize-auth-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           Your bingo card is ready! Create an account to save and finalize it.
         </p>
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="flex flex-col gap-md">
           <button class="btn btn-primary btn-lg" data-action="show-finalize-register-form">
             Create Account
           </button>
@@ -5646,11 +5656,11 @@ const App = {
   showAIAuthModal() {
     this.openModal('Use the AI Goal Wizard', `
       <div class="finalize-auth-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           AI-generated goals are available after you create an account.
           This helps prevent abuse and keeps AI costs under control.
         </p>
-        <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <div class="flex flex-col gap-md">
           <a class="btn btn-primary btn-lg" href="/register" data-action="close-modal">
             Create Account
           </a>
@@ -5691,11 +5701,11 @@ const App = {
           <small class="text-muted">You can change this later in your account settings</small>
         </div>
         <div id="finalize-register-error" class="form-error hidden"></div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="show-finalize-auth-modal">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="show-finalize-auth-modal">
             Back
           </button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
+          <button type="submit" class="btn btn-primary flex-1">
             Create Account & Save Card
           </button>
         </div>
@@ -5743,11 +5753,11 @@ const App = {
           <input type="password" id="finalize-login-password" class="form-input" required autocomplete="current-password">
         </div>
         <div id="finalize-login-error" class="form-error hidden"></div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="show-finalize-auth-modal">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="show-finalize-auth-modal">
             Back
           </button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
+          <button type="submit" class="btn btn-primary flex-1">
             Login & Save Card
           </button>
         </div>
@@ -5818,24 +5828,24 @@ const App = {
 
     this.openModal('Card Already Exists', `
       <div class="conflict-modal">
-        <p style="margin-bottom: 1rem;">
+        <p class="mb-md">
           You already have a <strong>${existingCard.year}</strong> card:
         </p>
-        <div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+        <div class="card p-md mb-lg">
           <strong>${this.escapeHtml(existingTitle)}</strong>
-          <p class="text-muted" style="margin: 0.25rem 0 0 0;">
+          <p class="text-muted m-0 mt-xs">
             ${itemCount} items, ${isFinalized}
           </p>
         </div>
-        <p style="margin-bottom: 1.5rem;">What would you like to do?</p>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <p class="mb-lg">What would you like to do?</p>
+        <div class="flex flex-col gap-075">
           <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${existingCard.id}">
             Keep Existing Card
           </button>
           <button class="btn btn-primary" data-action="conflict-save-as-new">
             Save as New Card (with different title)
           </button>
-          <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="conflict-replace" data-card-id="${existingCard.id}">
+          <button class="btn btn-ghost btn-ghost-danger" data-action="conflict-replace" data-card-id="${existingCard.id}">
             Replace Existing Card
           </button>
           <button class="btn btn-ghost" data-action="close-modal">
@@ -5871,11 +5881,11 @@ const App = {
           <small class="text-muted">Choose a different title for your new card</small>
         </div>
         <div id="conflict-new-title-error" class="form-error hidden"></div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="import-anonymous-card">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="import-anonymous-card">
             Back
           </button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
+          <button type="submit" class="btn btn-primary flex-1">
             Save Card
           </button>
         </div>
@@ -5972,7 +5982,7 @@ const App = {
     // Only offer replace for unfinalized cards
     if (!existingCard.is_finalized) {
       buttons += `
-        <button class="btn btn-ghost" style="color: var(--color-danger);" data-action="create-conflict-replace" data-card-id="${existingCard.id}">
+        <button class="btn btn-ghost btn-ghost-danger" data-action="create-conflict-replace" data-card-id="${existingCard.id}">
           Delete &amp; Create New
         </button>`;
     }
@@ -5984,17 +5994,17 @@ const App = {
 
     this.openModal('Card Already Exists', `
       <div class="conflict-modal">
-        <p style="margin-bottom: 1rem;">
+        <p class="mb-md">
           You already have a <strong>${existingCard.year}</strong> card:
         </p>
-        <div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+        <div class="card p-md mb-lg">
           <strong>${this.escapeHtml(existingTitle)}</strong>
-          <p class="text-muted" style="margin: 0.25rem 0 0 0;">
+          <p class="text-muted m-0 mt-xs">
             ${itemCount} items, ${isFinalized}
           </p>
         </div>
-        <p style="margin-bottom: 1.5rem;">What would you like to do?</p>
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <p class="mb-lg">What would you like to do?</p>
+        <div class="flex flex-col gap-075">
           ${buttons}
         </div>
       </div>
@@ -6021,11 +6031,11 @@ const App = {
           <small class="text-muted">Choose a unique title for your new card</small>
         </div>
         <div id="create-conflict-error" class="form-error hidden"></div>
-        <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-          <button type="button" class="btn btn-ghost" style="flex: 1;" data-action="close-modal">
+        <div class="flex gap-md mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="close-modal">
             Cancel
           </button>
-          <button type="submit" class="btn btn-primary" style="flex: 1;">
+          <button type="submit" class="btn btn-primary flex-1">
             Create Card
           </button>
         </div>
@@ -6136,7 +6146,7 @@ const App = {
   renderInviteGate(container, token) {
     if (!token) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Invite link not found</h3>
           <p class="text-muted mb-lg">This invite link is missing or invalid.</p>
           <a href="/" class="btn btn-primary">Go Home</a>
@@ -6147,10 +6157,10 @@ const App = {
 
     this.storePendingInviteToken(token);
     container.innerHTML = `
-      <div class="card text-center" style="padding: 3rem;">
+      <div class="card text-center p-2xl">
         <h3>Accept Friend Invite</h3>
         <p class="text-muted mb-lg">Sign in or create an account to accept this invite.</p>
-        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+        <div class="flex gap-md justify-center flex-wrap">
           <a href="/login" class="btn btn-primary">Sign In</a>
           <a href="/register" class="btn btn-secondary">Create Account</a>
         </div>
@@ -6161,7 +6171,7 @@ const App = {
   async renderInviteAccept(container, token) {
     if (!token) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Invite link not found</h3>
           <p class="text-muted mb-lg">This invite link is missing or invalid.</p>
           <a href="/friends" class="btn btn-primary">Back to Friends</a>
@@ -6171,8 +6181,8 @@ const App = {
     }
 
     container.innerHTML = `
-      <div class="card text-center" style="padding: 3rem;">
-        <div class="spinner" style="margin: 2rem auto;"></div>
+      <div class="card text-center p-2xl">
+        <div class="spinner spinner--spaced"></div>
         <p>Accepting invite...</p>
       </div>
     `;
@@ -6181,7 +6191,7 @@ const App = {
       const response = await API.friends.acceptInvite(token);
       this.toast('Invite accepted!', 'success');
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>You're friends now!</h3>
           <p class="text-muted mb-lg">You are now connected with ${this.escapeHtml(response.inviter.username)}.</p>
           <a href="/friends" class="btn btn-primary">Go to Friends</a>
@@ -6189,7 +6199,7 @@ const App = {
       `;
     } catch (error) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Invite Error</h3>
           <p class="text-muted mb-lg" id="invite-accept-error"></p>
           <a href="/friends" class="btn btn-primary">Back to Friends</a>
@@ -6209,11 +6219,11 @@ const App = {
 
         <div class="card">
           <h3>Invite Friends</h3>
-          <p class="text-muted" style="margin-bottom: 1rem;">
+          <p class="text-muted mb-md">
             Share a private invite link. Anyone with the link can accept it.
             You can revoke invites at any time.
           </p>
-          <div class="search-input-group" style="align-items: center;">
+          <div class="search-input-group items-center">
             <button class="btn btn-primary" id="create-invite-btn">Create Invite Link</button>
           </div>
           <div id="invite-result" class="mt-md"></div>
@@ -6222,7 +6232,7 @@ const App = {
 
         <div class="friends-search card">
           <h3>Find Friends</h3>
-          <p class="text-muted" style="margin-bottom: 1rem;">
+          <p class="text-muted mb-md">
             Search for friends by their username. Users must enable "Make my profile searchable"
             in their <a href="/profile">Profile settings</a> to appear in search results.
           </p>
@@ -6233,12 +6243,12 @@ const App = {
           <div id="search-results" class="search-results"></div>
         </div>
 
-        <div id="friend-requests" class="card" style="display: none;">
+        <div id="friend-requests" class="card hidden">
           <h3>Friend Requests</h3>
           <div id="requests-list"></div>
         </div>
 
-        <div id="sent-requests" class="card" style="display: none;">
+        <div id="sent-requests" class="card hidden">
           <h3>Sent Requests</h3>
           <div id="sent-list"></div>
         </div>
@@ -6250,7 +6260,7 @@ const App = {
           </div>
         </div>
 
-        <div id="blocked-users" class="card" style="display: none;">
+        <div id="blocked-users" class="card hidden">
           <h3>Blocked Users</h3>
           <div id="blocked-list"></div>
         </div>
@@ -6318,14 +6328,14 @@ const App = {
 
   async createFriendInvite() {
     const resultEl = document.getElementById('invite-result');
-    resultEl.innerHTML = '<div class="spinner" style="margin: 1rem auto;"></div>';
+    resultEl.innerHTML = '<div class="spinner spinner--compact"></div>';
 
     try {
       const response = await API.friends.createInvite(14);
       const inviteURL = `${window.location.origin}/${response.url}`;
       resultEl.innerHTML = `
-        <div class="card" style="padding: 1rem;">
-          <div class="form-group" style="margin-bottom: 0;">
+        <div class="card p-md">
+          <div class="form-group mb-0">
             <label class="form-label">Invite Link</label>
             <div class="search-input-group">
               <input type="text" class="form-input" id="invite-link-input" readonly>
@@ -6399,10 +6409,10 @@ const App = {
       const response = await API.friends.listBlocked();
       const blocked = response.blocked || [];
       if (blocked.length === 0) {
-        blockedEl.style.display = 'none';
+        blockedEl.classList.add('hidden');
         return;
       }
-      blockedEl.style.display = 'block';
+      blockedEl.classList.remove('hidden');
       blockedListEl.innerHTML = blocked.map(user => `
         <div class="friend-item">
           <div>
@@ -6412,7 +6422,7 @@ const App = {
         </div>
       `).join('');
     } catch (error) {
-      blockedEl.style.display = 'block';
+      blockedEl.classList.remove('hidden');
       blockedListEl.innerHTML = '<p class="text-muted" id="blocked-error"></p>';
       const errorEl = document.getElementById('blocked-error');
       if (errorEl) errorEl.textContent = error.message;
@@ -6440,7 +6450,7 @@ const App = {
       const requestsEl = document.getElementById('friend-requests');
       const requestsListEl = document.getElementById('requests-list');
       if (requests && requests.length > 0) {
-        requestsEl.style.display = 'block';
+        requestsEl.classList.remove('hidden');
         requestsListEl.innerHTML = requests.map(req => `
           <div class="friend-item">
             <div>
@@ -6453,14 +6463,14 @@ const App = {
           </div>
         `).join('');
       } else {
-        requestsEl.style.display = 'none';
+        requestsEl.classList.add('hidden');
       }
 
       // Sent requests
       const sentEl = document.getElementById('sent-requests');
       const sentListEl = document.getElementById('sent-list');
       if (sent && sent.length > 0) {
-        sentEl.style.display = 'block';
+        sentEl.classList.remove('hidden');
         sentListEl.innerHTML = sent.map(req => `
           <div class="friend-item">
             <div>
@@ -6470,7 +6480,7 @@ const App = {
           </div>
         `).join('');
       } else {
-        sentEl.style.display = 'none';
+        sentEl.classList.add('hidden');
       }
 
       // Friends list
@@ -6573,7 +6583,7 @@ const App = {
   // Friend's card view (read-only with reactions)
   async renderFriendCard(container, friendshipId, selectedYear = null) {
     container.innerHTML = `
-      <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+      <div class="text-center"><div class="spinner spinner--spaced"></div></div>
     `;
 
     try {
@@ -6581,7 +6591,7 @@ const App = {
 
       if (!response.cards || response.cards.length === 0) {
         container.innerHTML = `
-          <div class="card text-center" style="padding: 3rem;">
+          <div class="card text-center p-2xl">
             <h3>No Cards Available</h3>
             <p class="text-muted mb-lg">This friend has no finalized cards yet.</p>
             <a href="/friends" class="btn btn-primary">Back to Friends</a>
@@ -6607,7 +6617,7 @@ const App = {
       this.renderFriendCardView(container);
     } catch (error) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Error</h3>
           <p class="text-muted mb-lg" id="friend-card-error"></p>
           <a href="/friends" class="btn btn-primary">Back to Friends</a>
@@ -6618,15 +6628,14 @@ const App = {
     }
   },
 
-  renderFriendCardView(container) {
-    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const gridSize = this.getGridSize(this.currentCard);
-    const capacity = this.getCardCapacity(this.currentCard);
-    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
-    const currentYear = new Date().getFullYear();
-    const isArchived = this.currentCard.year < currentYear;
-    const displayName = this.getCardDisplayName(this.currentCard);
-    const categoryBadge = this.getCategoryBadge(this.currentCard);
+	  renderFriendCardView(container) {
+	    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
+	    const gridSize = this.getGridSize(this.currentCard);
+	    const capacity = this.getCardCapacity(this.currentCard);
+	    const currentYear = new Date().getFullYear();
+	    const isArchived = this.currentCard.year < currentYear;
+	    const displayName = this.getCardDisplayName(this.currentCard);
+	    const categoryBadge = this.getCategoryBadge(this.currentCard);
 
     // Build card selector if multiple cards
     let cardSelector = '';
@@ -6649,8 +6658,8 @@ const App = {
         <div class="finalized-card-header">
           <a href="/friends" class="btn btn-ghost">&larr; Friends</a>
           <div class="friend-card-title">
-            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-              <h2 style="margin: 0;">${this.escapeHtml(this.friendCardOwner?.username || 'Friend')}'s ${displayName}</h2>
+            <div class="flex items-center gap-sm flex-wrap justify-center">
+              <h2 class="m-0">${this.escapeHtml(this.friendCardOwner?.username || 'Friend')}'s ${displayName}</h2>
               <span class="year-badge">${this.currentCard.year}</span>
               ${categoryBadge}
               ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
@@ -6660,19 +6669,17 @@ const App = {
         </div>
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized ${isArchived ? 'bingo-grid--archive' : ''}" id="bingo-grid" style="--grid-size: ${gridSize};">
+          <div class="bingo-grid bingo-grid--finalized bingo-grid--size-${gridSize} ${isArchived ? 'bingo-grid--archive' : ''}" id="bingo-grid">
             ${this.renderGrid(true)}
           </div>
-        </div>
+	        </div>
 
-        <div class="finalized-card-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progress}%"></div>
-          </div>
-          <p class="progress-text">${completedCount}/${capacity} completed</p>
-        </div>
-      </div>
-    `;
+	        <div class="finalized-card-progress">
+	          <progress class="progress-bar" value="${completedCount}" max="${capacity}"></progress>
+	          <p class="progress-text">${completedCount}/${capacity} completed</p>
+	        </div>
+	      </div>
+	    `;
 
     this.setupFriendCardEvents();
   },
@@ -6761,10 +6768,10 @@ const App = {
         ${notes && isCompleted ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
         ${reactionsHtml}
         ${emojiPickerHtml}
-        ${!isCompleted ? '<p class="text-muted" style="margin-top: 1rem;">This goal hasn\'t been completed yet.</p>' : ''}
+        ${!isCompleted ? '<p class="text-muted mt-md">This goal hasn\'t been completed yet.</p>' : ''}
       </div>
-      <div style="margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
+      <div class="mt-lg">
+        <button type="button" class="btn btn-secondary btn-full" data-action="close-modal">
           Close
         </button>
       </div>
@@ -6893,7 +6900,7 @@ const App = {
           <div class="card profile-section">
             <h3>API Tokens</h3>
             <div class="profile-tokens">
-              <p class="text-muted" style="margin-bottom: 1rem;">
+              <p class="text-muted mb-md">
                 Create API tokens to access your data programmatically.
                 <a href="/api/docs" target="_blank">View API Documentation</a>
               </p>
@@ -6987,7 +6994,7 @@ const App = {
   // Archive card view (for viewing individual archived cards)
   async renderArchiveCard(container, cardId) {
     container.innerHTML = `
-      <div class="text-center"><div class="spinner" style="margin: 2rem auto;"></div></div>
+      <div class="text-center"><div class="spinner spinner--spaced"></div></div>
     `;
 
     try {
@@ -7002,7 +7009,7 @@ const App = {
       this.renderArchiveCardView(container);
     } catch (error) {
       container.innerHTML = `
-        <div class="card text-center" style="padding: 3rem;">
+        <div class="card text-center p-2xl">
           <h3>Card not found</h3>
           <p class="text-muted mb-lg" id="archive-card-error"></p>
           <a href="/dashboard" class="btn btn-primary">Back to Dashboard</a>
@@ -7013,14 +7020,13 @@ const App = {
     }
   },
 
-  renderArchiveCardView(container) {
-    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
-    const gridSize = this.getGridSize(this.currentCard);
-    const capacity = this.getCardCapacity(this.currentCard);
-    const progress = capacity ? Math.round((completedCount / capacity) * 100) : 0;
-    const stats = this.currentStats;
-    const displayName = this.getCardDisplayName(this.currentCard);
-    const categoryBadge = this.getCategoryBadge(this.currentCard);
+	  renderArchiveCardView(container) {
+	    const completedCount = this.currentCard.items.filter(i => i.is_completed).length;
+	    const gridSize = this.getGridSize(this.currentCard);
+	    const capacity = this.getCardCapacity(this.currentCard);
+	    const stats = this.currentStats;
+	    const displayName = this.getCardDisplayName(this.currentCard);
+	    const categoryBadge = this.getCategoryBadge(this.currentCard);
     const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
     const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible' : 'Private';
     const showShare = this.user && !this.isAnonymousMode && this.currentCard.is_finalized;
@@ -7029,8 +7035,8 @@ const App = {
       <div class="archive-card-view">
         <div class="archive-card-header">
           <a href="/dashboard" class="btn btn-ghost">&larr; Back</a>
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-            <h2 style="margin: 0;">${displayName}</h2>
+          <div class="flex items-center gap-sm flex-wrap justify-center">
+            <h2 class="m-0">${displayName}</h2>
             <span class="year-badge">${this.currentCard.year}</span>
             ${categoryBadge}
           </div>
@@ -7070,19 +7076,17 @@ const App = {
         ` : ''}
 
         <div class="bingo-container bingo-container--finalized">
-          <div class="bingo-grid bingo-grid--finalized bingo-grid--archive" id="bingo-grid" style="--grid-size: ${gridSize};">
+          <div class="bingo-grid bingo-grid--finalized bingo-grid--archive bingo-grid--size-${gridSize}" id="bingo-grid">
             ${this.renderArchiveGrid()}
           </div>
-        </div>
+	        </div>
 
-        <div class="finalized-card-progress">
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${progress}%"></div>
-          </div>
-          <p class="progress-text">${completedCount}/${capacity} completed</p>
-        </div>
-      </div>
-    `;
+	        <div class="finalized-card-progress">
+	          <progress class="progress-bar" value="${completedCount}" max="${capacity}"></progress>
+	          <p class="progress-text">${completedCount}/${capacity} completed</p>
+	        </div>
+	      </div>
+	    `;
 
     this.setupArchiveCardEvents();
   },
@@ -7114,14 +7118,14 @@ const App = {
       <div class="item-detail">
         <p class="item-detail-content">${this.escapeHtml(content)}</p>
         ${isCompleted ? `
-          ${completedAt ? `<p class="text-muted" style="margin-top: 0.5rem;">Completed on ${completedAt}</p>` : ''}
+          ${completedAt ? `<p class="text-muted mt-sm">Completed on ${completedAt}</p>` : ''}
           ${notes ? `<p class="item-detail-notes"><strong>Notes:</strong> ${this.escapeHtml(notes)}</p>` : ''}
         ` : `
-          <p class="text-muted" style="margin-top: 1rem;">This goal was not completed.</p>
+          <p class="text-muted mt-md">This goal was not completed.</p>
         `}
       </div>
-      <div style="margin-top: 1.5rem;">
-        <button type="button" class="btn btn-secondary" style="width: 100%;" data-action="close-modal">
+      <div class="mt-lg">
+        <button type="button" class="btn btn-secondary btn-full" data-action="close-modal">
           Close
         </button>
       </div>
@@ -7139,10 +7143,10 @@ const App = {
   confirmLogoutUnfinalizedCard() {
     this.openModal('Draft Saved', `
       <div class="finalize-confirm-modal">
-        <p style="margin-bottom: 1.5rem;">
+        <p class="mb-lg">
           Your card is saved as a draft. If you log out now, you can pick up where you left off when you sign back in. Finalizing locks the layout so you can start tracking completion.
         </p>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end; flex-wrap: wrap;">
+        <div class="flex gap-md justify-end flex-wrap">
           <button class="btn btn-ghost" data-action="close-modal">Stay</button>
           <button class="btn btn-secondary" data-action="confirmed-logout">Log Out</button>
           <button class="btn btn-primary" data-action="open-finalize-from-navigation-warning">Finalize Card</button>
@@ -7302,52 +7306,52 @@ const App = {
 
     try {
       const response = await API.tokens.list();
-      const tokens = response.tokens || [];
+	      const tokens = response.tokens || [];
 
-      if (tokens.length === 0) {
-        listEl.innerHTML = '<p class="text-muted" style="margin-top: 1rem;">No active tokens.</p>';
-        return;
-      }
+	      if (tokens.length === 0) {
+	        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
+	        return;
+	      }
 
-      listEl.innerHTML = tokens.map(token => `
-        <div class="token-item" style="padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 0.5rem; margin-top: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-          <div class="token-info">
-            <div style="font-weight: 500;">${this.escapeHtml(token.name)}</div>
-            <div class="token-meta text-muted" style="font-size: 0.85rem;">
-              <code>${this.escapeHtml(token.token_prefix)}...</code>
-              <span>•</span>
-              <span class="token-scope scope-${token.scope}">${token.scope.replace('_', ' & ')}</span>
-              <span>•</span>
-              <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
-            </div>
-            <div class="token-meta text-muted" style="font-size: 0.85rem;">
-              Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
-            </div>
-          </div>
-          <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
-            <i class="fas fa-trash"></i>
-          </button>
-        </div>
-      `).join('');
+	      listEl.innerHTML = tokens.map(token => `
+	        <div class="token-item">
+	          <div class="token-info">
+	            <div class="fw-medium">${this.escapeHtml(token.name)}</div>
+	            <div class="token-meta text-muted text-sm">
+	              <code>${this.escapeHtml(token.token_prefix)}...</code>
+	              <span>•</span>
+	              <span class="token-scope scope-${token.scope}">${token.scope.replace('_', ' & ')}</span>
+	              <span>•</span>
+	              <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
+	            </div>
+	            <div class="token-meta text-muted text-sm">
+	              Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
+	            </div>
+	          </div>
+	          <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
+	            <i class="fas fa-trash"></i>
+	          </button>
+	        </div>
+	      `).join('');
 
-      // Add Revoke All button if tokens exist
-      if (tokens.length > 1) {
-          listEl.innerHTML += `
-            <div style="margin-top: 1rem; text-align: right;">
-                <button class="btn btn-ghost btn-sm" style="color: var(--color-danger);" data-action="revoke-all-tokens">Revoke All Tokens</button>
-            </div>
-          `;
-      }
-    } catch (error) {
+	      // Add Revoke All button if tokens exist
+	      if (tokens.length > 1) {
+	          listEl.innerHTML += `
+	            <div class="mt-md text-right">
+	                <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
+	            </div>
+	          `;
+	      }
+	    } catch (error) {
       listEl.innerHTML = '<p class="text-muted text-danger" id="tokens-error"></p>';
       const errorEl = document.getElementById('tokens-error');
       if (errorEl) errorEl.textContent = `Failed to load tokens: ${error.message}`;
     }
   },
 
-  showCreateTokenModal() {
-    this.openModal('Create API Token', `
-      <form data-action="create-token">
+	  showCreateTokenModal() {
+	    this.openModal('Create API Token', `
+	      <form data-action="create-token">
         <div class="form-group">
           <label for="token-name">Name</label>
           <input type="text" id="token-name" class="form-input" required placeholder="e.g., Backup Script" maxlength="100">
@@ -7370,13 +7374,13 @@ const App = {
             <option value="0">Never</option>
           </select>
         </div>
-        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary">Generate Token</button>
-        </div>
-      </form>
-    `);
-  },
+	        <div class="flex gap-md justify-end">
+	          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+	          <button type="submit" class="btn btn-primary">Generate Token</button>
+	        </div>
+	      </form>
+	    `);
+	  },
 
   async handleCreateToken(event) {
     event.preventDefault();
@@ -7394,25 +7398,25 @@ const App = {
     }
   },
 
-  showTokenCreatedModal(token, meta) {
-    this.openModal('Token Generated', `
-      <div class="token-created-modal">
-        <p><strong>Save this token now!</strong> You won't be able to see it again.</p>
-        <div class="token-display" style="background: var(--surface-2); padding: 1rem; border-radius: 0.5rem; margin: 1rem 0; display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
-          <code id="new-token" style="word-break: break-all;">${this.escapeHtml(token)}</code>
-          <button class="btn btn-secondary btn-sm" data-action="copy-new-token">Copy</button>
-        </div>
-        <p class="text-muted" style="margin-top: 1rem; font-size: 0.9rem;">
-          Use this token in the <code>Authorization</code> header:
-          <br>
-          <code style="display: block; background: var(--surface-2); padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.25rem;">Authorization: Bearer ${this.escapeHtml(token.substring(0, 10))}...</code>
-        </p>
-        <div style="margin-top: 1.5rem; text-align: right;">
-          <button class="btn btn-primary" data-action="token-modal-done">Done</button>
-        </div>
-      </div>
-    `);
-  },
+	  showTokenCreatedModal(token, meta) {
+	    this.openModal('Token Generated', `
+	      <div class="token-created-modal">
+	        <p><strong>Save this token now!</strong> You won't be able to see it again.</p>
+	        <div class="token-display">
+	          <code id="new-token" class="break-all">${this.escapeHtml(token)}</code>
+	          <button class="btn btn-secondary btn-sm" data-action="copy-new-token">Copy</button>
+	        </div>
+	        <p class="text-muted mt-md text-sm">
+	          Use this token in the <code>Authorization</code> header:
+	          <br>
+	          <code class="block surface-2 p-sm mt-sm rounded-sm">Authorization: Bearer ${this.escapeHtml(token.substring(0, 10))}...</code>
+	        </p>
+	        <div class="mt-lg text-right">
+	          <button class="btn btn-primary" data-action="token-modal-done">Done</button>
+	        </div>
+	      </div>
+	    `);
+	  },
 
   copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
@@ -8059,16 +8063,16 @@ const App = {
     `;
   },
 
-  renderSupport(container) {
-    const userEmail = this.user?.email || '';
+	  renderSupport(container) {
+	    const userEmail = this.user?.email || '';
 
     container.innerHTML = `
       <div class="auth-page">
-        <div class="card auth-card">
-          <h2>Contact Support</h2>
-          <p class="text-muted" style="margin-bottom: 1.5rem;">
-            Have a question, found a bug, or want to request a feature? We'd love to hear from you!
-          </p>
+	        <div class="card auth-card">
+	          <h2>Contact Support</h2>
+	          <p class="text-muted mb-lg">
+	            Have a question, found a bug, or want to request a feature? We'd love to hear from you!
+	          </p>
 
           <form id="support-form">
             <div class="form-group">
@@ -8107,13 +8111,13 @@ const App = {
               <small class="form-hint">Minimum 10 characters</small>
             </div>
 
-            <button type="submit" class="btn btn-primary btn-lg" style="width: 100%;">
-              Send Message
-            </button>
-          </form>
-        </div>
-      </div>
-    `;
+	            <button type="submit" class="btn btn-primary btn-lg btn-full">
+	              Send Message
+	            </button>
+	          </form>
+	        </div>
+	      </div>
+	    `;
 
     const emailInput = document.getElementById('support-email');
     if (emailInput) emailInput.value = userEmail;

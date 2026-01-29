@@ -139,7 +139,7 @@ if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
         fi
 
         echo "Restoring via podman exec..."
-        gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
+        gpg --decrypt --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
             | gunzip \
             | podman exec -i -e PGPASSWORD="$DB_PASSWORD" "$POSTGRES_CONTAINER" \
                 psql -U "$DB_USER" -d "$DB_NAME"
@@ -149,7 +149,7 @@ if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
             podman start "$APP_CONTAINER" 2>/dev/null || true
         fi
     else
-        gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
+        gpg --decrypt --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
             | gunzip \
             | PGPASSWORD="$DB_PASSWORD" psql \
                 -h "$DB_HOST" \
@@ -158,7 +158,7 @@ if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
                 -d "$DB_NAME"
     fi
 else
-    gpg --decrypt --batch --passphrase "$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
+    gpg --decrypt --batch --pinentry-mode loopback --passphrase-fd 3 3<<<"$BACKUP_ENCRYPTION_KEY" "${BACKUP_DIR}/${BACKUP_FILE}" \
         | gunzip \
         | PGPASSWORD="$DB_PASSWORD" psql \
             -h "$DB_HOST" \

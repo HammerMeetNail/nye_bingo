@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/assets"
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 )
 
 type PageHandler struct {
@@ -80,13 +81,17 @@ func resolveBaseURL(r *http.Request) string {
 	if r.TLS != nil {
 		scheme = "https"
 	}
-	if v := sanitizeProto(firstForwardedValue(r.Header.Get("X-Forwarded-Proto"))); v != "" {
-		scheme = v
+	if httpx.TrustedForwardedHeaders(r) {
+		if v := sanitizeProto(firstForwardedValue(r.Header.Get("X-Forwarded-Proto"))); v != "" {
+			scheme = v
+		}
 	}
 
 	host := sanitizeHost(r.Host)
-	if v := sanitizeHost(firstForwardedValue(r.Header.Get("X-Forwarded-Host"))); v != "" {
-		host = v
+	if httpx.TrustedForwardedHeaders(r) {
+		if v := sanitizeHost(firstForwardedValue(r.Header.Get("X-Forwarded-Host"))); v != "" {
+			host = v
+		}
 	}
 
 	if host == "" {

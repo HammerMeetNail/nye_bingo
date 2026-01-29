@@ -230,6 +230,34 @@ func TestProviderAuthHandler_Callback_ExistingUser(t *testing.T) {
 	}
 }
 
+func TestSanitizeNext(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		{name: "Allow rooted path", in: "/dashboard", expected: "/dashboard"},
+		{name: "Allow rooted path with query", in: "/friend-invite/abc?x=y", expected: "/friend-invite/abc?x=y"},
+		{name: "Allow legacy hash at start", in: "#share/xyz", expected: "/share/xyz"},
+		{name: "Allow legacy hash in path", in: "/#share/xyz", expected: "/#share/xyz"},
+
+		{name: "Reject scheme-relative", in: "//evil.example", expected: ""},
+		{name: "Reject backslash variant", in: "/\\evil.example", expected: ""},
+		{name: "Reject encoded scheme-relative (slashes)", in: "/%2f%2fevil.example", expected: ""},
+		{name: "Reject encoded backslash scheme-relative", in: "/%5c%5cevil.example", expected: ""},
+		{name: "Reject absolute URL", in: "https://evil.example/", expected: ""},
+		{name: "Reject javascript scheme", in: "javascript:alert(1)", expected: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeNext(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeNext(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestProviderAuthHandler_Callback_NewUser(t *testing.T) {
 	mockProvider := &mockOAuthProvider{
 		provider: services.ProviderGoogle,

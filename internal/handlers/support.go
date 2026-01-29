@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
@@ -54,7 +54,7 @@ var validCategories = map[string]bool{
 
 func (h *SupportHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	// Check rate limit
-	clientIP := getClientIP(r)
+	clientIP := httpx.ClientIP(r)
 	if !h.checkRateLimit(r, clientIP) {
 		writeError(w, http.StatusTooManyRequests, "Too many requests. Please try again later.")
 		return
@@ -160,28 +160,4 @@ func (h *SupportHandler) checkRateLimit(r *http.Request, clientIP string) bool {
 	}
 
 	return count <= supportRateLimitMax
-}
-
-// getClientIP extracts the client IP from the request, respecting X-Forwarded-For
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header (set by Cloudflare/proxies)
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For can contain multiple IPs; the first one is the client
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check X-Real-IP header
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }

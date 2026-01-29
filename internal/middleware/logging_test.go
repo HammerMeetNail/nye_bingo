@@ -19,7 +19,7 @@ func TestRequestLogger_LogsErrorWithQuery(t *testing.T) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/test?foo=bar", nil)
+	req := httptest.NewRequest(http.MethodGet, "/test?foo=bar&token=secret123&code=oauthcode&state=oauthstate", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -30,8 +30,17 @@ func TestRequestLogger_LogsErrorWithQuery(t *testing.T) {
 	if entry.Level != logging.LevelError.String() {
 		t.Fatalf("expected ERROR level, got %s", entry.Level)
 	}
-	if entry.Fields["query"] != "foo=bar" {
-		t.Fatalf("expected query field, got %v", entry.Fields["query"])
+	if _, ok := entry.Fields["query"]; ok {
+		t.Fatalf("did not expect raw query string to be logged, got %v", entry.Fields["query"])
+	}
+	if v, ok := entry.Fields["query_present"]; !ok || v != true {
+		t.Fatalf("expected query_present=true, got %v", entry.Fields["query_present"])
+	}
+	logLine := buf.String()
+	for _, secret := range []string{"foo=bar", "secret123", "oauthcode", "oauthstate"} {
+		if bytes.Contains([]byte(logLine), []byte(secret)) {
+			t.Fatalf("log output must not contain query values; found %q in %q", secret, logLine)
+		}
 	}
 }
 
@@ -57,5 +66,8 @@ func TestRequestLogger_LogsWarnWithoutQuery(t *testing.T) {
 	}
 	if _, ok := entry.Fields["query"]; ok {
 		t.Fatal("did not expect query field for empty query string")
+	}
+	if _, ok := entry.Fields["query_present"]; ok {
+		t.Fatal("did not expect query_present field for empty query string")
 	}
 }
