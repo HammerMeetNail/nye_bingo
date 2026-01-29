@@ -236,17 +236,67 @@ func TestSanitizeNext(t *testing.T) {
 		in       string
 		expected string
 	}{
+		// Valid paths
 		{name: "Allow rooted path", in: "/dashboard", expected: "/dashboard"},
 		{name: "Allow rooted path with query", in: "/friend-invite/abc?x=y", expected: "/friend-invite/abc?x=y"},
 		{name: "Allow legacy hash at start", in: "#share/xyz", expected: "/share/xyz"},
 		{name: "Allow legacy hash in path", in: "/#share/xyz", expected: "/#share/xyz"},
+		{name: "Allow root path", in: "/", expected: "/"},
+		{name: "Allow nested path", in: "/card/abc-123/edit", expected: "/card/abc-123/edit"},
+		{name: "Allow path with fragment", in: "/page#section", expected: "/page#section"},
+		{name: "Allow path with query and fragment", in: "/page?foo=bar#section", expected: "/page?foo=bar#section"},
+		{name: "Trim whitespace", in: "  /dashboard  ", expected: "/dashboard"},
 
+		// Scheme-relative / double-slash attacks
 		{name: "Reject scheme-relative", in: "//evil.example", expected: ""},
 		{name: "Reject backslash variant", in: "/\\evil.example", expected: ""},
 		{name: "Reject encoded scheme-relative (slashes)", in: "/%2f%2fevil.example", expected: ""},
 		{name: "Reject encoded backslash scheme-relative", in: "/%5c%5cevil.example", expected: ""},
+		{name: "Reject mixed encoded slash backslash", in: "/%2f%5cevil.example", expected: ""},
+		{name: "Reject uppercase encoded slashes", in: "/%2F%2Fevil.example", expected: ""},
+		{name: "Reject uppercase encoded backslashes", in: "/%5C%5Cevil.example", expected: ""},
+		{name: "Reject triple slash", in: "///evil.example", expected: ""},
+
+		// Absolute URLs
 		{name: "Reject absolute URL", in: "https://evil.example/", expected: ""},
+		{name: "Reject http URL", in: "http://evil.example/", expected: ""},
 		{name: "Reject javascript scheme", in: "javascript:alert(1)", expected: ""},
+		{name: "Reject data scheme", in: "data:text/html,<script>alert(1)</script>", expected: ""},
+		{name: "Reject vbscript scheme", in: "vbscript:msgbox(1)", expected: ""},
+		{name: "Reject file scheme", in: "file:///etc/passwd", expected: ""},
+
+		// URLs with credentials
+		{name: "Reject URL with user info", in: "//user@evil.example", expected: ""},
+		{name: "Reject URL with user:pass", in: "//user:pass@evil.example", expected: ""},
+
+		// Path without leading slash
+		{name: "Reject relative path", in: "dashboard", expected: ""},
+		{name: "Reject relative path with dots", in: "../admin", expected: ""},
+
+		// Backslash attacks
+		{name: "Reject backslash in path", in: "/foo\\bar", expected: ""},
+		{name: "Reject encoded backslash in path", in: "/foo%5cbar", expected: ""},
+
+		// Newline / carriage return injection
+		{name: "Reject newline", in: "/foo\nbar", expected: ""},
+		{name: "Reject carriage return", in: "/foo\rbar", expected: ""},
+		{name: "Reject CRLF", in: "/foo\r\nbar", expected: ""},
+
+		// Length limits
+		{name: "Reject too long value", in: "/" + string(make([]byte, 600)), expected: ""},
+
+		// Empty / whitespace
+		{name: "Reject empty string", in: "", expected: ""},
+		{name: "Reject whitespace only", in: "   ", expected: ""},
+
+		// Path traversal
+		{name: "Normalize path traversal", in: "/foo/../bar", expected: "/bar"},
+		{name: "Normalize double dots", in: "/foo/bar/../baz", expected: "/foo/baz"},
+		{name: "Normalize current dir", in: "/foo/./bar", expected: "/foo/bar"},
+
+		// Opaque URLs
+		{name: "Reject mailto", in: "mailto:foo@bar.com", expected: ""},
+		{name: "Reject tel", in: "tel:+1234567890", expected: ""},
 	}
 
 	for _, tt := range tests {
