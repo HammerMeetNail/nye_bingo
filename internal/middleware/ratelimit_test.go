@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/httpx"
@@ -115,9 +116,139 @@ func TestWriteError(t *testing.T) {
 	}
 }
 
-// Note: Full integration testing of RateLimiter requires a running Redis instance
-// or a mock that implements the go-redis interface, which is not trivial without
-// external libraries like redismock.
+func TestRateLimiter_Middleware_WithMiniredis(t *testing.T) {
+	mr := miniredis.RunT(t)
+	redisClient := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	defer redisClient.Close()
+
+	t.Run("allows requests under limit", func(t *testing.T) {
+		mr.FlushAll()
+		limiter := NewRateLimiter(redisClient, 5, time.Minute, "test:", func(r *http.Request) string {
+			return "user1"
+		}, true)
+
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		// Make 5 requests - all should pass
+		for i := 0; i < 5; i++ {
+			req := httptest.NewRequest("GET", "/", nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Errorf("request %d: expected status 200, got %d", i+1, rr.Code)
+			}
+		}
+	})
+
+	t.Run("blocks requests over limit", func(t *testing.T) {
+		mr.FlushAll()
+		limiter := NewRateLimiter(redisClient, 3, time.Minute, "block:", func(r *http.Request) string {
+			return "user2"
+		}, true)
+
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		// Make 3 requests - all should pass
+		for i := 0; i < 3; i++ {
+			req := httptest.NewRequest("GET", "/", nil)
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Errorf("request %d: expected status 200, got %d", i+1, rr.Code)
+			}
+		}
+
+		// 4th request should be rate limited
+		req := httptest.NewRequest("GET", "/", nil)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusTooManyRequests {
+			t.Errorf("request 4: expected status 429, got %d", rr.Code)
+		}
+	})
+
+	t.Run("different keys have separate limits", func(t *testing.T) {
+		mr.FlushAll()
+		limiter := NewRateLimiter(redisClient, 2, time.Minute, "sep:", func(r *http.Request) string {
+			return r.Header.Get("X-User-ID")
+		}, true)
+
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		// User A makes 2 requests
+		for i := 0; i < 2; i++ {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("X-User-ID", "userA")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Errorf("userA request %d: expected 200, got %d", i+1, rr.Code)
+			}
+		}
+
+		// User A's 3rd request should be blocked
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-User-ID", "userA")
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusTooManyRequests {
+			t.Errorf("userA request 3: expected 429, got %d", rr.Code)
+		}
+
+		// User B should still be able to make requests
+		req = httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("X-User-ID", "userB")
+		rr = httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("userB request 1: expected 200, got %d", rr.Code)
+		}
+	})
+
+	t.Run("empty key function falls back to IP", func(t *testing.T) {
+		mr.FlushAll()
+		limiter := NewRateLimiter(redisClient, 1, time.Minute, "ip:", func(r *http.Request) string {
+			return "" // Empty key, should fallback to IP
+		}, true)
+
+		handler := limiter.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+
+		// First request should pass
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.100:12345"
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("first request: expected 200, got %d", rr.Code)
+		}
+
+		// Second request from same IP should be blocked
+		req = httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.100:12345"
+		rr = httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusTooManyRequests {
+			t.Errorf("second request: expected 429, got %d", rr.Code)
+		}
+
+		// Request from different IP should pass
+		req = httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.168.1.200:12345"
+		rr = httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Errorf("different IP request: expected 200, got %d", rr.Code)
+		}
+	})
+}
 
 func TestRateLimiter_Middleware_RedisError_FailOpenAndFailClosed(t *testing.T) {
 	redisClient := redis.NewClient(&redis.Options{

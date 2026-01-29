@@ -543,3 +543,90 @@ func TestRedirectTarget_NormalizesFallback(t *testing.T) {
 		t.Fatalf("expected fallback to normalize, got %q", target)
 	}
 }
+
+func TestSanitizeProviderErrorParam(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		// Valid OAuth error codes (should pass through)
+		{name: "access_denied", in: "access_denied", expected: "access_denied"},
+		{name: "invalid_request", in: "invalid_request", expected: "invalid_request"},
+		{name: "invalid_scope", in: "invalid_scope", expected: "invalid_scope"},
+		{name: "server_error", in: "server_error", expected: "server_error"},
+		{name: "temporarily_unavailable", in: "temporarily_unavailable", expected: "temporarily_unavailable"},
+		{name: "unauthorized_client", in: "unauthorized_client", expected: "unauthorized_client"},
+		{name: "unsupported_response_type", in: "unsupported_response_type", expected: "unsupported_response_type"},
+
+		// Case insensitivity
+		{name: "uppercase ACCESS_DENIED", in: "ACCESS_DENIED", expected: "access_denied"},
+		{name: "mixed case Access_Denied", in: "Access_Denied", expected: "access_denied"},
+
+		// Whitespace handling
+		{name: "with leading space", in: "  access_denied", expected: "access_denied"},
+		{name: "with trailing space", in: "access_denied  ", expected: "access_denied"},
+		{name: "with both spaces", in: "  access_denied  ", expected: "access_denied"},
+
+		// Invalid/unknown errors (should return oauth_error)
+		{name: "empty string", in: "", expected: "oauth_error"},
+		{name: "whitespace only", in: "   ", expected: "oauth_error"},
+		{name: "unknown error", in: "some_unknown_error", expected: "oauth_error"},
+		{name: "injection attempt", in: "<script>alert(1)</script>", expected: "oauth_error"},
+		{name: "sql injection", in: "'; DROP TABLE users; --", expected: "oauth_error"},
+		{name: "newline injection", in: "access_denied\nevil", expected: "oauth_error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeProviderErrorParam(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeProviderErrorParam(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestSanitizeErrorParam(t *testing.T) {
+	tests := []struct {
+		name     string
+		in       string
+		expected string
+	}{
+		// Valid error strings
+		{name: "simple error", in: "invalid_token", expected: "invalid_token"},
+		{name: "with hyphen", in: "auth-failed", expected: "auth-failed"},
+		{name: "with numbers", in: "error123", expected: "error123"},
+		{name: "mixed case", in: "InvalidToken", expected: "InvalidToken"},
+		{name: "underscore and hyphen", in: "auth_error-code", expected: "auth_error-code"},
+
+		// Empty/whitespace
+		{name: "empty string", in: "", expected: "oauth_error"},
+		{name: "whitespace only", in: "   ", expected: "oauth_error"},
+
+		// Whitespace trimming
+		{name: "leading space", in: "  error", expected: "error"},
+		{name: "trailing space", in: "error  ", expected: "error"},
+
+		// Length limits
+		{name: "exactly 60 chars", in: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890", expected: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890"},
+		{name: "over 60 chars truncated", in: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890extra", expected: "abcdefghij1234567890abcdefghij1234567890abcdefghij1234567890"},
+
+		// Invalid characters (should return oauth_error)
+		{name: "with space in middle", in: "invalid token", expected: "oauth_error"},
+		{name: "with special chars", in: "error<script>", expected: "oauth_error"},
+		{name: "with colon", in: "error:code", expected: "oauth_error"},
+		{name: "with slash", in: "error/code", expected: "oauth_error"},
+		{name: "with dot", in: "error.code", expected: "oauth_error"},
+		{name: "with newline", in: "error\ncode", expected: "oauth_error"},
+		{name: "with unicode", in: "error\u200b", expected: "oauth_error"},
+		{name: "with emoji", in: "error😀", expected: "oauth_error"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := sanitizeErrorParam(tt.in); got != tt.expected {
+				t.Fatalf("sanitizeErrorParam(%q)=%q, want %q", tt.in, got, tt.expected)
+			}
+		})
+	}
+}
