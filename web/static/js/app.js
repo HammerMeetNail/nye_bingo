@@ -742,19 +742,32 @@ const App = {
   },
 
   async checkAuth() {
-    try {
-      const response = await API.auth.me();
-      this.user = response.user;
-      this.isPremium = !!response.is_premium;
-      if (this.user) {
-        this.isAnonymousMode = false;
-        await this.refreshNotificationCount();
-        this.startNotificationPolling();
+    // On cold starts (especially in CI/containerized environments) the app can briefly return 5xx
+    // for auth-dependent calls (DB/Redis settling). Don't immediately treat that as "logged out".
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await API.auth.me();
+        this.user = response.user;
+        this.isPremium = !!response.is_premium;
+        if (this.user) {
+          this.isAnonymousMode = false;
+          await this.refreshNotificationCount();
+          this.startNotificationPolling();
+        }
+        return;
+      } catch (error) {
+        const status = typeof error?.status === 'number' ? error.status : 0;
+        const retryable = status === 0 || status >= 500;
+        if (!retryable || attempt === maxAttempts) {
+          this.user = null;
+          this.isPremium = false;
+          this.stopNotificationPolling();
+          return;
+        }
+        // Small backoff to give the backend a chance to settle.
+        await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
       }
-    } catch (error) {
-      this.user = null;
-      this.isPremium = false;
-      this.stopNotificationPolling();
     }
   },
 
