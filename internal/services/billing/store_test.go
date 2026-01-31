@@ -373,6 +373,28 @@ func TestStore_WithWebhookEvent_HandlerError(t *testing.T) {
 	}
 }
 
+func TestStore_WithWebhookEvent_InsertError(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{}, fmt.Errorf("insert failed")
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_1"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "insert webhook event") {
+		t.Fatalf("expected insert webhook event error, got %v", err)
+	}
+}
+
 func TestStore_WithWebhookEvent_Success(t *testing.T) {
 	ctx := context.Background()
 	var commitCalls int
@@ -594,5 +616,538 @@ func TestStore_RedeemPremiumCode_UpdateError(t *testing.T) {
 	}
 	if execCalls != 1 {
 		t.Fatalf("expected 1 exec call, got %d", execCalls)
+	}
+}
+
+func TestStore_GetStripeCustomerID_DBError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("db connection failed")
+			}}
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.GetStripeCustomerID(ctx, uuid.New())
+	if err == nil || !strings.Contains(err.Error(), "get stripe customer id") {
+		t.Fatalf("expected get stripe customer id error, got %v", err)
+	}
+}
+
+func TestStore_EnsureStripeCustomerID_GetError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("db connection failed")
+			}}
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.EnsureStripeCustomerID(ctx, uuid.New(), func(ctx context.Context) (string, error) {
+		return "cus_new", nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "get stripe customer id") {
+		t.Fatalf("expected get error, got %v", err)
+	}
+}
+
+func TestStore_EnsureStripeCustomerID_CreateError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues((*string)(nil))
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.EnsureStripeCustomerID(ctx, uuid.New(), func(ctx context.Context) (string, error) {
+		return "", fmt.Errorf("create customer failed")
+	})
+	if err == nil || !strings.Contains(err.Error(), "create customer failed") {
+		t.Fatalf("expected create error, got %v", err)
+	}
+}
+
+func TestStore_EnsureStripeCustomerID_ExecError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues((*string)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{}, fmt.Errorf("exec failed")
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.EnsureStripeCustomerID(ctx, uuid.New(), func(ctx context.Context) (string, error) {
+		return "cus_new", nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "set stripe customer id") {
+		t.Fatalf("expected set error, got %v", err)
+	}
+}
+
+func TestStore_SetStripeIDs_Success(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	store := NewStore(db)
+
+	err := store.SetStripeIDs(ctx, uuid.New(), "cus", "sub", db)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_FindUserIDByStripeCustomerID_Success(t *testing.T) {
+	ctx := context.Background()
+	expectedID := uuid.New()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues(expectedID)
+		},
+	}
+	store := NewStore(db)
+
+	got, err := store.FindUserIDByStripeCustomerID(ctx, "cus", db)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != expectedID {
+		t.Fatalf("expected %s, got %s", expectedID, got)
+	}
+}
+
+func TestStore_FindUserIDByStripeCustomerID_DBError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("db error")
+			}}
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.FindUserIDByStripeCustomerID(ctx, "cus", db)
+	if err == nil || !strings.Contains(err.Error(), "find user by customer id") {
+		t.Fatalf("expected find error, got %v", err)
+	}
+}
+
+func TestStore_FindUserIDByStripeSubscriptionID_Success(t *testing.T) {
+	ctx := context.Background()
+	expectedID := uuid.New()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues(expectedID)
+		},
+	}
+	store := NewStore(db)
+
+	got, err := store.FindUserIDByStripeSubscriptionID(ctx, "sub", db)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != expectedID {
+		t.Fatalf("expected %s, got %s", expectedID, got)
+	}
+}
+
+func TestStore_FindUserIDByStripeSubscriptionID_NoRows(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return pgx.ErrNoRows
+			}}
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.FindUserIDByStripeSubscriptionID(ctx, "sub", db)
+	if !errors.Is(err, ErrBillingUserNotFound) {
+		t.Fatalf("expected ErrBillingUserNotFound, got %v", err)
+	}
+}
+
+func TestStore_FindUserIDByStripeSubscriptionID_DBError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("db error")
+			}}
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.FindUserIDByStripeSubscriptionID(ctx, "sub", db)
+	if err == nil || !strings.Contains(err.Error(), "find user by subscription id") {
+		t.Fatalf("expected find error, got %v", err)
+	}
+}
+
+func TestStore_GrantLifetime_Success(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	db := &fakeDB{}
+	store := NewStore(db)
+
+	err := store.GrantLifetime(ctx, uuid.New(), "cus", tx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_SetSubscriptionState_Success(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	db := &fakeDB{}
+	store := NewStore(db)
+
+	err := store.SetSubscriptionState(ctx, uuid.New(), "cus", "sub", "active", time.Now(), false, tx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_SetSubscriptionState_Error(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{}, fmt.Errorf("boom")
+		},
+	}
+	db := &fakeDB{}
+	store := NewStore(db)
+
+	err := store.SetSubscriptionState(ctx, uuid.New(), "cus", "sub", "active", time.Now(), false, tx)
+	if err == nil || !strings.Contains(err.Error(), "set subscription state") {
+		t.Fatalf("expected set subscription state error, got %v", err)
+	}
+}
+
+func TestStore_ResetToFree_Success(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	db := &fakeDB{}
+	store := NewStore(db)
+
+	err := store.ResetToFree(ctx, uuid.New(), tx)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_BeginError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return nil, fmt.Errorf("begin failed")
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_1"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "begin webhook tx") {
+		t.Fatalf("expected begin error, got %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_LockError(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("lock failed")
+			}}
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_lock"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "lock webhook event row") {
+		t.Fatalf("expected lock error, got %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_CommitNoOpError(t *testing.T) {
+	ctx := context.Background()
+	processedAt := time.Now().UTC()
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues(&processedAt)
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return fmt.Errorf("commit failed")
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_commit"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "commit webhook no-op") {
+		t.Fatalf("expected commit error, got %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_CommitErrorAfterHandlerError(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues((*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return fmt.Errorf("commit failed")
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_err"}, func(ctx context.Context, tx services.Tx) error {
+		return fmt.Errorf("handler error")
+	})
+	if err == nil || !strings.Contains(err.Error(), "commit webhook error") {
+		t.Fatalf("expected commit error, got %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_MarkProcessedError(t *testing.T) {
+	ctx := context.Background()
+	var execCalls int
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues((*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			execCalls++
+			if execCalls == 2 {
+				return fakeCommandTag{}, fmt.Errorf("mark processed failed")
+			}
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_mark"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "mark webhook processed") {
+		t.Fatalf("expected mark processed error, got %v", err)
+	}
+}
+
+func TestStore_WithWebhookEvent_FinalCommitError(t *testing.T) {
+	ctx := context.Background()
+	var execCalls int
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return rowFromValues((*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			execCalls++
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return fmt.Errorf("final commit failed")
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	_, err := store.WithWebhookEvent(ctx, WebhookEventMeta{StripeEventID: "evt_final"}, func(ctx context.Context, tx services.Tx) error {
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "commit webhook processed") {
+		t.Fatalf("expected final commit error, got %v", err)
+	}
+}
+
+func TestStore_RedeemPremiumCode_BeginError(t *testing.T) {
+	ctx := context.Background()
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return nil, fmt.Errorf("begin failed")
+		},
+	}
+	store := NewStore(db)
+
+	err := store.RedeemPremiumCode(ctx, uuid.New(), "hash", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "begin redeem tx") {
+		t.Fatalf("expected begin error, got %v", err)
+	}
+}
+
+func TestStore_RedeemPremiumCode_QueryError(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return fmt.Errorf("query failed")
+			}}
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	err := store.RedeemPremiumCode(ctx, uuid.New(), "hash", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "load premium code") {
+		t.Fatalf("expected load premium code error, got %v", err)
+	}
+}
+
+func TestStore_RedeemPremiumCode_UserUpdateError(t *testing.T) {
+	ctx := context.Background()
+	var execCalls int
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			codeID := uuid.New()
+			return rowFromValues(codeID, (*int)(nil), (*time.Time)(nil), (*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			execCalls++
+			if execCalls == 2 {
+				return fakeCommandTag{}, fmt.Errorf("user update failed")
+			}
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	err := store.RedeemPremiumCode(ctx, uuid.New(), "hash", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "apply premium code entitlement") {
+		t.Fatalf("expected apply entitlement error, got %v", err)
+	}
+}
+
+func TestStore_RedeemPremiumCode_CommitError(t *testing.T) {
+	ctx := context.Background()
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			codeID := uuid.New()
+			return rowFromValues(codeID, (*int)(nil), (*time.Time)(nil), (*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return fmt.Errorf("commit failed")
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	err := store.RedeemPremiumCode(ctx, uuid.New(), "hash", time.Now())
+	if err == nil || !strings.Contains(err.Error(), "commit redeem tx") {
+		t.Fatalf("expected commit error, got %v", err)
+	}
+}
+
+func TestStore_RedeemPremiumCode_LifetimeNoDuration(t *testing.T) {
+	ctx := context.Background()
+	now := time.Now().UTC()
+	var gotPeriodEnd any
+	var execCalls int
+	tx := &fakeTx{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) services.Row {
+			codeID := uuid.New()
+			// duration_days is nil (lifetime code)
+			return rowFromValues(codeID, (*int)(nil), (*time.Time)(nil), (*time.Time)(nil))
+		},
+		ExecFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			execCalls++
+			// Capture the period_end arg from the user update query (second exec)
+			if execCalls == 2 && len(args) >= 2 {
+				gotPeriodEnd = args[1]
+			}
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		CommitFunc: func(ctx context.Context) error {
+			return nil
+		},
+	}
+	db := &fakeDB{
+		BeginFunc: func(ctx context.Context) (services.Tx, error) {
+			return tx, nil
+		},
+	}
+	store := NewStore(db)
+
+	err := store.RedeemPremiumCode(ctx, uuid.New(), "hash", now)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// For lifetime codes, periodEnd should be nil
+	// Check that gotPeriodEnd is (*time.Time)(nil), not a non-nil *time.Time
+	if pe, ok := gotPeriodEnd.(*time.Time); !ok || pe != nil {
+		t.Fatalf("expected nil *time.Time period end for lifetime, got %T = %v", gotPeriodEnd, gotPeriodEnd)
 	}
 }

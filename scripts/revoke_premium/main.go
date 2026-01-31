@@ -83,7 +83,8 @@ func revokePremium(ctx context.Context, db revokeDB, email string) error {
 
 	if _, err := db.Exec(ctx,
 		`UPDATE users
-		 SET billing_plan = 'free',
+		 SET stripe_subscription_id = NULL,
+		     billing_plan = 'free',
 		     billing_source = 'none',
 		     billing_status = 'inactive',
 		     billing_current_period_end = NULL,

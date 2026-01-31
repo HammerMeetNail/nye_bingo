@@ -119,12 +119,14 @@ func (s *Store) WithWebhookEvent(ctx context.Context, meta WebhookEventMeta, fn 
 	defer tx.Rollback(ctx) //nolint:errcheck // best effort
 
 	// Insert if new; if existing, still lock and check processed_at.
-	_, _ = tx.Exec(ctx,
+	if _, err := tx.Exec(ctx,
 		`INSERT INTO stripe_webhook_events (stripe_event_id, event_type, livemode, created_at)
 		 VALUES ($1, $2, $3, $4)
 		 ON CONFLICT (stripe_event_id) DO NOTHING`,
 		meta.StripeEventID, meta.EventType, meta.Livemode, meta.CreatedAt,
-	)
+	); err != nil {
+		return false, fmt.Errorf("insert webhook event: %w", err)
+	}
 
 	var processedAt *time.Time
 	if err := tx.QueryRow(ctx,

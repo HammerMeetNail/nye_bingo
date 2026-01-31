@@ -319,3 +319,250 @@ func TestBillingHandler_Webhook_Success(t *testing.T) {
 	handler.Webhook(rr, req)
 	testutil.AssertStatusCode(t, rr, http.StatusOK)
 }
+
+func TestBillingHandler_Webhook_Disabled(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))
+
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_disabled","type":"invoice.created","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/webhook", bytes.NewReader(payload))
+	req.Header.Set("Stripe-Signature", signatureHeader("whsec_test", payload, ts))
+	rr := httptest.NewRecorder()
+
+	handler.Webhook(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusNotFound)
+}
+
+func TestBillingHandler_CheckoutSubscription_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/subscription", map[string]string{"interval": "month"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutSubscription(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_CheckoutSubscription_InternalError(t *testing.T) {
+	store := &handlerStore{
+		ensureFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/subscription", map[string]string{"interval": "month"})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutSubscription(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}
+
+func TestBillingHandler_CheckoutLifetime_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/checkout/lifetime", nil)
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutLifetime(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_CheckoutLifetime_Success(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/checkout/lifetime", nil)
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutLifetime(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusOK)
+	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
+	if _, ok := resp["url"]; !ok {
+		t.Fatalf("expected url in response, got %v", resp)
+	}
+}
+
+func TestBillingHandler_CheckoutLifetime_InternalError(t *testing.T) {
+	store := &handlerStore{
+		ensureFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/checkout/lifetime", nil)
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutLifetime(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}
+
+func TestBillingHandler_CheckoutTip_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/tip", map[string]int{"amount": 5})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutTip(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_CheckoutTip_InvalidJSON(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/checkout/tip", bytes.NewBufferString("{bad"))
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutTip(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_CheckoutTip_Disabled(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/tip", map[string]int{"amount": 5})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutTip(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusNotFound)
+}
+
+func TestBillingHandler_CheckoutTip_Success(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/tip", map[string]int{"amount": 5})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutTip(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusOK)
+	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
+	if _, ok := resp["url"]; !ok {
+		t.Fatalf("expected url in response, got %v", resp)
+	}
+}
+
+func TestBillingHandler_CheckoutTip_InternalError(t *testing.T) {
+	store := &handlerStore{
+		ensureFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout/tip", map[string]int{"amount": 5})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.CheckoutTip(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}
+
+func TestBillingHandler_Portal_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/portal", nil)
+	rr := httptest.NewRecorder()
+
+	handler.Portal(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_Portal_Success(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/portal", nil)
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Portal(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusOK)
+	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
+	if _, ok := resp["url"]; !ok {
+		t.Fatalf("expected url in response, got %v", resp)
+	}
+}
+
+func TestBillingHandler_Portal_InternalError(t *testing.T) {
+	store := &handlerStore{
+		ensureFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/portal", nil)
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Portal(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}
+
+func TestBillingHandler_Redeem_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/redeem", map[string]string{"code": "YOBP" + strings.Repeat("A", 24)})
+	rr := httptest.NewRecorder()
+
+	handler.Redeem(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_Redeem_InvalidJSON(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/redeem", bytes.NewBufferString("{bad"))
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Redeem(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_Redeem_Disabled(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))
+
+	code := "YOBP" + strings.Repeat("A", 24)
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/redeem", map[string]string{"code": code})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Redeem(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusNotFound)
+}
+
+func TestBillingHandler_Redeem_InternalError(t *testing.T) {
+	store := &handlerStore{
+		redeemFn: func(ctx context.Context, userID uuid.UUID, codeHashHex string, now time.Time) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	code := "YOBP" + strings.Repeat("A", 24)
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/redeem", map[string]string{"code": code})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Redeem(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}

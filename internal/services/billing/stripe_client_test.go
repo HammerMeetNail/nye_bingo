@@ -186,3 +186,65 @@ func TestStripeHTTPClient_MissingURL(t *testing.T) {
 		t.Fatalf("expected missing url error, got %v", err)
 	}
 }
+
+func TestStripeHTTPClient_MissingPortalURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]string{})
+	}))
+	defer server.Close()
+
+	client := &stripeHTTPClient{
+		secretKey: "sk_test",
+		client:    server.Client(),
+		apiBase:   server.URL,
+	}
+
+	_, err := client.CreatePortalSession(context.Background(), "cus_123", "https://example.test/return")
+	if err == nil || !strings.Contains(err.Error(), "missing portal url") {
+		t.Fatalf("expected missing portal url error, got %v", err)
+	}
+}
+
+func TestStripeHTTPClient_ErrorResponseNoMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer server.Close()
+
+	client := &stripeHTTPClient{
+		secretKey: "sk_test",
+		client:    server.Client(),
+		apiBase:   server.URL,
+	}
+
+	_, err := client.CreateCustomer(context.Background(), "u@example.com", "user-1")
+	if err == nil || !strings.Contains(err.Error(), "status 500") {
+		t.Fatalf("expected status error, got %v", err)
+	}
+}
+
+func TestStripeHTTPClient_InvalidJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	client := &stripeHTTPClient{
+		secretKey: "sk_test",
+		client:    server.Client(),
+		apiBase:   server.URL,
+	}
+
+	_, err := client.CreateCustomer(context.Background(), "u@example.com", "user-1")
+	if err == nil || !strings.Contains(err.Error(), "decode response") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
+
+func TestNewStripeHTTPClient(t *testing.T) {
+	client := NewStripeHTTPClient("sk_test")
+	if client == nil {
+		t.Fatal("expected client")
+	}
+}

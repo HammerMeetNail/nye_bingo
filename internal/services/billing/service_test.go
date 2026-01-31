@@ -661,3 +661,573 @@ func TestService_HandleWebhook_DecodesSubscription(t *testing.T) {
 		t.Fatalf("expected active status, got %q", gotStatus)
 	}
 }
+
+func TestService_CreateSubscriptionCheckoutURL_YearlyInterval(t *testing.T) {
+	var gotParams CheckoutSessionParams
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return createFn(ctx)
+		},
+	}
+	stripe := stubStripe{
+		createCustomerFn: func(ctx context.Context, email, userID string) (string, error) {
+			return "cus_yearly", nil
+		},
+		createCheckoutSessionFn: func(ctx context.Context, params CheckoutSessionParams) (string, error) {
+			gotParams = params
+			return "https://checkout.example.test/session", nil
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:                    true,
+		StripePremiumYearlyPriceID: "price_year",
+	}, "https://example.test", store, stripe)
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateSubscriptionCheckoutURL(context.Background(), user, IntervalYear)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams.PriceID != "price_year" {
+		t.Fatalf("expected yearly price id, got %q", gotParams.PriceID)
+	}
+	if gotParams.Metadata["interval"] != "year" {
+		t.Fatalf("expected year interval in metadata, got %+v", gotParams.Metadata)
+	}
+}
+
+func TestService_CreateSubscriptionCheckoutURL_EnsureCustomerError(t *testing.T) {
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db connection failed")
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:                     true,
+		StripePremiumMonthlyPriceID: "price_month",
+	}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateSubscriptionCheckoutURL(context.Background(), user, IntervalMonth)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "db connection failed") {
+		t.Fatalf("expected db error, got %v", err)
+	}
+}
+
+func TestService_CreateLifetimeCheckoutURL_EnsureCustomerError(t *testing.T) {
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db connection failed")
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:                      true,
+		StripePremiumLifetimePriceID: "price_lifetime",
+	}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateLifetimeCheckoutURL(context.Background(), user)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestService_CreateTipCheckoutURL_EnsureCustomerError(t *testing.T) {
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db connection failed")
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:           true,
+		StripeTip5PriceID: "price_tip5",
+	}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateTipCheckoutURL(context.Background(), user, Tip5)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestService_CreatePortalURL_EnsureCustomerError(t *testing.T) {
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db connection failed")
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreatePortalURL(context.Background(), user)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestService_CreateTipCheckoutURL_Tip10(t *testing.T) {
+	var gotParams CheckoutSessionParams
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return createFn(ctx)
+		},
+	}
+	stripe := stubStripe{
+		createCustomerFn: func(ctx context.Context, email, userID string) (string, error) {
+			return "cus_tip10", nil
+		},
+		createCheckoutSessionFn: func(ctx context.Context, params CheckoutSessionParams) (string, error) {
+			gotParams = params
+			return "https://checkout.example.test/tip", nil
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:            true,
+		StripeTip10PriceID: "price_tip10",
+	}, "https://example.test", store, stripe)
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateTipCheckoutURL(context.Background(), user, Tip10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams.PriceID != "price_tip10" {
+		t.Fatalf("expected tip10 price id, got %q", gotParams.PriceID)
+	}
+}
+
+func TestService_CreateTipCheckoutURL_Tip20(t *testing.T) {
+	var gotParams CheckoutSessionParams
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return createFn(ctx)
+		},
+	}
+	stripe := stubStripe{
+		createCustomerFn: func(ctx context.Context, email, userID string) (string, error) {
+			return "cus_tip20", nil
+		},
+		createCheckoutSessionFn: func(ctx context.Context, params CheckoutSessionParams) (string, error) {
+			gotParams = params
+			return "https://checkout.example.test/tip", nil
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:            true,
+		StripeTip20PriceID: "price_tip20",
+	}, "https://example.test", store, stripe)
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateTipCheckoutURL(context.Background(), user, Tip20)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams.PriceID != "price_tip20" {
+		t.Fatalf("expected tip20 price id, got %q", gotParams.PriceID)
+	}
+}
+
+func TestService_CreateTipCheckoutURL_Disabled(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: false}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateTipCheckoutURL(context.Background(), user, Tip5)
+	if !errors.Is(err, ErrBillingDisabled) {
+		t.Fatalf("expected ErrBillingDisabled, got %v", err)
+	}
+}
+
+func TestService_CreateLifetimeCheckoutURL_Disabled(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: false}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateLifetimeCheckoutURL(context.Background(), user)
+	if !errors.Is(err, ErrBillingDisabled) {
+		t.Fatalf("expected ErrBillingDisabled, got %v", err)
+	}
+}
+
+func TestService_CreateSubscriptionCheckoutURL_Disabled(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: false}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateSubscriptionCheckoutURL(context.Background(), user, IntervalMonth)
+	if !errors.Is(err, ErrBillingDisabled) {
+		t.Fatalf("expected ErrBillingDisabled, got %v", err)
+	}
+}
+
+func TestService_HandleCheckoutCompleted_Subscription(t *testing.T) {
+	var setIDs int
+	store := &stubStore{
+		setStripeIDsFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID string, conn services.DBConn) error {
+			setIDs++
+			if subscriptionID != "sub_123" {
+				return fmt.Errorf("expected subscriptionID sub_123, got %s", subscriptionID)
+			}
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	session := stripeCheckoutSession{
+		Customer:     "cus",
+		Subscription: "sub_123",
+		Metadata: map[string]string{
+			"user_id":  uuid.New().String(),
+			"purchase": "subscription",
+		},
+	}
+	if err := svc.handleCheckoutCompleted(context.Background(), noopConn{}, session); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if setIDs != 1 {
+		t.Fatalf("expected setIDs=1, got setIDs=%d", setIDs)
+	}
+}
+
+func TestService_HandleCheckoutCompleted_InvalidUserID(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	session := stripeCheckoutSession{
+		Customer: "cus",
+		Metadata: map[string]string{
+			"user_id":  "not-a-uuid",
+			"purchase": "lifetime",
+		},
+	}
+	// Should not error - just ignore bad metadata
+	if err := svc.handleCheckoutCompleted(context.Background(), noopConn{}, session); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_HandleCheckoutCompleted_NoMetadata(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	session := stripeCheckoutSession{
+		Customer: "cus",
+		Metadata: nil,
+	}
+	// Should not error - just ignore nil metadata
+	if err := svc.handleCheckoutCompleted(context.Background(), noopConn{}, session); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_HandleCheckoutCompleted_UnknownPurchase(t *testing.T) {
+	var setIDs int
+	store := &stubStore{
+		setStripeIDsFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID string, conn services.DBConn) error {
+			setIDs++
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	session := stripeCheckoutSession{
+		Customer: "cus",
+		Metadata: map[string]string{
+			"user_id":  uuid.New().String(),
+			"purchase": "unknown_type",
+		},
+	}
+	if err := svc.handleCheckoutCompleted(context.Background(), noopConn{}, session); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if setIDs != 1 {
+		t.Fatalf("expected setIDs=1, got setIDs=%d", setIDs)
+	}
+}
+
+func TestService_HandleCheckoutCompleted_SetStripeIDsError(t *testing.T) {
+	store := &stubStore{
+		setStripeIDsFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID string, conn services.DBConn) error {
+			return fmt.Errorf("db error")
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	session := stripeCheckoutSession{
+		Customer: "cus",
+		Metadata: map[string]string{
+			"user_id":  uuid.New().String(),
+			"purchase": "subscription",
+		},
+	}
+	if err := svc.handleCheckoutCompleted(context.Background(), noopConn{}, session); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestService_HandleSubscriptionEvent_EmptySubID(t *testing.T) {
+	var customerCalls int
+	store := &stubStore{
+		findUserByCustomerFn: func(ctx context.Context, customerID string, conn services.DBConn) (uuid.UUID, error) {
+			customerCalls++
+			return uuid.New(), nil
+		},
+		setSubscriptionStateFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID, status string, currentPeriodEnd time.Time, cancelAtPeriodEnd bool, conn services.DBConn) error {
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "", // Empty subscription ID
+		Customer:         "cus_fallback",
+		Status:           "active",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if customerCalls != 1 {
+		t.Fatalf("expected customer lookup, got %d", customerCalls)
+	}
+}
+
+func TestService_HandleSubscriptionEvent_BothLookupsNotFound(t *testing.T) {
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.Nil, ErrBillingUserNotFound
+		},
+		findUserByCustomerFn: func(ctx context.Context, customerID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.Nil, ErrBillingUserNotFound
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_unknown",
+		Customer:         "cus_unknown",
+		Status:           "active",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	// Should not error when user is not found
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestService_HandleSubscriptionEvent_CustomerLookupError(t *testing.T) {
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.Nil, ErrBillingUserNotFound
+		},
+		findUserByCustomerFn: func(ctx context.Context, customerID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.Nil, fmt.Errorf("db connection failed")
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_err",
+		Customer:         "cus_err",
+		Status:           "active",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestService_HandleSubscriptionEvent_CanceledStatus(t *testing.T) {
+	var resetCalls int
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.New(), nil
+		},
+		resetToFreeFn: func(ctx context.Context, userID uuid.UUID, conn services.DBConn) error {
+			resetCalls++
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_canceled",
+		Customer:         "cus_canceled",
+		Status:           "canceled",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resetCalls != 1 {
+		t.Fatalf("expected reset call for canceled status, got %d", resetCalls)
+	}
+}
+
+func TestService_HandleSubscriptionEvent_InactiveStatus(t *testing.T) {
+	var resetCalls int
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.New(), nil
+		},
+		resetToFreeFn: func(ctx context.Context, userID uuid.UUID, conn services.DBConn) error {
+			resetCalls++
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_inactive",
+		Customer:         "cus_inactive",
+		Status:           "unpaid", // Maps to "inactive"
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resetCalls != 1 {
+		t.Fatalf("expected reset call for inactive status, got %d", resetCalls)
+	}
+}
+
+func TestService_HandleSubscriptionEvent_Trialing(t *testing.T) {
+	var setStatus string
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.New(), nil
+		},
+		setSubscriptionStateFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID, status string, currentPeriodEnd time.Time, cancelAtPeriodEnd bool, conn services.DBConn) error {
+			setStatus = status
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_trialing",
+		Customer:         "cus_trialing",
+		Status:           "trialing",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if setStatus != "trialing" {
+		t.Fatalf("expected trialing status, got %q", setStatus)
+	}
+}
+
+func TestService_HandleSubscriptionEvent_PastDue(t *testing.T) {
+	var setStatus string
+	store := &stubStore{
+		findUserBySubFn: func(ctx context.Context, subscriptionID string, conn services.DBConn) (uuid.UUID, error) {
+			return uuid.New(), nil
+		},
+		setSubscriptionStateFn: func(ctx context.Context, userID uuid.UUID, customerID, subscriptionID, status string, currentPeriodEnd time.Time, cancelAtPeriodEnd bool, conn services.DBConn) error {
+			setStatus = status
+			return nil
+		},
+	}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	now := time.Now().UTC()
+	sub := stripeSubscription{
+		ID:               "sub_pastdue",
+		Customer:         "cus_pastdue",
+		Status:           "past_due",
+		CurrentPeriodEnd: now.Add(time.Hour).Unix(),
+	}
+	if err := svc.handleSubscriptionEvent(context.Background(), noopConn{}, sub, now); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if setStatus != "past_due" {
+		t.Fatalf("expected past_due status, got %q", setStatus)
+	}
+}
+
+func TestService_HandleWebhook_AlreadyProcessed(t *testing.T) {
+	var callCount int
+	store := &stubStore{
+		withWebhookEventFn: func(ctx context.Context, meta WebhookEventMeta, fn func(context.Context, services.Tx) error) (bool, error) {
+			callCount++
+			return true, nil // Already processed
+		},
+	}
+	secret := "whsec_test"
+	svc := NewService(config.BillingConfig{Enabled: true, StripeWebhookSecret: secret}, "https://example.test", store, stubStripe{})
+
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_already","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	sig := stripeSig(secret, payload, ts)
+
+	if err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(ts, 0)); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected one call, got %d", callCount)
+	}
+}
+
+func TestService_HandleWebhook_CheckoutSessionBadJSON(t *testing.T) {
+	store := &stubStore{
+		withWebhookEventFn: func(ctx context.Context, meta WebhookEventMeta, fn func(context.Context, services.Tx) error) (bool, error) {
+			return false, fn(ctx, noopTx{})
+		},
+	}
+	secret := "whsec_test"
+	svc := NewService(config.BillingConfig{Enabled: true, StripeWebhookSecret: secret}, "https://example.test", store, stubStripe{})
+
+	ts := time.Now().Unix()
+	// Object is malformed JSON for checkout session
+	payload := []byte(fmt.Sprintf(`{"id":"evt_badjson","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":"not-an-object"}}`, ts))
+	sig := stripeSig(secret, payload, ts)
+
+	err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(ts, 0))
+	if err == nil || !strings.Contains(err.Error(), "decode checkout session") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
+
+func TestService_HandleWebhook_SubscriptionBadJSON(t *testing.T) {
+	store := &stubStore{
+		withWebhookEventFn: func(ctx context.Context, meta WebhookEventMeta, fn func(context.Context, services.Tx) error) (bool, error) {
+			return false, fn(ctx, noopTx{})
+		},
+	}
+	secret := "whsec_test"
+	svc := NewService(config.BillingConfig{Enabled: true, StripeWebhookSecret: secret}, "https://example.test", store, stubStripe{})
+
+	ts := time.Now().Unix()
+	// Object is malformed JSON for subscription
+	payload := []byte(fmt.Sprintf(`{"id":"evt_badsub","type":"customer.subscription.created","livemode":false,"created":%d,"data":{"object":"not-an-object"}}`, ts))
+	sig := stripeSig(secret, payload, ts)
+
+	err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(ts, 0))
+	if err == nil || !strings.Contains(err.Error(), "decode subscription") {
+		t.Fatalf("expected decode error, got %v", err)
+	}
+}
+
+func TestService_Enabled(t *testing.T) {
+	store := &stubStore{}
+
+	svcEnabled := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+	if !svcEnabled.Enabled() {
+		t.Fatal("expected Enabled() to return true")
+	}
+
+	svcDisabled := NewService(config.BillingConfig{Enabled: false}, "https://example.test", store, stubStripe{})
+	if svcDisabled.Enabled() {
+		t.Fatal("expected Enabled() to return false")
+	}
+}

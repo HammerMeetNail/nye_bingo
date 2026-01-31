@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -219,5 +220,92 @@ func TestService_CreateSubscriptionCheckoutURL_MapsIntervalToServerPrice(t *test
 	}
 	if !bytes.HasPrefix([]byte(url), []byte("https://")) {
 		t.Fatalf("expected url, got %q", url)
+	}
+}
+
+func TestVerifyStripeSignature_EmptySecret(t *testing.T) {
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	header := fmt.Sprintf("t=%d,v1=somesig", ts)
+
+	err := VerifyStripeSignature("", payload, header)
+	if err == nil {
+		t.Fatal("expected error for empty secret")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_EmptyHeader(t *testing.T) {
+	payload := []byte(`{"id":"evt_test"}`)
+	err := VerifyStripeSignature("whsec_test", payload, "")
+	if err == nil {
+		t.Fatal("expected error for empty header")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_MissingTimestamp(t *testing.T) {
+	payload := []byte(`{"id":"evt_test"}`)
+	err := VerifyStripeSignature("whsec_test", payload, "v1=abc123")
+	if err == nil {
+		t.Fatal("expected error for missing timestamp")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_MissingV1Sig(t *testing.T) {
+	ts := time.Now().Unix()
+	payload := []byte(`{"id":"evt_test"}`)
+	err := VerifyStripeSignature("whsec_test", payload, fmt.Sprintf("t=%d", ts))
+	if err == nil {
+		t.Fatal("expected error for missing v1 signature")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_InvalidTimestampFormat(t *testing.T) {
+	payload := []byte(`{"id":"evt_test"}`)
+	err := VerifyStripeSignature("whsec_test", payload, "t=not-a-number,v1=abc123")
+	if err == nil {
+		t.Fatal("expected error for invalid timestamp format")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_MultipleV1Sigs(t *testing.T) {
+	secret := "whsec_test"
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+
+	// Create a valid signature
+	validHeader := stripeSignatureHeader(t, secret, payload, ts)
+
+	// Add extra invalid v1 sigs - extract the valid sig and add invalid ones before it
+	parts := strings.Split(validHeader, ",")
+	header := fmt.Sprintf("t=%d,v1=invalid1,v1=invalid2,%s", ts, parts[1])
+
+	if err := VerifyStripeSignature(secret, payload, header); err != nil {
+		t.Fatalf("expected success with valid sig among multiple, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignature_MalformedParts(t *testing.T) {
+	payload := []byte(`{"id":"evt_test"}`)
+	ts := time.Now().Unix()
+
+	// Header with empty parts and malformed key-value pairs
+	err := VerifyStripeSignature("whsec_test", payload, fmt.Sprintf("t=%d,,v1=abc,badpart,=nokey,novalue=", ts))
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
