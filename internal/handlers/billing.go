@@ -118,6 +118,53 @@ func (h *BillingHandler) CheckoutTip(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"url": url})
 }
 
+func (h *BillingHandler) Checkout(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+
+	var req struct {
+		PremiumKind string `json:"premium_kind"`
+		Interval    string `json:"interval"`
+		TipAmount   int    `json:"tip_amount"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	url, err := h.billing.CreateCombinedCheckoutURL(r.Context(), user, billing.CombinedCheckoutRequest{
+		PremiumKind: billing.CheckoutPremiumKind(req.PremiumKind),
+		Interval:    billing.CheckoutInterval(req.Interval),
+		TipAmount:   billing.CheckoutTipAmount(req.TipAmount),
+	})
+	if errors.Is(err, billing.ErrBillingDisabled) {
+		writeError(w, http.StatusNotFound, "Billing is not available")
+		return
+	}
+	if errors.Is(err, billing.ErrInvalidInterval) {
+		writeError(w, http.StatusBadRequest, "Invalid interval")
+		return
+	}
+	if errors.Is(err, billing.ErrInvalidTipAmount) {
+		writeError(w, http.StatusBadRequest, "Invalid tip amount")
+		return
+	}
+	if errors.Is(err, billing.ErrInvalidCheckout) {
+		writeError(w, http.StatusBadRequest, "Invalid checkout selection")
+		return
+	}
+	if err != nil {
+		slog.Error("billing: checkout failed", "error", err, "user_id", user.ID)
+		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"url": url})
+}
+
 func (h *BillingHandler) Portal(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r.Context())
 	if user == nil {

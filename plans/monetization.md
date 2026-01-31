@@ -12,7 +12,7 @@
 
 ## Current Status (Implemented Foundation)
 
-As of **January 30, 2026**, the billing + entitlement **foundation is implemented** behind `BILLING_ENABLED` (default `false`).
+As of **January 31, 2026**, the billing + entitlement **foundation is implemented** behind `BILLING_ENABLED` (default `false`).
 
 **Implemented (code-as-built):**
 - DB: `migrations/000021_billing_stripe.up.sql` / `.down.sql` (user billing fields + `stripe_webhook_events` + `premium_codes`).
@@ -23,8 +23,11 @@ As of **January 30, 2026**, the billing + entitlement **foundation is implemente
   - webhook signature verification (HMAC) + idempotency via `stripe_webhook_events`
   - premium code redemption (hashed codes, one-time, transactional)
 - Stripe integration: implemented via a small Stripe **HTTP API client** (`internal/services/billing/stripe_client.go`) rather than `stripe-go` (no SDK dependency).
+  - supports multiple line items in a single Checkout Session (e.g., subscription + tip)
 - Handlers/routes: `internal/handlers/billing.go` + `cmd/server/main.go`:
   - `GET /api/billing/status`
+    - now includes `source` (`none|stripe_subscription|stripe_lifetime|code|grant`) so the UI can display accurate renewal/expiry messaging
+  - `POST /api/billing/checkout` (combined checkout; supports Premium purchase optionally combined with a tip)
   - `POST /api/billing/checkout/subscription` (`interval: month|year`)
   - `POST /api/billing/checkout/lifetime`
   - `POST /api/billing/checkout/tip` (`amount: 5|10|20`)
@@ -32,11 +35,20 @@ As of **January 30, 2026**, the billing + entitlement **foundation is implemente
   - `POST /api/billing/redeem` (rate-limited `10/hour` per-user; fail-closed)
   - `POST /api/billing/webhook` (CSRF-exempt; signature-verified)
 - Frontend: `web/static/js/api.js`, `web/static/js/app.js`, `web/static/css/styles.css`:
-  - Profile shows Plan status + Upgrade modal + post-checkout polling (`?billing=success`)
+  - Navbar shows a visible **Premium** entry point (star + label) that links to `/premium`
+  - `/premium` page:
+    - upgrade CTA + post-checkout polling (`?billing=success`)
+    - "Have a code?" redeem flow lives in a modal; logged-out users can enter a code and are prompted to sign in/create an account before the code is redeemed
+  - Upgrade modal supports selecting Premium option + optional tip, then a single Checkout redirect
+  - Billing UI messaging is source-aware (renew vs active-until vs expires vs no-expiration)
   - Premium badge shown for account holder and friends (friends list + friend card view)
 - Auth responses include `is_premium` (for the current session user): `internal/handlers/auth.go`.
-- Owner scripts: `scripts/create_premium_codes.go`, `scripts/grant_premium.go`, `scripts/revoke_premium.go`.
-- OpenAPI: billing endpoints added in `web/static/openapi.yaml`.
+- Owner/admin scripts: `scripts/create_premium_codes/`, `scripts/grant_premium/`, `scripts/revoke_premium/`.
+  - Convenience make targets added:
+    - `make premium-code` (local)
+    - `make premium-code-prod` (via SSH tunnel)
+- Dev tooling: `make local-billing` starts the Stripe webhook listener before the app so `STRIPE_WEBHOOK_SECRET` is available at boot.
+- OpenAPI: billing endpoints and schema updated in `web/static/openapi.yaml` (including the combined checkout endpoint and `BillingStatus.source`).
 
 **Not implemented yet (planned for later / still TODO):**
 - Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.

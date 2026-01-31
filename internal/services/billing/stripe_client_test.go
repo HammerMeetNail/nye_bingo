@@ -70,7 +70,10 @@ func TestStripeHTTPClient_CreateCheckoutSession(t *testing.T) {
 	url, err := client.CreateCheckoutSession(context.Background(), CheckoutSessionParams{
 		Mode:       CheckoutSessionModeSubscription,
 		CustomerID: "cus_123",
-		PriceID:    "price_123",
+		LineItems: []CheckoutSessionLineItem{
+			{PriceID: "price_123", Quantity: 1},
+			{PriceID: "price_tip5", Quantity: 1},
+		},
 		SuccessURL: "https://example.test/success",
 		CancelURL:  "https://example.test/cancel",
 		Metadata: map[string]string{
@@ -91,6 +94,9 @@ func TestStripeHTTPClient_CreateCheckoutSession(t *testing.T) {
 	}
 	if gotValues.Get("line_items[0][price]") != "price_123" {
 		t.Fatalf("expected price id, got %q", gotValues.Get("line_items[0][price]"))
+	}
+	if gotValues.Get("line_items[1][price]") != "price_tip5" {
+		t.Fatalf("expected tip price id, got %q", gotValues.Get("line_items[1][price]"))
 	}
 	if gotValues.Get("metadata[user_id]") != "user-1" {
 		t.Fatalf("expected metadata user_id, got %q", gotValues.Get("metadata[user_id]"))
@@ -178,7 +184,9 @@ func TestStripeHTTPClient_MissingURL(t *testing.T) {
 	_, err := client.CreateCheckoutSession(context.Background(), CheckoutSessionParams{
 		Mode:       CheckoutSessionModePayment,
 		CustomerID: "cus_123",
-		PriceID:    "price_123",
+		LineItems: []CheckoutSessionLineItem{
+			{PriceID: "price_123", Quantity: 1},
+		},
 		SuccessURL: "https://example.test/success",
 		CancelURL:  "https://example.test/cancel",
 	})

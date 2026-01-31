@@ -417,6 +417,7 @@ func run() error {
 
 	// Billing endpoints (session cookie only)
 	mux.Handle("GET /api/billing/status", requireSession(requireRead(http.HandlerFunc(billingHandler.Status))))
+	mux.Handle("POST /api/billing/checkout", requireSession(http.HandlerFunc(billingHandler.Checkout)))
 	mux.Handle("POST /api/billing/checkout/subscription", requireSession(http.HandlerFunc(billingHandler.CheckoutSubscription)))
 	mux.Handle("POST /api/billing/checkout/lifetime", requireSession(http.HandlerFunc(billingHandler.CheckoutLifetime)))
 	mux.Handle("POST /api/billing/checkout/tip", requireSession(http.HandlerFunc(billingHandler.CheckoutTip)))

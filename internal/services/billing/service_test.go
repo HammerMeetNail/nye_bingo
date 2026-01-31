@@ -141,7 +141,7 @@ func TestService_Status_Defaults(t *testing.T) {
 	store := &stubStore{}
 	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
 
-	user := &models.User{BillingPlan: "", BillingStatus: ""}
+	user := &models.User{BillingPlan: "", BillingStatus: "", BillingSource: ""}
 	status := svc.Status(user, time.Now())
 
 	if !status.BillingEnabled {
@@ -152,6 +152,9 @@ func TestService_Status_Defaults(t *testing.T) {
 	}
 	if status.Status != "inactive" {
 		t.Fatalf("expected status inactive, got %q", status.Status)
+	}
+	if status.Source != "none" {
+		t.Fatalf("expected source none, got %q", status.Source)
 	}
 	if status.IsPremium {
 		t.Fatal("expected not premium")
@@ -212,8 +215,8 @@ func TestService_CreateSubscriptionCheckoutURL_Success(t *testing.T) {
 	if gotParams.Mode != CheckoutSessionModeSubscription {
 		t.Fatalf("expected subscription mode, got %q", gotParams.Mode)
 	}
-	if gotParams.PriceID != "price_month" {
-		t.Fatalf("expected price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_month" {
+		t.Fatalf("expected price line item, got %+v", gotParams.LineItems)
 	}
 	if gotParams.Metadata["user_id"] == "" || gotParams.Metadata["purchase"] != "subscription" {
 		t.Fatalf("expected metadata, got %+v", gotParams.Metadata)
@@ -260,8 +263,8 @@ func TestService_CreateLifetimeCheckoutURL_Success(t *testing.T) {
 	if gotParams.Mode != CheckoutSessionModePayment {
 		t.Fatalf("expected payment mode, got %q", gotParams.Mode)
 	}
-	if gotParams.PriceID != "price_lifetime" {
-		t.Fatalf("expected price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_lifetime" {
+		t.Fatalf("expected lifetime line item, got %+v", gotParams.LineItems)
 	}
 	if gotParams.Metadata["purchase"] != "lifetime" {
 		t.Fatalf("expected lifetime metadata, got %+v", gotParams.Metadata)
@@ -287,6 +290,105 @@ func TestService_CreateTipCheckoutURL_MissingPrice(t *testing.T) {
 	_, err := svc.CreateTipCheckoutURL(context.Background(), user, Tip5)
 	if err == nil || !strings.Contains(err.Error(), "missing stripe tip price id") {
 		t.Fatalf("expected missing price error, got %v", err)
+	}
+}
+
+func TestService_CreateCombinedCheckoutURL_InvalidSelection(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateCombinedCheckoutURL(context.Background(), user, CombinedCheckoutRequest{
+		PremiumKind: CheckoutPremiumNone,
+		TipAmount:   0,
+	})
+	if err == nil || !errors.Is(err, ErrInvalidCheckout) {
+		t.Fatalf("expected ErrInvalidCheckout, got %v", err)
+	}
+}
+
+func TestService_CreateCombinedCheckoutURL_SubscriptionPlusTip(t *testing.T) {
+	var gotParams CheckoutSessionParams
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return createFn(ctx)
+		},
+	}
+	stripe := stubStripe{
+		createCustomerFn: func(ctx context.Context, email, userID string) (string, error) {
+			return "cus_combo", nil
+		},
+		createCheckoutSessionFn: func(ctx context.Context, params CheckoutSessionParams) (string, error) {
+			gotParams = params
+			return "https://checkout.example.test/combo", nil
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:                     true,
+		StripePremiumMonthlyPriceID: "price_month",
+		StripeTip5PriceID:           "price_tip5",
+	}, "https://example.test", store, stripe)
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateCombinedCheckoutURL(context.Background(), user, CombinedCheckoutRequest{
+		PremiumKind: CheckoutPremiumSubscription,
+		Interval:    IntervalMonth,
+		TipAmount:   Tip5,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams.Mode != CheckoutSessionModeSubscription {
+		t.Fatalf("expected subscription mode, got %q", gotParams.Mode)
+	}
+	if len(gotParams.LineItems) != 2 {
+		t.Fatalf("expected 2 line items, got %+v", gotParams.LineItems)
+	}
+	if gotParams.LineItems[0].PriceID != "price_month" || gotParams.LineItems[1].PriceID != "price_tip5" {
+		t.Fatalf("unexpected line items: %+v", gotParams.LineItems)
+	}
+	if gotParams.Metadata["purchase"] != "subscription" || gotParams.Metadata["interval"] != "month" || gotParams.Metadata["tip_amount"] != "5" {
+		t.Fatalf("unexpected metadata: %+v", gotParams.Metadata)
+	}
+}
+
+func TestService_CreateCombinedCheckoutURL_TipOnly(t *testing.T) {
+	var gotParams CheckoutSessionParams
+	store := &stubStore{
+		ensureStripeCustomerIDFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return createFn(ctx)
+		},
+	}
+	stripe := stubStripe{
+		createCustomerFn: func(ctx context.Context, email, userID string) (string, error) {
+			return "cus_tiponly", nil
+		},
+		createCheckoutSessionFn: func(ctx context.Context, params CheckoutSessionParams) (string, error) {
+			gotParams = params
+			return "https://checkout.example.test/tiponly", nil
+		},
+	}
+	svc := NewService(config.BillingConfig{
+		Enabled:           true,
+		StripeTip10PriceID: "price_tip10",
+	}, "https://example.test", store, stripe)
+
+	user := &models.User{ID: uuid.New(), Email: "u@example.com"}
+	_, err := svc.CreateCombinedCheckoutURL(context.Background(), user, CombinedCheckoutRequest{
+		PremiumKind: CheckoutPremiumNone,
+		TipAmount:   Tip10,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if gotParams.Mode != CheckoutSessionModePayment {
+		t.Fatalf("expected payment mode, got %q", gotParams.Mode)
+	}
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_tip10" {
+		t.Fatalf("unexpected line items: %+v", gotParams.LineItems)
+	}
+	if gotParams.Metadata["purchase"] != "tip" || gotParams.Metadata["tip_amount"] != "10" {
+		t.Fatalf("unexpected metadata: %+v", gotParams.Metadata)
 	}
 }
 
@@ -589,8 +691,8 @@ func TestService_CreateTipCheckoutURL_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotParams.PriceID != "price_tip5" {
-		t.Fatalf("expected tip price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_tip5" {
+		t.Fatalf("expected tip line item, got %+v", gotParams.LineItems)
 	}
 	if gotParams.Metadata["purchase"] != "tip" {
 		t.Fatalf("expected tip metadata, got %+v", gotParams.Metadata)
@@ -688,8 +790,8 @@ func TestService_CreateSubscriptionCheckoutURL_YearlyInterval(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotParams.PriceID != "price_year" {
-		t.Fatalf("expected yearly price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_year" {
+		t.Fatalf("expected yearly line item, got %+v", gotParams.LineItems)
 	}
 	if gotParams.Metadata["interval"] != "year" {
 		t.Fatalf("expected year interval in metadata, got %+v", gotParams.Metadata)
@@ -794,8 +896,8 @@ func TestService_CreateTipCheckoutURL_Tip10(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotParams.PriceID != "price_tip10" {
-		t.Fatalf("expected tip10 price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_tip10" {
+		t.Fatalf("expected tip10 line item, got %+v", gotParams.LineItems)
 	}
 }
 
@@ -825,8 +927,8 @@ func TestService_CreateTipCheckoutURL_Tip20(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if gotParams.PriceID != "price_tip20" {
-		t.Fatalf("expected tip20 price id, got %q", gotParams.PriceID)
+	if len(gotParams.LineItems) != 1 || gotParams.LineItems[0].PriceID != "price_tip20" {
+		t.Fatalf("expected tip20 line item, got %+v", gotParams.LineItems)
 	}
 }
 

@@ -1,4 +1,4 @@
-.PHONY: local local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop
+.PHONY: local local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop premium-code premium-code-prod
 
 # Force Podman to use a Linux compose provider (important in WSL where it may
 # otherwise auto-detect a Windows Docker Desktop docker-compose binary).
@@ -18,8 +18,15 @@ local: down assets build up
 	@echo "Local environment running. Use 'make logs' to view output or 'make down' to stop."
 	@echo "For billing testing, use 'make local-billing' instead."
 
-# Run local environment with Stripe webhook listener (for billing development)
-local-billing: down assets build up stripe-listen
+# Run local environment with Stripe webhook listener (for billing development).
+# Order matters: Stripe listener must start first so STRIPE_WEBHOOK_SECRET is
+# available to the app container on boot.
+local-billing:
+	@$(MAKE) down
+	@$(MAKE) stripe-listen
+	@$(MAKE) assets
+	@$(MAKE) build
+	@$(MAKE) up
 	@echo "Local environment running with Stripe webhook listener."
 	@echo "Use 'make logs' to view app output or 'make down' to stop (also stops Stripe listener)."
 
@@ -153,3 +160,91 @@ stripe-stop:
 		fi; \
 		rm -f $(STRIPE_PID_FILE); \
 	fi
+
+# ============================================================================
+# Premium Code Generation (Owner/Admin)
+# ============================================================================
+
+# Local code generation (writes hashed codes to the configured DB, prints plaintext codes to stdout).
+# Examples:
+#   make premium-code PREMIUM_CODE_COUNT=5 PREMIUM_CODE_DURATION_DAYS=30
+#   make premium-code PREMIUM_CODE_COUNT=1 PREMIUM_CODE_LIFETIME=1
+#
+# Defaults target the local dev DB from compose.yaml (override via env if needed).
+PREMIUM_CODE_COUNT ?= 1
+PREMIUM_CODE_DURATION_DAYS ?= 30
+PREMIUM_CODE_LIFETIME ?= 0
+PREMIUM_CODE_EXPIRES_DAYS ?= 0
+
+premium-code:
+	@bash -euo pipefail -c '\
+	FLAGS="--count $(PREMIUM_CODE_COUNT)"; \
+	if [ "$(PREMIUM_CODE_LIFETIME)" = "1" ]; then \
+		FLAGS="$$FLAGS --lifetime"; \
+	elif [ "$(PREMIUM_CODE_DURATION_DAYS)" != "0" ]; then \
+		FLAGS="$$FLAGS --duration_days $(PREMIUM_CODE_DURATION_DAYS)"; \
+	fi; \
+	if [ "$(PREMIUM_CODE_EXPIRES_DAYS)" != "0" ]; then \
+		FLAGS="$$FLAGS --expires_days $(PREMIUM_CODE_EXPIRES_DAYS)"; \
+	fi; \
+	echo "Generating Premium code(s) in DB (prints codes to stdout)..."; \
+	DB_HOST="$${DB_HOST:-localhost}" \
+	DB_PORT="$${DB_PORT:-5432}" \
+	DB_USER="$${DB_USER:-bingo}" \
+	DB_PASSWORD="$${DB_PASSWORD:-bingo_dev_password}" \
+	DB_NAME="$${DB_NAME:-nye_bingo}" \
+	DB_SSLMODE="$${DB_SSLMODE:-disable}" \
+	go run ./scripts/create_premium_codes $$FLAGS \
+	'
+
+# Production-ish generation via SSH tunnel.
+# This runs the generator locally, but connects to the production DB through an SSH port forward.
+#
+# Required:
+#   PREMIUM_CODE_SSH_HOST=user@prod-host
+#
+# Optional (adjust depending on where Postgres is reachable FROM the SSH host):
+#   PREMIUM_CODE_SSH_DB_HOST=127.0.0.1
+#   PREMIUM_CODE_SSH_DB_PORT=5432
+#   PREMIUM_CODE_LOCAL_PORT=15432
+#
+# Usage:
+#   make premium-code-prod PREMIUM_CODE_SSH_HOST=user@prod-host DB_USER=... DB_PASSWORD=... DB_NAME=...
+PREMIUM_CODE_SSH_HOST ?=
+PREMIUM_CODE_SSH_DB_HOST ?= 127.0.0.1
+PREMIUM_CODE_SSH_DB_PORT ?= 5432
+PREMIUM_CODE_LOCAL_PORT ?= 15432
+
+premium-code-prod:
+	@bash -euo pipefail -c '\
+	if [ -z "$(PREMIUM_CODE_SSH_HOST)" ]; then \
+		echo "PREMIUM_CODE_SSH_HOST is required (e.g. user@prod-host)"; \
+		exit 1; \
+	fi; \
+	if [ -z "$${DB_PASSWORD:-}" ]; then \
+		echo "DB_PASSWORD is required for premium-code-prod (pass it in your shell env)"; \
+		exit 1; \
+	fi; \
+	FLAGS="--count $(PREMIUM_CODE_COUNT)"; \
+	if [ "$(PREMIUM_CODE_LIFETIME)" = "1" ]; then \
+		FLAGS="$$FLAGS --lifetime"; \
+	elif [ "$(PREMIUM_CODE_DURATION_DAYS)" != "0" ]; then \
+		FLAGS="$$FLAGS --duration_days $(PREMIUM_CODE_DURATION_DAYS)"; \
+	fi; \
+	if [ "$(PREMIUM_CODE_EXPIRES_DAYS)" != "0" ]; then \
+		FLAGS="$$FLAGS --expires_days $(PREMIUM_CODE_EXPIRES_DAYS)"; \
+	fi; \
+	echo "Opening SSH tunnel to Postgres via $(PREMIUM_CODE_SSH_HOST) (localhost:$(PREMIUM_CODE_LOCAL_PORT) -> $(PREMIUM_CODE_SSH_DB_HOST):$(PREMIUM_CODE_SSH_DB_PORT))..."; \
+	ssh -o ExitOnForwardFailure=yes -N -L $(PREMIUM_CODE_LOCAL_PORT):$(PREMIUM_CODE_SSH_DB_HOST):$(PREMIUM_CODE_SSH_DB_PORT) $(PREMIUM_CODE_SSH_HOST) & \
+	TUNNEL_PID="$$!"; \
+	trap "kill \"$$TUNNEL_PID\" >/dev/null 2>&1 || true" EXIT; \
+	sleep 0.5; \
+	echo "Generating Premium code(s) in production DB (prints codes to stdout)..."; \
+	DB_HOST="localhost" \
+	DB_PORT="$(PREMIUM_CODE_LOCAL_PORT)" \
+	DB_USER="$${DB_USER:-bingo}" \
+	DB_PASSWORD="$$DB_PASSWORD" \
+	DB_NAME="$${DB_NAME:-nye_bingo}" \
+	DB_SSLMODE="$${DB_SSLMODE:-disable}" \
+	go run ./scripts/create_premium_codes $$FLAGS \
+	'

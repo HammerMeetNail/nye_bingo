@@ -62,11 +62,16 @@ func (s *Service) Status(user *models.User, now time.Time) BillingStatus {
 	if status == "" {
 		status = "inactive"
 	}
+	source := user.BillingSource
+	if source == "" {
+		source = "none"
+	}
 	return BillingStatus{
 		BillingEnabled:    s.enabled,
 		IsPremium:         IsPremium(user, now),
 		Plan:              plan,
 		Status:            status,
+		Source:            source,
 		CurrentPeriodEnd:  user.BillingCurrentPeriodEnd,
 		CancelAtPeriodEnd: user.BillingCancelAtPeriodEnd,
 	}
@@ -99,7 +104,9 @@ func (s *Service) CreateSubscriptionCheckoutURL(ctx context.Context, user *model
 	params := CheckoutSessionParams{
 		Mode:       CheckoutSessionModeSubscription,
 		CustomerID: customerID,
-		PriceID:    priceID,
+		LineItems: []CheckoutSessionLineItem{
+			{PriceID: priceID, Quantity: 1},
+		},
 		SuccessURL: s.successURL(),
 		CancelURL:  s.cancelURL(),
 		Metadata: map[string]string{
@@ -127,7 +134,9 @@ func (s *Service) CreateLifetimeCheckoutURL(ctx context.Context, user *models.Us
 	params := CheckoutSessionParams{
 		Mode:       CheckoutSessionModePayment,
 		CustomerID: customerID,
-		PriceID:    s.priceLifetime,
+		LineItems: []CheckoutSessionLineItem{
+			{PriceID: s.priceLifetime, Quantity: 1},
+		},
 		SuccessURL: s.successURL(),
 		CancelURL:  s.cancelURL(),
 		Metadata: map[string]string{
@@ -165,7 +174,9 @@ func (s *Service) CreateTipCheckoutURL(ctx context.Context, user *models.User, a
 	params := CheckoutSessionParams{
 		Mode:       CheckoutSessionModePayment,
 		CustomerID: customerID,
-		PriceID:    priceID,
+		LineItems: []CheckoutSessionLineItem{
+			{PriceID: priceID, Quantity: 1},
+		},
 		SuccessURL: s.successURL(),
 		CancelURL:  s.cancelURL(),
 		Metadata: map[string]string{
@@ -175,6 +186,117 @@ func (s *Service) CreateTipCheckoutURL(ctx context.Context, user *models.User, a
 		},
 	}
 	return s.stripe.CreateCheckoutSession(ctx, params)
+}
+
+type CheckoutPremiumKind string
+
+const (
+	CheckoutPremiumNone         CheckoutPremiumKind = ""
+	CheckoutPremiumSubscription CheckoutPremiumKind = "subscription"
+	CheckoutPremiumLifetime     CheckoutPremiumKind = "lifetime"
+)
+
+type CombinedCheckoutRequest struct {
+	PremiumKind CheckoutPremiumKind
+	Interval    CheckoutInterval
+	TipAmount   CheckoutTipAmount
+}
+
+func (s *Service) CreateCombinedCheckoutURL(ctx context.Context, user *models.User, req CombinedCheckoutRequest) (string, error) {
+	if !s.enabled {
+		return "", ErrBillingDisabled
+	}
+
+	// Tip (optional)
+	tipPriceID := ""
+	if req.TipAmount != 0 {
+		switch req.TipAmount {
+		case Tip5:
+			tipPriceID = s.priceTip5
+		case Tip10:
+			tipPriceID = s.priceTip10
+		case Tip20:
+			tipPriceID = s.priceTip20
+		default:
+			return "", ErrInvalidTipAmount
+		}
+		if strings.TrimSpace(tipPriceID) == "" {
+			return "", fmt.Errorf("missing stripe tip price id for amount %d", req.TipAmount)
+		}
+	}
+
+	// Premium (optional)
+	var mode CheckoutSessionMode
+	var premiumPriceID string
+	metadata := map[string]string{
+		"user_id": user.ID.String(),
+	}
+
+	switch req.PremiumKind {
+	case CheckoutPremiumNone:
+		if req.Interval != "" {
+			return "", ErrInvalidCheckout
+		}
+		mode = CheckoutSessionModePayment
+		metadata["purchase"] = "tip"
+	case CheckoutPremiumSubscription:
+		mode = CheckoutSessionModeSubscription
+		switch req.Interval {
+		case IntervalMonth:
+			premiumPriceID = s.priceMonthly
+		case IntervalYear:
+			premiumPriceID = s.priceYearly
+		default:
+			return "", ErrInvalidInterval
+		}
+		if strings.TrimSpace(premiumPriceID) == "" {
+			return "", fmt.Errorf("missing stripe price id for interval %q", req.Interval)
+		}
+		metadata["purchase"] = "subscription"
+		metadata["interval"] = string(req.Interval)
+	case CheckoutPremiumLifetime:
+		mode = CheckoutSessionModePayment
+		if req.Interval != "" {
+			return "", ErrInvalidCheckout
+		}
+		premiumPriceID = s.priceLifetime
+		if strings.TrimSpace(premiumPriceID) == "" {
+			return "", fmt.Errorf("missing stripe lifetime price id")
+		}
+		metadata["purchase"] = "lifetime"
+	default:
+		return "", ErrInvalidCheckout
+	}
+
+	if tipPriceID == "" && premiumPriceID == "" {
+		return "", ErrInvalidCheckout
+	}
+
+	// Ensure a Stripe Customer for all Checkout flows (even tip-only) so we can send them to the portal later.
+	customerID, err := s.store.EnsureStripeCustomerID(ctx, user.ID, func(ctx context.Context) (string, error) {
+		return s.stripe.CreateCustomer(ctx, user.Email, user.ID.String())
+	})
+	if err != nil {
+		return "", err
+	}
+
+	lineItems := make([]CheckoutSessionLineItem, 0, 2)
+	if premiumPriceID != "" {
+		lineItems = append(lineItems, CheckoutSessionLineItem{PriceID: premiumPriceID, Quantity: 1})
+	}
+	if tipPriceID != "" {
+		lineItems = append(lineItems, CheckoutSessionLineItem{PriceID: tipPriceID, Quantity: 1})
+		metadata["tip_amount"] = fmt.Sprintf("%d", req.TipAmount)
+	}
+
+	return s.stripe.CreateCheckoutSession(ctx, CheckoutSessionParams{
+		Mode:       mode,
+		CustomerID: customerID,
+		LineItems:  lineItems,
+		SuccessURL: s.successURL(),
+		CancelURL:  s.cancelURL(),
+		Metadata:   metadata,
+	})
 }
 
 func (s *Service) CreatePortalURL(ctx context.Context, user *models.User) (string, error) {

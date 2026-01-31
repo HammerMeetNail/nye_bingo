@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,10 +44,15 @@ const (
 type CheckoutSessionParams struct {
 	Mode       CheckoutSessionMode
 	CustomerID string
-	PriceID    string
+	LineItems  []CheckoutSessionLineItem
 	SuccessURL string
 	CancelURL  string
 	Metadata   map[string]string
+}
+
+type CheckoutSessionLineItem struct {
+	PriceID  string
+	Quantity int
 }
 
 func (c *stripeHTTPClient) CreateCustomer(ctx context.Context, email, userID string) (string, error) {
@@ -79,8 +85,17 @@ func (c *stripeHTTPClient) CreateCheckoutSession(ctx context.Context, params Che
 	form.Set("billing_address_collection", "required")
 	form.Set("customer_update[address]", "auto")
 
-	form.Set("line_items[0][price]", params.PriceID)
-	form.Set("line_items[0][quantity]", "1")
+	for i, item := range params.LineItems {
+		if strings.TrimSpace(item.PriceID) == "" {
+			continue
+		}
+		qty := item.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+		form.Set(fmt.Sprintf("line_items[%d][price]", i), item.PriceID)
+		form.Set(fmt.Sprintf("line_items[%d][quantity]", i), strconv.Itoa(qty))
+	}
 
 	for k, v := range params.Metadata {
 		form.Set("metadata["+k+"]", v)

@@ -235,6 +235,102 @@ func TestBillingHandler_CheckoutTip_InvalidAmount(t *testing.T) {
 	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
 }
 
+func TestBillingHandler_Checkout_InvalidJSON(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/checkout", bytes.NewBufferString("{bad"))
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_Checkout_Disabled(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "month",
+		"tip_amount":   0,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusNotFound)
+}
+
+func TestBillingHandler_Checkout_InvalidInterval(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "week",
+		"tip_amount":   0,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_Checkout_InvalidTipAmount(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "month",
+		"tip_amount":   7,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_Checkout_InvalidSelection(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "",
+		"interval":     "",
+		"tip_amount":   0,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
+func TestBillingHandler_Checkout_Success_SubscriptionPlusTip(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "month",
+		"tip_amount":   5,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusOK)
+	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
+	if _, ok := resp["url"]; !ok {
+		t.Fatalf("expected url in response, got %v", resp)
+	}
+}
+
 func TestBillingHandler_Portal_Disabled(t *testing.T) {
 	store := &handlerStore{}
 	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))

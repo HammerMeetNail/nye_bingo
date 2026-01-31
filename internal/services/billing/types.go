@@ -25,6 +25,7 @@ type BillingStatus struct {
 	IsPremium         bool       `json:"is_premium"`
 	Plan              string     `json:"plan"`
 	Status            string     `json:"status"`
+	Source            string     `json:"source"`
 	CurrentPeriodEnd  *time.Time `json:"current_period_end"`
 	CancelAtPeriodEnd bool       `json:"cancel_at_period_end"`
 }
@@ -36,4 +37,5 @@ var (
 	ErrStripeSignatureInvalid = errors.New("invalid stripe signature")
 	ErrInvalidInterval        = errors.New("invalid interval")
 	ErrInvalidTipAmount       = errors.New("invalid tip amount")
+	ErrInvalidCheckout        = errors.New("invalid checkout selection")
 )

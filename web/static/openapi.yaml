@@ -37,6 +37,9 @@ components:
         status:
           type: string
           enum: [inactive, active, trialing, past_due, canceled]
+        source:
+          type: string
+          enum: [none, stripe_subscription, stripe_lifetime, code, grant]
         current_period_end:
           type: string
           format: date-time
@@ -2368,6 +2371,40 @@ paths:
                 interval:
                   type: string
                   enum: [month, year]
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+  /billing/checkout:
+    post:
+      summary: Create Stripe Checkout Session (combined)
+      description: >
+        This endpoint requires a browser session cookie (API tokens are not allowed).
+        It supports a Premium purchase (subscription or lifetime) optionally combined with a tip.
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                premium_kind:
+                  type: string
+                  enum: ['', subscription, lifetime]
+                  description: Empty string means no Premium purchase (tip-only).
+                interval:
+                  type: string
+                  enum: ['', month, year]
+                  description: Required when premium_kind is subscription.
+                tip_amount:
+                  type: integer
+                  enum: [0, 5, 10, 20]
+                  description: Optional tip amount (0 means no tip).
       responses:
         '200':
           description: Checkout URL

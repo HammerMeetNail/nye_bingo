@@ -642,6 +642,10 @@ const API = {
       return API.request('GET', '/api/billing/status');
     },
 
+    async createCheckoutSession({ premium_kind, interval, tip_amount } = {}) {
+      return API.request('POST', '/api/billing/checkout', { premium_kind, interval, tip_amount });
+    },
+
     async createSubscriptionCheckoutSession(interval) {
       return API.request('POST', '/api/billing/checkout/subscription', { interval });
     },

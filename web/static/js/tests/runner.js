@@ -215,6 +215,72 @@ describe('truncateText', () => {
   });
 });
 
+describe('Premium navigation + page wiring', () => {
+  const appJsPath = path.join(__dirname, '..', 'app.js');
+  const cssPath = path.join(__dirname, '..', '..', 'css', 'styles.css');
+
+  test('router supports /premium', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (!/switch\s*\(\s*page\s*\)[\s\S]*case\s+'premium'\s*:/.test(appJs)) {
+      throw new Error("Expected router switch(page) to include case 'premium'");
+    }
+  });
+
+  test('route() closes any open modal overlay', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (!/route\s*\(\s*\)\s*\{[\s\S]*this\.closeModal\(\)/.test(appJs)) {
+      throw new Error('Expected route() to call this.closeModal()');
+    }
+  });
+
+  test('premium route is considered SPA-routable', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (!/isRoutablePage\s*\(\s*page\s*\)[\s\S]*case\s+'premium'\s*:/.test(appJs)) {
+      throw new Error("Expected isRoutablePage(page) to include case 'premium'");
+    }
+  });
+
+  test('navbar renders a Premium link', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (!appJs.includes('nav-link--premium')) {
+      throw new Error("Expected setupNavigation() to render an element with class 'nav-link--premium'");
+    }
+    if (!appJs.includes('href="/premium?upgrade=1"') && !appJs.includes("href='/premium?upgrade=1'")) {
+      throw new Error("Expected Premium navbar link to point to /premium?upgrade=1");
+    }
+  });
+
+  test('CSS defines premium navbar styling hooks', () => {
+    const css = fs.readFileSync(cssPath, 'utf8');
+    if (!css.includes('.nav-link--premium')) {
+      throw new Error("Expected styles.css to include .nav-link--premium");
+    }
+    if (!css.includes('.premium-page')) {
+      throw new Error("Expected styles.css to include .premium-page");
+    }
+  });
+
+  test('premium page does not include See options button', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (appJs.includes('See options')) {
+      throw new Error("Expected 'See options' to be removed from the Premium page UI");
+    }
+  });
+
+  test('premium page includes a Have a code entry point', () => {
+    const appJs = fs.readFileSync(appJsPath, 'utf8');
+    if (!appJs.includes('data-action="open-premium-code-modal"')) {
+      throw new Error('Expected Premium page to include a Have a code? button');
+    }
+    if (!appJs.includes('openPremiumCodeModal()')) {
+      throw new Error('Expected openPremiumCodeModal() to exist');
+    }
+    if (!appJs.includes('id="premium-code-error"')) {
+      throw new Error('Expected premium code modal to include an error slot');
+    }
+  });
+});
+
 describe('parsePath', () => {
   test('parses simple path', () => {
     const result = parsePath('/dashboard');
