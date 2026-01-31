@@ -49,6 +49,10 @@ func NewService(cfg config.BillingConfig, baseURL string, store StoreInterface, 
 	}
 }
 
+func (s *Service) Enabled() bool {
+	return s.enabled
+}
+
 func (s *Service) Status(user *models.User, now time.Time) BillingStatus {
 	plan := user.BillingPlan
 	if plan == "" {
@@ -79,7 +83,7 @@ func (s *Service) CreateSubscriptionCheckoutURL(ctx context.Context, user *model
 	case IntervalYear:
 		priceID = s.priceYearly
 	default:
-		return "", fmt.Errorf("invalid interval")
+		return "", ErrInvalidInterval
 	}
 	if strings.TrimSpace(priceID) == "" {
 		return "", fmt.Errorf("missing stripe price id for interval %q", interval)
@@ -147,7 +151,7 @@ func (s *Service) CreateTipCheckoutURL(ctx context.Context, user *models.User, a
 	case Tip20:
 		priceID = s.priceTip20
 	default:
-		return "", fmt.Errorf("invalid tip amount")
+		return "", ErrInvalidTipAmount
 	}
 	if strings.TrimSpace(priceID) == "" {
 		return "", fmt.Errorf("missing stripe tip price id for amount %d", amount)
@@ -318,10 +322,10 @@ func (s *Service) handleSubscriptionEvent(ctx context.Context, tx services.DBCon
 	custIDTrimmed := strings.TrimSpace(sub.Customer)
 
 	if subIDTrimmed != "" {
-		userID, err = s.store.FindUserIDByStripeSubscriptionID(ctx, sub.ID, tx)
+		userID, err = s.store.FindUserIDByStripeSubscriptionID(ctx, subIDTrimmed, tx)
 	}
 	if (subIDTrimmed == "" || errors.Is(err, ErrBillingUserNotFound)) && custIDTrimmed != "" {
-		userID, err = s.store.FindUserIDByStripeCustomerID(ctx, sub.Customer, tx)
+		userID, err = s.store.FindUserIDByStripeCustomerID(ctx, custIDTrimmed, tx)
 	}
 	if err != nil {
 		if errors.Is(err, ErrBillingUserNotFound) {
@@ -335,7 +339,7 @@ func (s *Service) handleSubscriptionEvent(ctx context.Context, tx services.DBCon
 		return s.store.ResetToFree(ctx, userID, tx)
 	}
 
-	return s.store.SetSubscriptionState(ctx, userID, sub.Customer, sub.ID, status, periodEnd, sub.CancelAtPeriodEnd, tx)
+	return s.store.SetSubscriptionState(ctx, userID, custIDTrimmed, subIDTrimmed, status, periodEnd, sub.CancelAtPeriodEnd, tx)
 }
 
 func mapStripeSubscriptionStatus(stripeStatus string) string {

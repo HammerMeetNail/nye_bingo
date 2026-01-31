@@ -95,7 +95,7 @@ export OIDC_CLIENT_ID
 export OIDC_CLIENT_SECRET
 export OIDC_REDIRECT_URI
 export OIDC_BASE_URL
-"${PROJECT_DIR}/scripts/podman-compose.sh" up -d --build oidc
+"${PROJECT_DIR}/scripts/podman-compose.sh" --profile e2e up -d --build oidc
 
 echo ""
 echo "Waiting for OIDC mock..."
@@ -154,7 +154,7 @@ done
 
 echo ""
 echo "Building Playwright container..."
-"${PROJECT_DIR}/scripts/podman-compose.sh" build playwright
+"${PROJECT_DIR}/scripts/podman-compose.sh" --profile e2e build playwright
 
 echo ""
 echo "Running Playwright (projects: ${PLAYWRIGHT_BROWSERS}, workers: ${PLAYWRIGHT_WORKERS:-auto})..."

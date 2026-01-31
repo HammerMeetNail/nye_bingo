@@ -82,23 +82,21 @@ func TestVerifyStripeSignatureWithTolerance_CustomTolerance(t *testing.T) {
 	}
 }
 
-type noopTag struct{}
+func TestVerifyStripeSignature_TimestampTooFarInFuture(t *testing.T) {
+	secret := "whsec_test"
+	// Use a timestamp far in the future (beyond tolerance)
+	ts := time.Now().Unix() + DefaultWebhookTimestampTolerance + 10
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	header := stripeSignatureHeader(t, secret, payload, ts)
 
-func (noopTag) RowsAffected() int64 { return 1 }
-
-type noopTx struct{}
-
-func (noopTx) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
-	return noopTag{}, nil
+	err := VerifyStripeSignature(secret, payload, header)
+	if err == nil {
+		t.Fatal("expected error for future timestamp")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
 }
-func (noopTx) Query(ctx context.Context, sql string, args ...any) (services.Rows, error) {
-	return nil, nil
-}
-func (noopTx) QueryRow(ctx context.Context, sql string, args ...any) services.Row {
-	return nil
-}
-func (noopTx) Commit(ctx context.Context) error   { return nil }
-func (noopTx) Rollback(ctx context.Context) error { return nil }
 
 type memStore struct {
 	processed map[string]bool

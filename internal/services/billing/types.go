@@ -34,4 +34,6 @@ var (
 	ErrInvalidCode            = errors.New("invalid code")
 	ErrPremiumRequired        = errors.New("premium required")
 	ErrStripeSignatureInvalid = errors.New("invalid stripe signature")
+	ErrInvalidInterval        = errors.New("invalid interval")
+	ErrInvalidTipAmount       = errors.New("invalid tip amount")
 )

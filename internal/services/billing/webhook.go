@@ -59,10 +59,17 @@ func VerifyStripeSignatureWithTolerance(secret string, payload []byte, sigHeader
 		return ErrStripeSignatureInvalid
 	}
 
-	// Reject events with timestamps older than the tolerance to prevent replay attacks.
+	// Reject events whose timestamps differ from the server time by more than the tolerance
+	// to prevent replay attacks and limit clock skew.
 	now := time.Now().Unix()
-	if now-tsInt > toleranceSec {
-		return fmt.Errorf("%w: timestamp too old", ErrStripeSignatureInvalid)
+	var diff int64
+	if now >= tsInt {
+		diff = now - tsInt
+	} else {
+		diff = tsInt - now
+	}
+	if diff > toleranceSec {
+		return fmt.Errorf("%w: timestamp outside allowed tolerance", ErrStripeSignatureInvalid)
 	}
 
 	signed := []byte(fmt.Sprintf("%s.%s", ts, string(payload)))

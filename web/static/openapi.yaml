@@ -541,7 +541,6 @@ paths:
                     $ref: '#/components/schemas/User'
                   is_premium:
                     type: boolean
-                    nullable: true
   /auth/{provider}/start:
     get:
       summary: Start OAuth provider login

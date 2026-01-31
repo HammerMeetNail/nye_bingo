@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -15,31 +17,12 @@ import (
 )
 
 func main() {
-	var email string
-	var durationDays int
-	var lifetime bool
-	var reason string
-
-	flag.StringVar(&email, "email", "", "user email")
-	flag.IntVar(&durationDays, "duration_days", 0, "duration in days (0 means unset)")
-	flag.BoolVar(&lifetime, "lifetime", false, "grant lifetime premium")
-	flag.StringVar(&reason, "reason", "", "optional reason (not stored in v1)")
-	flag.Parse()
-
-	_ = reason
-
-	email = strings.TrimSpace(strings.ToLower(email))
-	if email == "" {
-		log.Fatal("--email is required")
+	opts, err := parseGrantFlags(os.Args[1:])
+	if err != nil {
+		log.Fatalf("parse flags: %v", err)
 	}
-	if lifetime && durationDays > 0 {
-		log.Fatal("choose either --lifetime or --duration_days, not both")
-	}
-	if !lifetime && durationDays == 0 {
-		log.Fatal("must specify either --lifetime or --duration_days")
-	}
-	if durationDays < 0 {
-		log.Fatal("--duration_days must be >= 0")
+	if err := validateGrantOptions(opts); err != nil {
+		log.Fatal(err)
 	}
 
 	cfg, err := config.Load()
@@ -53,23 +36,74 @@ func main() {
 	defer db.Close()
 
 	dbAdapter := services.NewPoolAdapter(db.Pool)
-	ctx := context.Background()
+	periodEnd := buildGrantPeriodEnd(time.Now().UTC(), opts.durationDays, opts.lifetime)
+	if err := grantPremium(context.Background(), dbAdapter, normalizeEmail(opts.email), periodEnd); err != nil {
+		log.Fatal(err)
+	}
+}
 
+type grantOptions struct {
+	email        string
+	durationDays int
+	lifetime     bool
+	reason       string
+}
+
+type grantDB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) services.Row
+	Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error)
+}
+
+func parseGrantFlags(args []string) (grantOptions, error) {
+	var opts grantOptions
+	fs := flag.NewFlagSet("grant_premium", flag.ContinueOnError)
+	fs.StringVar(&opts.email, "email", "", "user email")
+	fs.IntVar(&opts.durationDays, "duration_days", 0, "duration in days (0 means unset)")
+	fs.BoolVar(&opts.lifetime, "lifetime", false, "grant lifetime premium")
+	fs.StringVar(&opts.reason, "reason", "", "optional reason (not stored in v1)")
+	if err := fs.Parse(args); err != nil {
+		return opts, err
+	}
+	return opts, nil
+}
+
+func validateGrantOptions(opts grantOptions) error {
+	if strings.TrimSpace(opts.email) == "" {
+		return fmt.Errorf("--email is required")
+	}
+	if opts.lifetime && opts.durationDays > 0 {
+		return fmt.Errorf("choose either --lifetime or --duration_days, not both")
+	}
+	if !opts.lifetime && opts.durationDays == 0 {
+		return fmt.Errorf("must specify either --lifetime or --duration_days")
+	}
+	if opts.durationDays < 0 {
+		return fmt.Errorf("--duration_days must be >= 0")
+	}
+	return nil
+}
+
+func normalizeEmail(email string) string {
+	return strings.TrimSpace(strings.ToLower(email))
+}
+
+func buildGrantPeriodEnd(now time.Time, durationDays int, lifetime bool) *time.Time {
+	if lifetime || durationDays <= 0 {
+		return nil
+	}
+	t := now.Add(time.Duration(durationDays) * 24 * time.Hour)
+	return &t
+}
+
+func grantPremium(ctx context.Context, db grantDB, email string, periodEnd *time.Time) error {
 	var userID uuid.UUID
-	if err := dbAdapter.QueryRow(ctx,
+	if err := db.QueryRow(ctx,
 		`SELECT id FROM users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL`,
 		email,
 	).Scan(&userID); err != nil {
-		log.Fatalf("find user: %v", err)
+		return fmt.Errorf("find user: %w", err)
 	}
-
-	var periodEnd *time.Time
-	if !lifetime && durationDays > 0 {
-		t := time.Now().UTC().Add(time.Duration(durationDays) * 24 * time.Hour)
-		periodEnd = &t
-	}
-
-	if _, err := dbAdapter.Exec(ctx,
+	if _, err := db.Exec(ctx,
 		`UPDATE users
 		 SET billing_plan = 'premium',
 		     billing_source = 'grant',
@@ -80,6 +114,7 @@ func main() {
 		 WHERE id = $1 AND deleted_at IS NULL`,
 		userID, periodEnd,
 	); err != nil {
-		log.Fatalf("grant premium: %v", err)
+		return fmt.Errorf("grant premium: %w", err)
 	}
+	return nil
 }

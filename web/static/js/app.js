@@ -7175,10 +7175,10 @@ const App = {
 
         <h4 class="mt-lg">Premium Benefits</h4>
         <ul class="upgrade-list">
-          <li>Shareable PNG links</li>
-          <li>Templates + 1‑click New Year rollover</li>
-          <li>AI Enhancements: 100/month</li>
           <li>Premium badge (visible to friends)</li>
+          <li>Shareable PNG links <span class="text-muted">(coming soon)</span></li>
+          <li>Templates + 1‑click New Year rollover <span class="text-muted">(coming soon)</span></li>
+          <li>AI Enhancements: 100/month <span class="text-muted">(coming soon)</span></li>
         </ul>
 
         <h4 class="mt-lg">Choose an option</h4>

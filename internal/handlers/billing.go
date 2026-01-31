@@ -50,8 +50,12 @@ func (h *BillingHandler) CheckoutSubscription(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusNotFound, "Billing is not available")
 		return
 	}
+	if errors.Is(err, billing.ErrInvalidInterval) {
+		writeError(w, http.StatusBadRequest, "Invalid interval")
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Unable to start checkout")
+		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
 
@@ -71,7 +75,7 @@ func (h *BillingHandler) CheckoutLifetime(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Unable to start checkout")
+		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
 
@@ -98,8 +102,12 @@ func (h *BillingHandler) CheckoutTip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Billing is not available")
 		return
 	}
+	if errors.Is(err, billing.ErrInvalidTipAmount) {
+		writeError(w, http.StatusBadRequest, "Invalid tip amount")
+		return
+	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Unable to start checkout")
+		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
 
@@ -119,7 +127,7 @@ func (h *BillingHandler) Portal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Unable to open billing portal")
+		writeError(w, http.StatusInternalServerError, "Unable to open billing portal")
 		return
 	}
 
@@ -151,7 +159,7 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Unable to redeem code")
+		writeError(w, http.StatusInternalServerError, "Unable to redeem code")
 		return
 	}
 
@@ -159,6 +167,11 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {
+	if !h.billing.Enabled() {
+		writeError(w, http.StatusNotFound, "Billing is not available")
+		return
+	}
+
 	payload, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request")
