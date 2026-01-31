@@ -23,8 +23,8 @@ import (
 )
 
 type handlerStore struct {
-	ensureFn     func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error)
-	redeemFn     func(ctx context.Context, userID uuid.UUID, codeHashHex string, now time.Time) error
+	ensureFn      func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error)
+	redeemFn      func(ctx context.Context, userID uuid.UUID, codeHashHex string, now time.Time) error
 	withWebhookFn func(ctx context.Context, meta billing.WebhookEventMeta, fn func(context.Context, services.Tx) error) (bool, error)
 }
 
@@ -69,7 +69,7 @@ func (h *handlerStore) RedeemPremiumCode(ctx context.Context, userID uuid.UUID, 
 }
 
 type handlerStripe struct {
-	createCustomerFn       func(ctx context.Context, email, userID string) (string, error)
+	createCustomerFn        func(ctx context.Context, email, userID string) (string, error)
 	createCheckoutSessionFn func(ctx context.Context, params billing.CheckoutSessionParams) (string, error)
 	createPortalSessionFn   func(ctx context.Context, customerID, returnURL string) (string, error)
 }
@@ -95,11 +95,15 @@ func (h handlerStripe) CreatePortalSession(ctx context.Context, customerID, retu
 
 type noopTx struct{}
 
-func (noopTx) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) { return nil, nil }
-func (noopTx) Query(ctx context.Context, sql string, args ...any) (services.Rows, error)       { return nil, nil }
-func (noopTx) QueryRow(ctx context.Context, sql string, args ...any) services.Row             { return nil }
-func (noopTx) Commit(ctx context.Context) error                                                { return nil }
-func (noopTx) Rollback(ctx context.Context) error                                              { return nil }
+func (noopTx) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+	return nil, nil
+}
+func (noopTx) Query(ctx context.Context, sql string, args ...any) (services.Rows, error) {
+	return nil, nil
+}
+func (noopTx) QueryRow(ctx context.Context, sql string, args ...any) services.Row { return nil }
+func (noopTx) Commit(ctx context.Context) error                                   { return nil }
+func (noopTx) Rollback(ctx context.Context) error                                 { return nil }
 
 func withUser(req *http.Request, user *models.User) *http.Request {
 	return req.WithContext(SetUserInContext(req.Context(), user))
@@ -115,14 +119,14 @@ func signatureHeader(secret string, payload []byte, ts int64) string {
 
 func newBillingService(enabled bool, store billing.StoreInterface, stripe billing.StripeClient) *billing.Service {
 	cfg := config.BillingConfig{
-		Enabled:                     enabled,
-		StripeWebhookSecret:         "whsec_test",
-		StripePremiumMonthlyPriceID: "price_month",
-		StripePremiumYearlyPriceID:  "price_year",
+		Enabled:                      enabled,
+		StripeWebhookSecret:          "whsec_test",
+		StripePremiumMonthlyPriceID:  "price_month",
+		StripePremiumYearlyPriceID:   "price_year",
 		StripePremiumLifetimePriceID: "price_lifetime",
-		StripeTip5PriceID:           "price_tip5",
-		StripeTip10PriceID:          "price_tip10",
-		StripeTip20PriceID:          "price_tip20",
+		StripeTip5PriceID:            "price_tip5",
+		StripeTip10PriceID:           "price_tip10",
+		StripeTip20PriceID:           "price_tip20",
 	}
 	return billing.NewService(cfg, "https://example.test", store, stripe)
 }

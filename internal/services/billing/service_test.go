@@ -90,7 +90,7 @@ func (s *stubStore) RedeemPremiumCode(ctx context.Context, userID uuid.UUID, cod
 }
 
 type stubStripe struct {
-	createCustomerFn       func(ctx context.Context, email, userID string) (string, error)
+	createCustomerFn        func(ctx context.Context, email, userID string) (string, error)
 	createCheckoutSessionFn func(ctx context.Context, params CheckoutSessionParams) (string, error)
 	createPortalSessionFn   func(ctx context.Context, customerID, returnURL string) (string, error)
 }
@@ -116,9 +116,13 @@ func (s stubStripe) CreatePortalSession(ctx context.Context, customerID, returnU
 
 type noopConn struct{}
 
-func (noopConn) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) { return nil, nil }
-func (noopConn) Query(ctx context.Context, sql string, args ...any) (services.Rows, error)       { return nil, nil }
-func (noopConn) QueryRow(ctx context.Context, sql string, args ...any) services.Row             { return nil }
+func (noopConn) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+	return nil, nil
+}
+func (noopConn) Query(ctx context.Context, sql string, args ...any) (services.Rows, error) {
+	return nil, nil
+}
+func (noopConn) QueryRow(ctx context.Context, sql string, args ...any) services.Row { return nil }
 
 type noopTx struct{ noopConn }
 
@@ -576,7 +580,7 @@ func TestService_CreateTipCheckoutURL_Success(t *testing.T) {
 		},
 	}
 	svc := NewService(config.BillingConfig{
-		Enabled:            true,
+		Enabled:           true,
 		StripeTip5PriceID: "price_tip5",
 	}, "https://example.test", store, stripe)
 
