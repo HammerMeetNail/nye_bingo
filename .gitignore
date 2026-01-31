@@ -64,3 +64,6 @@ temp/
 # Logs
 *.log
 logs/
+
+# Stripe CLI
+.stripe-listen.pid

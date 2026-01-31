@@ -77,6 +77,7 @@ func (c *stripeHTTPClient) CreateCheckoutSession(ctx context.Context, params Che
 	// Stripe Tax
 	form.Set("automatic_tax[enabled]", "true")
 	form.Set("billing_address_collection", "required")
+	form.Set("customer_update[address]", "auto")
 
 	form.Set("line_items[0][price]", params.PriceID)
 	form.Set("line_items[0][quantity]", "1")

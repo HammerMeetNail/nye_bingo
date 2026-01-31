@@ -1,4 +1,4 @@
-.PHONY: local down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release
+.PHONY: local local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop
 
 # Force Podman to use a Linux compose provider (important in WSL where it may
 # otherwise auto-detect a Windows Docker Desktop docker-compose binary).
@@ -10,16 +10,25 @@ PODMAN_COMPOSE := $(PODMAN_COMPOSE_ENV) podman compose
 # Tooling versions (override via env, e.g. `make lint GOLANGCI_LINT_VERSION=v2.0.0`)
 GOLANGCI_LINT_VERSION ?= v2.6.2
 
+# Stripe CLI PID file for background webhook listener
+STRIPE_PID_FILE := .stripe-listen.pid
+
 # Run full local rebuild: down, build assets, build container, up in background
 local: down assets build up
 	@echo "Local environment running. Use 'make logs' to view output or 'make down' to stop."
+	@echo "For billing testing, use 'make local-billing' instead."
+
+# Run local environment with Stripe webhook listener (for billing development)
+local-billing: down assets build up stripe-listen
+	@echo "Local environment running with Stripe webhook listener."
+	@echo "Use 'make logs' to view app output or 'make down' to stop (also stops Stripe listener)."
 
 # Build hashed assets locally (needed because ./web is volume-mounted)
 assets:
 	./scripts/build-assets.sh
 
-# Stop and remove containers
-down:
+# Stop and remove containers (also stops Stripe listener if running)
+down: stripe-stop
 	$(PODMAN_COMPOSE) down
 
 # Build containers
@@ -97,3 +106,50 @@ ifneq (,$(filter release,$(MAKECMDGOALS)))
 $(filter-out release,$(MAKECMDGOALS)):
 	@:
 endif
+
+# ============================================================================
+# Stripe (Billing) Development Targets
+# ============================================================================
+
+# Create Stripe test-mode products and prices, append to .env
+stripe-products:
+	@echo "Creating Stripe products and prices..."
+	@./scripts/stripe-setup.sh >> .env
+	@echo "Price IDs appended to .env"
+
+# Start Stripe CLI webhook listener in background
+# Requires: stripe CLI installed and authenticated (stripe login)
+# The webhook secret is written to .env as STRIPE_WEBHOOK_SECRET
+stripe-listen:
+	@if [ -f $(STRIPE_PID_FILE) ] && kill -0 $$(cat $(STRIPE_PID_FILE)) 2>/dev/null; then \
+		echo "Stripe listener already running (PID $$(cat $(STRIPE_PID_FILE)))"; \
+	else \
+		echo "Starting Stripe webhook listener..."; \
+		stripe listen --forward-to localhost:8080/api/billing/webhook > .stripe-listen.log 2>&1 & \
+		echo $$! > $(STRIPE_PID_FILE); \
+		sleep 2; \
+		WEBHOOK_SECRET=$$(grep -o 'whsec_[a-zA-Z0-9]*' .stripe-listen.log | head -1); \
+		if [ -n "$$WEBHOOK_SECRET" ]; then \
+			if grep -q '^STRIPE_WEBHOOK_SECRET=' .env 2>/dev/null; then \
+				sed -i.bak "s/^STRIPE_WEBHOOK_SECRET=.*/STRIPE_WEBHOOK_SECRET=$$WEBHOOK_SECRET/" .env && rm -f .env.bak; \
+			else \
+				echo "STRIPE_WEBHOOK_SECRET=$$WEBHOOK_SECRET" >> .env; \
+			fi; \
+			echo "Stripe listener started (PID $$(cat $(STRIPE_PID_FILE)))"; \
+			echo "Webhook secret written to .env: $$WEBHOOK_SECRET"; \
+		else \
+			echo "Warning: Could not extract webhook secret from Stripe CLI output"; \
+			echo "Check .stripe-listen.log for details"; \
+		fi; \
+	fi
+
+# Stop Stripe CLI webhook listener
+stripe-stop:
+	@if [ -f $(STRIPE_PID_FILE) ]; then \
+		PID=$$(cat $(STRIPE_PID_FILE)); \
+		if kill -0 $$PID 2>/dev/null; then \
+			echo "Stopping Stripe listener (PID $$PID)..."; \
+			kill $$PID 2>/dev/null || true; \
+		fi; \
+		rm -f $(STRIPE_PID_FILE); \
+	fi
