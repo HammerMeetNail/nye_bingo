@@ -312,10 +312,15 @@ func (s *Service) handleSubscriptionEvent(ctx context.Context, tx services.DBCon
 
 	var userID uuid.UUID
 	var err error
-	if strings.TrimSpace(sub.ID) != "" {
+
+	// Try to find user by subscription ID first, then fall back to customer ID.
+	subIDTrimmed := strings.TrimSpace(sub.ID)
+	custIDTrimmed := strings.TrimSpace(sub.Customer)
+
+	if subIDTrimmed != "" {
 		userID, err = s.store.FindUserIDByStripeSubscriptionID(ctx, sub.ID, tx)
 	}
-	if err != nil && errors.Is(err, ErrBillingUserNotFound) && strings.TrimSpace(sub.Customer) != "" {
+	if (subIDTrimmed == "" || errors.Is(err, ErrBillingUserNotFound)) && custIDTrimmed != "" {
 		userID, err = s.store.FindUserIDByStripeCustomerID(ctx, sub.Customer, tx)
 	}
 	if err != nil {

@@ -29,8 +29,9 @@ func stripeSignatureHeader(t *testing.T, secret string, payload []byte, ts int64
 
 func TestVerifyStripeSignature_Valid(t *testing.T) {
 	secret := "whsec_test"
-	payload := []byte(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":1700000000,"data":{"object":{}}}`)
-	header := stripeSignatureHeader(t, secret, payload, 1700000000)
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	header := stripeSignatureHeader(t, secret, payload, ts)
 
 	if err := VerifyStripeSignature(secret, payload, header); err != nil {
 		t.Fatalf("expected nil, got %v", err)
@@ -39,10 +40,45 @@ func TestVerifyStripeSignature_Valid(t *testing.T) {
 
 func TestVerifyStripeSignature_InvalidRejected(t *testing.T) {
 	secret := "whsec_test"
-	payload := []byte(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":1700000000,"data":{"object":{}}}`)
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
 
-	if err := VerifyStripeSignature(secret, payload, "t=1700000000,v1=not-a-real-sig"); err == nil {
+	if err := VerifyStripeSignature(secret, payload, fmt.Sprintf("t=%d,v1=not-a-real-sig", ts)); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestVerifyStripeSignature_TimestampTooOld(t *testing.T) {
+	secret := "whsec_test"
+	// Use a timestamp older than the default 5-minute tolerance
+	ts := time.Now().Unix() - DefaultWebhookTimestampTolerance - 10
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	header := stripeSignatureHeader(t, secret, payload, ts)
+
+	err := VerifyStripeSignature(secret, payload, header)
+	if err == nil {
+		t.Fatal("expected error for old timestamp")
+	}
+	if !errors.Is(err, ErrStripeSignatureInvalid) {
+		t.Fatalf("expected ErrStripeSignatureInvalid, got %v", err)
+	}
+}
+
+func TestVerifyStripeSignatureWithTolerance_CustomTolerance(t *testing.T) {
+	secret := "whsec_test"
+	// Use a timestamp 10 seconds old
+	ts := time.Now().Unix() - 10
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{}}}`, ts))
+	header := stripeSignatureHeader(t, secret, payload, ts)
+
+	// Should pass with 60 second tolerance
+	if err := VerifyStripeSignatureWithTolerance(secret, payload, header, 60); err != nil {
+		t.Fatalf("expected nil with 60s tolerance, got %v", err)
+	}
+
+	// Should fail with 5 second tolerance
+	if err := VerifyStripeSignatureWithTolerance(secret, payload, header, 5); err == nil {
+		t.Fatal("expected error with 5s tolerance")
 	}
 }
 
@@ -130,17 +166,18 @@ func TestService_HandleWebhook_Idempotent(t *testing.T) {
 	svc := NewService(config.BillingConfig{Enabled: true, StripeWebhookSecret: "whsec_test"}, "https://example.test", store, noopStripe{})
 
 	userID := uuid.New()
-	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":1700000000,"data":{"object":{"id":"cs_test","customer":"cus_test","subscription":"","metadata":{"user_id":"%s","purchase":"lifetime"}}}}`, userID.String()))
-	sig := stripeSignatureHeader(t, "whsec_test", payload, 1700000000)
+	ts := time.Now().Unix()
+	payload := []byte(fmt.Sprintf(`{"id":"evt_test","type":"checkout.session.completed","livemode":false,"created":%d,"data":{"object":{"id":"cs_test","customer":"cus_test","subscription":"","metadata":{"user_id":"%s","purchase":"lifetime"}}}}`, ts, userID.String()))
+	sig := stripeSignatureHeader(t, "whsec_test", payload, ts)
 
-	if err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(1700000000, 0)); err != nil {
+	if err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(ts, 0)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if store.setIDs != 1 || store.grants != 1 {
 		t.Fatalf("expected setIDs=1 grants=1, got setIDs=%d grants=%d", store.setIDs, store.grants)
 	}
 
-	if err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(1700000000, 0)); err != nil {
+	if err := svc.HandleWebhook(context.Background(), payload, sig, time.Unix(ts, 0)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if store.setIDs != 1 || store.grants != 1 {

@@ -35,6 +35,9 @@ func main() {
 	if lifetime && durationDays > 0 {
 		log.Fatal("choose either --lifetime or --duration_days, not both")
 	}
+	if !lifetime && durationDays == 0 {
+		log.Fatal("must specify either --lifetime or --duration_days")
+	}
 	if durationDays < 0 {
 		log.Fatal("--duration_days must be >= 0")
 	}

@@ -8,9 +8,18 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
+// DefaultWebhookTimestampTolerance is the maximum age of a webhook event before it's rejected.
+// Stripe recommends 5 minutes (300 seconds) to prevent replay attacks.
+const DefaultWebhookTimestampTolerance = 300
+
 func VerifyStripeSignature(secret string, payload []byte, sigHeader string) error {
+	return VerifyStripeSignatureWithTolerance(secret, payload, sigHeader, DefaultWebhookTimestampTolerance)
+}
+
+func VerifyStripeSignatureWithTolerance(secret string, payload []byte, sigHeader string, toleranceSec int64) error {
 	secret = strings.TrimSpace(secret)
 	if secret == "" {
 		return fmt.Errorf("%w: missing webhook secret", ErrStripeSignatureInvalid)
@@ -45,8 +54,15 @@ func VerifyStripeSignature(secret string, payload []byte, sigHeader string) erro
 	if ts == "" || len(v1Sigs) == 0 {
 		return ErrStripeSignatureInvalid
 	}
-	if _, err := strconv.ParseInt(ts, 10, 64); err != nil {
+	tsInt, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
 		return ErrStripeSignatureInvalid
+	}
+
+	// Reject events with timestamps older than the tolerance to prevent replay attacks.
+	now := time.Now().Unix()
+	if now-tsInt > toleranceSec {
+		return fmt.Errorf("%w: timestamp too old", ErrStripeSignatureInvalid)
 	}
 
 	signed := []byte(fmt.Sprintf("%s.%s", ts, string(payload)))
