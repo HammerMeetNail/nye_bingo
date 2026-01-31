@@ -175,7 +175,12 @@ func TestUserService_GetByID_FiltersDeleted(t *testing.T) {
 			if !strings.Contains(sql, "deleted_at IS NULL") {
 				t.Fatalf("expected deleted_at filter in query, got %q", sql)
 			}
-			return rowFromValues(uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true, time.Now(), time.Now())
+			now := time.Now()
+			return rowFromValues(
+				uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true,
+				nil, nil, "free", "none", "inactive", nil, false, now,
+				now, now,
+			)
 		},
 	}
 
@@ -236,7 +241,12 @@ func TestUserService_GetByEmail_FiltersDeleted(t *testing.T) {
 			if !strings.Contains(sql, "deleted_at IS NULL") {
 				t.Fatalf("expected deleted_at filter in query, got %q", sql)
 			}
-			return rowFromValues(uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true, time.Now(), time.Now())
+			now := time.Now()
+			return rowFromValues(
+				uuid.New(), "test@example.com", stringPtr("hash"), "user", false, nil, 0, true,
+				nil, nil, "free", "none", "inactive", nil, false, now,
+				now, now,
+			)
 		},
 	}
 
@@ -313,6 +323,14 @@ func TestUserService_Create_Success(t *testing.T) {
 					nil,
 					0,
 					true,
+					nil,
+					nil,
+					"free",
+					"none",
+					"inactive",
+					nil,
+					false,
+					now,
 					now,
 					now,
 				)
@@ -349,6 +367,14 @@ func TestUserService_GetByID_Success(t *testing.T) {
 				nil,
 				0,
 				true,
+				nil,
+				nil,
+				"free",
+				"none",
+				"inactive",
+				nil,
+				false,
+				now,
 				now,
 				now,
 			)
@@ -379,6 +405,14 @@ func TestUserService_GetByEmail_Success(t *testing.T) {
 				nil,
 				2,
 				false,
+				nil,
+				nil,
+				"free",
+				"none",
+				"inactive",
+				nil,
+				false,
+				now,
 				now,
 				now,
 			)

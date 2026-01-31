@@ -284,7 +284,8 @@ func (s *FriendService) CancelRequest(ctx context.Context, userID, friendshipID 
 func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]models.FriendWithUser, error) {
 	rows, err := s.db.Query(ctx,
 		`SELECT f.id, f.user_id, f.friend_id, f.status, f.created_at,
-		        CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END
+		        CASE WHEN f.user_id = $1 THEN u2.username ELSE u1.username END,
+		        CASE WHEN f.user_id = $1 THEN (u2.billing_plan = 'premium') ELSE (u1.billing_plan = 'premium') END
 		 FROM friendships f
 		 JOIN users u1 ON f.user_id = u1.id AND u1.deleted_at IS NULL
 		 JOIN users u2 ON f.friend_id = u2.id AND u2.deleted_at IS NULL
@@ -300,7 +301,7 @@ func (s *FriendService) ListFriends(ctx context.Context, userID uuid.UUID) ([]mo
 	var friends []models.FriendWithUser
 	for rows.Next() {
 		var f models.FriendWithUser
-		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendUsername); err != nil {
+		if err := rows.Scan(&f.ID, &f.UserID, &f.FriendID, &f.Status, &f.CreatedAt, &f.FriendUsername, &f.FriendIsPremium); err != nil {
 			return nil, fmt.Errorf("scanning friend: %w", err)
 		}
 		friends = append(friends, f)

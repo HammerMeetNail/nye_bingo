@@ -10,6 +10,38 @@
 - **TDD-first**: new billing logic is covered by unit tests; webhook handling is fully testable and idempotent.
 - **Positive UX**: clear value, easy upgrade/cancel, no dark patterns, no spammy nags.
 
+## Current Status (Implemented Foundation)
+
+As of **January 30, 2026**, the billing + entitlement **foundation is implemented** behind `BILLING_ENABLED` (default `false`).
+
+**Implemented (code-as-built):**
+- DB: `migrations/000021_billing_stripe.up.sql` / `.down.sql` (user billing fields + `stripe_webhook_events` + `premium_codes`).
+- Config: `internal/config/config.go` (+ tests) and `.env.example` (Stripe env vars; production startup validation when `BILLING_ENABLED=true`).
+- CSRF: explicit exemption for `POST /api/billing/webhook` in `internal/middleware/csrf.go` (+ tests).
+- Billing service: `internal/services/billing/*` including:
+  - server-side premium check: `billing.IsPremium(user, now)`
+  - webhook signature verification (HMAC) + idempotency via `stripe_webhook_events`
+  - premium code redemption (hashed codes, one-time, transactional)
+- Stripe integration: implemented via a small Stripe **HTTP API client** (`internal/services/billing/stripe_client.go`) rather than `stripe-go` (no SDK dependency).
+- Handlers/routes: `internal/handlers/billing.go` + `cmd/server/main.go`:
+  - `GET /api/billing/status`
+  - `POST /api/billing/checkout/subscription` (`interval: month|year`)
+  - `POST /api/billing/checkout/lifetime`
+  - `POST /api/billing/checkout/tip` (`amount: 5|10|20`)
+  - `POST /api/billing/portal`
+  - `POST /api/billing/redeem` (rate-limited `10/hour` per-user; fail-closed)
+  - `POST /api/billing/webhook` (CSRF-exempt; signature-verified)
+- Frontend: `web/static/js/api.js`, `web/static/js/app.js`, `web/static/css/styles.css`:
+  - Profile shows Plan status + Upgrade modal + post-checkout polling (`?billing=success`)
+  - Premium badge shown for account holder and friends (friends list + friend card view)
+- Auth responses include `is_premium` (for the current session user): `internal/handlers/auth.go`.
+- Owner scripts: `scripts/create_premium_codes.go`, `scripts/grant_premium.go`, `scripts/revoke_premium.go`.
+- OpenAPI: billing endpoints added in `web/static/openapi.yaml`.
+
+**Not implemented yet (planned for later / still TODO):**
+- Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.
+- “Premium features” themselves (templates / premium AI / PNG gating) remain separate plans.
+
 ## Decisions (Owner Inputs)
 
 ### Monetization & Tiering
@@ -41,7 +73,7 @@
 - Premium usage (especially AI) must not create unbounded cost exposure.
 
 ### Technical / Ops
-- OK to use the official Stripe Go SDK (`stripe-go`).
+- Stripe integration is implemented via a small server-side Stripe HTTP client (no `stripe-go` dependency). Migrating to `stripe-go` later is optional.
 - Separate keys per environment (test vs live) via env vars (like Gemini).
 - Prod secrets stored in env vars.
 - Admin actions live in Stripe Dashboard (no in-app admin billing UI).
@@ -138,7 +170,7 @@ On the frontend, show a “Processing your upgrade…” status and poll until P
 
 ## Data Model (Minimal, Practical, Auditable)
 
-### Migration: `000014_billing_stripe.*.sql`
+### Migration: `000021_billing_stripe.*.sql`
 
 #### 1) Add billing + entitlement fields to `users`
 Add columns:
@@ -369,7 +401,7 @@ Tests (write first):
 - `internal/services/billing/*` (new: entitlements + stripe client + repo)
 - `internal/handlers/billing.go` (new: checkout/portal/status/redeem/webhook)
 - `cmd/server/main.go` (route registration)
-- `migrations/000014_billing_stripe.up.sql` + `.down.sql`
+- `migrations/000021_billing_stripe.up.sql` + `.down.sql`
 - `web/static/openapi.yaml` (endpoint docs)
 
 ### CSRF Exemption Implementation (Exact Shape)
@@ -389,77 +421,19 @@ if r.Method == http.MethodPost && csrfExempt[r.URL.Path] {
 
 Keep all other unsafe requests protected.
 
-### Stripe-Go SDK (Checkout + Portal) (Example Code)
+### Stripe API Client (As Implemented)
 
-In a Stripe client wrapper (server-side only):
-```go
-import (
-  "github.com/stripe/stripe-go/v76"
-  "github.com/stripe/stripe-go/v76/checkout/session"
-  portal "github.com/stripe/stripe-go/v76/billingportal/session"
-)
+Current implementation uses a small Stripe HTTP client wrapper (no `stripe-go`) in:
+- `internal/services/billing/stripe_client.go`
 
-func (c *StripeClient) CreateSubscriptionCheckoutURL(userID uuid.UUID, customerID, priceID, successURL, cancelURL string) (string, error) {
-  stripe.Key = c.secretKey
-
-  params := &stripe.CheckoutSessionParams{
-    Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
-    Customer: stripe.String(customerID),
-    LineItems: []*stripe.CheckoutSessionLineItemParams{
-      {Price: stripe.String(priceID), Quantity: stripe.Int64(1)},
-    },
-    SuccessURL: stripe.String(successURL),
-    CancelURL: stripe.String(cancelURL),
-
-    // Stripe Tax
-    AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
-    BillingAddressCollection: stripe.String("required"),
-
-    Metadata: map[string]string{
-      "user_id": userID.String(),
-      "purchase": "subscription",
-    },
-  }
-
-  s, err := session.New(params)
-  if err != nil {
-    return "", err
-  }
-  return s.URL, nil
-}
-
-func (c *StripeClient) CreateCustomerPortalURL(customerID, returnURL string) (string, error) {
-  stripe.Key = c.secretKey
-  s, err := portal.New(&stripe.BillingPortalSessionParams{
-    Customer: stripe.String(customerID),
-    ReturnURL: stripe.String(returnURL),
-  })
-  if err != nil {
-    return "", err
-  }
-  return s.URL, nil
-}
-```
-
-Notes:
-- This plan pins examples to `stripe-go/v76` to keep import paths copy/pasteable for a less-capable implementation agent.
-  - If you choose a different `stripe-go` major later, update the import paths consistently.
-- Never accept a `price_id` from the client; map `interval -> env-configured price id` server-side.
+Key rules are the same:
+- Never accept a `price_id` from the client; map `interval/amount -> env-configured price id` server-side.
+- Stripe Tax is enabled in Checkout Session creation (`automatic_tax` + `billing_address_collection`).
 
 ### Webhook Verification + Idempotency (Example Code)
 
-Signature verification:
-```go
-import "github.com/stripe/stripe-go/v76/webhook"
-
-payload, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-sig := r.Header.Get("Stripe-Signature")
-event, err := webhook.ConstructEvent(payload, sig, webhookSecret)
-if err != nil {
-  http.Error(w, "invalid signature", http.StatusBadRequest)
-  return
-}
-```
+Signature verification is implemented via HMAC verification of `Stripe-Signature`:
+- `internal/services/billing/webhook.go` (`billing.VerifyStripeSignature`)
 
 Idempotency table usage:
 1. Insert event id (unique):
@@ -524,55 +498,33 @@ In `scripts/create_premium_codes.go`:
 Because redemption checks the DB allowlist, public repo visibility does not make codes guessable.
 
 ### Phase 3: Billing Service + Stripe Client
-**New files (recommended):**
+**Files (as implemented):**
 - `internal/services/billing/service.go`
+- `internal/services/billing/store.go` (DB access behind an interface for unit tests)
 - `internal/services/billing/stripe_client.go`
 - `internal/services/billing/entitlements.go`
-- `internal/services/billing/repo.go` (DB access behind an interface for unit tests)
+- `internal/services/billing/types.go`
+- `internal/services/billing/webhook.go`
 
 Design:
 - Create a small `StripeClient` interface so tests can run without network:
-  - `CreateCustomer(ctx, user) (customerID string, err error)`
-  - `CreateCheckoutSessionSubscription(ctx, args) (url string, err error)`
-  - `CreateCheckoutSessionLifetime(ctx, args) (url string, err error)`
-  - `CreateCheckoutSessionTip(ctx, args) (url string, err error)`
-  - `CreatePortalSession(ctx, args) (url string, err error)`
-- Concrete implementation uses either:
-  - **Official Stripe Go SDK** (`stripe-go`).
+  - `CreateCustomer(ctx, email, userID string) (customerID string, err error)`
+  - `CreateCheckoutSession(ctx, params CheckoutSessionParams) (url string, err error)`
+  - `CreatePortalSession(ctx, customerID, returnURL string) (url string, err error)`
 
 **Make It Unit-Testable (No DB Required)**
 The repo’s Go tests run without a database (see `scripts/test.sh`), so billing logic must be testable with fakes.
 
-Add a small repository interface for DB operations and provide:
-- a Postgres implementation (pgxpool), and
-- an in-memory fake for unit tests.
-
-Suggested `BillingRepo` interface:
-```go
-type BillingRepo interface {
-  GetUserBilling(ctx context.Context, userID uuid.UUID) (*models.UserBilling, error)
-  SetStripeCustomerID(ctx context.Context, userID uuid.UUID, customerID string) error
-  UpsertWebhookEvent(ctx context.Context, stripeEventID, eventType string, livemode bool, createdAt time.Time) (inserted bool, err error)
-  MarkWebhookProcessed(ctx context.Context, stripeEventID string) error
-  MarkWebhookFailed(ctx context.Context, stripeEventID string, processingErr string) error
-  ApplySubscriptionUpdate(ctx context.Context, customerID, subscriptionID string, status string, currentPeriodEnd time.Time, cancelAtPeriodEnd bool) error
-  ApplyLifetimePurchase(ctx context.Context, customerID string) error
-  RedeemCode(ctx context.Context, userID uuid.UUID, codeHashHex string, now time.Time) (applied bool, err error)
-}
-```
-Notes:
-- Keep `models.UserBilling` as a small struct with only the billing fields; avoid pulling full `models.User`.
-- The in-memory fake can be a couple of maps keyed by `userID` and `stripeEventID`.
+This is implemented as `StoreInterface` in `internal/services/billing/store.go`, and unit tests provide fakes for the store and Stripe client.
 
 Stripe Tax requirements in Checkout Session creation:
 - `automatic_tax.enabled = true`
 - `billing_address_collection = required`
 - Provide `customer` (create/store Stripe customer once per user)
 
-Entitlements:
+Entitlements (as implemented):
 - `IsPremium(user, now) bool` returns true when:
   - `billing_plan == 'premium'`
-  - and `billing_status` in (`trialing`, `active`, `past_due`) (past_due is treated as “grace”)
   - and (`billing_current_period_end` is NULL OR `billing_current_period_end > now`)
 
 ### Phase 4: Billing Handlers & Routes

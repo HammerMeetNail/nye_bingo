@@ -24,6 +24,41 @@ components:
       in: cookie
       name: session_token
   schemas:
+    BillingStatus:
+      type: object
+      properties:
+        billing_enabled:
+          type: boolean
+        is_premium:
+          type: boolean
+        plan:
+          type: string
+          enum: [free, premium]
+        status:
+          type: string
+          enum: [inactive, active, trialing, past_due, canceled]
+        current_period_end:
+          type: string
+          format: date-time
+          nullable: true
+        cancel_at_period_end:
+          type: boolean
+    CheckoutSessionResponse:
+      type: object
+      properties:
+        url:
+          type: string
+    PortalSessionResponse:
+      type: object
+      properties:
+        url:
+          type: string
+    RedeemCodeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
     BingoCard:
       type: object
       properties:
@@ -504,6 +539,9 @@ paths:
                 properties:
                   user:
                     $ref: '#/components/schemas/User'
+                  is_premium:
+                    type: boolean
+                    nullable: true
   /auth/{provider}/start:
     get:
       summary: Start OAuth provider login
@@ -2301,6 +2339,115 @@ paths:
       responses:
         '200':
           description: List of categories
+  /billing/status:
+    get:
+      summary: Get billing status for current session user
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Billing status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillingStatus'
+  /billing/checkout/subscription:
+    post:
+      summary: Create Stripe Checkout Session (subscription)
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interval]
+              properties:
+                interval:
+                  type: string
+                  enum: [month, year]
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+  /billing/checkout/lifetime:
+    post:
+      summary: Create Stripe Checkout Session (lifetime)
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+  /billing/checkout/tip:
+    post:
+      summary: Create Stripe Checkout Session (tip jar)
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount]
+              properties:
+                amount:
+                  type: integer
+                  enum: [5, 10, 20]
+      responses:
+        '200':
+          description: Checkout URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutSessionResponse'
+  /billing/portal:
+    post:
+      summary: Create Stripe Customer Portal Session
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Portal URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortalSessionResponse'
+  /billing/redeem:
+    post:
+      summary: Redeem a Premium code
+      description: This endpoint requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedeemCodeRequest'
+      responses:
+        '200':
+          description: Redeemed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  is_premium:
+                    type: boolean
   /ai/generate:
     post:
       summary: Generate AI goals

@@ -73,7 +73,7 @@ echo "Year of Bingo E2E Runner"
 echo "================================"
 echo ""
 echo "Resetting local stack (destructive: volumes will be removed)."
-podman compose down -v
+"${PROJECT_DIR}/scripts/podman-compose.sh" down -v
 
 echo ""
 echo "Building assets..."
@@ -95,7 +95,7 @@ export OIDC_CLIENT_ID
 export OIDC_CLIENT_SECRET
 export OIDC_REDIRECT_URI
 export OIDC_BASE_URL
-podman compose --profile e2e up -d --build oidc
+"${PROJECT_DIR}/scripts/podman-compose.sh" up -d --build oidc
 
 echo ""
 echo "Waiting for OIDC mock..."
@@ -113,7 +113,7 @@ done
 
 echo ""
 echo "Starting containers..."
-podman compose --profile e2e up -d --build app postgres redis mailpit
+"${PROJECT_DIR}/scripts/podman-compose.sh" up -d --build app postgres redis mailpit
 
 echo ""
 echo "Waiting for health check at ${BASE_URL}/health ..."
@@ -153,8 +153,31 @@ for browser in "${browsers[@]}"; do
 done
 
 echo ""
+echo "Building Playwright container..."
+"${PROJECT_DIR}/scripts/podman-compose.sh" build playwright
+
+echo ""
 echo "Running Playwright (projects: ${PLAYWRIGHT_BROWSERS}, workers: ${PLAYWRIGHT_WORKERS:-auto})..."
-podman compose --profile e2e run --rm playwright \
+PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "$PROJECT_DIR")}"
+NETWORK_NAME="${PROJECT_NAME}_default"
+
+podman run --rm \
+  --pull=never \
+  --net "$NETWORK_NAME" \
+  -e PLAYWRIGHT_BASE_URL="$PLAYWRIGHT_BASE_URL" \
+  -e PLAYWRIGHT_BROWSERS="$PLAYWRIGHT_BROWSERS" \
+  -e PLAYWRIGHT_HEADLESS="$PLAYWRIGHT_HEADLESS" \
+  -e PLAYWRIGHT_WORKERS="${PLAYWRIGHT_WORKERS:-}" \
+  -e PWDEBUG="${PWDEBUG:-}" \
+  -e PLAYWRIGHT_OUTPUT_DIR="$PLAYWRIGHT_OUTPUT_DIR" \
+  -e PLAYWRIGHT_REPORT_DIR="$PLAYWRIGHT_REPORT_DIR" \
+  -e OIDC_BASE_URL="$OIDC_BASE_URL" \
+  -v "${PROJECT_DIR}:/app:ro" \
+  -v "${PROJECT_DIR}/test-results:/test-results" \
+  -v "${PROJECT_DIR}/playwright-report:/playwright-report" \
+  -w /app \
+  --shm-size 1gb \
+  localhost/yearofbingo_playwright:latest \
   /opt/playwright/node_modules/.bin/playwright test \
   "${project_args[@]}" \
   "$@"

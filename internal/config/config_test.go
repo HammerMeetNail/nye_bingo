@@ -13,6 +13,9 @@ func TestLoad_Defaults(t *testing.T) {
 		"REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD", "REDIS_DB",
 		"AI_STUB", "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_THINKING_LEVEL", "GEMINI_THINKING_BUDGET", "GEMINI_TEMPERATURE", "GEMINI_MAX_OUTPUT_TOKENS",
 		"OAUTH_ALLOWED_PROVIDERS", "GOOGLE_OAUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REDIRECT_URL", "GOOGLE_OIDC_ISSUER_URL", "GOOGLE_OIDC_SCOPES",
+		"BILLING_ENABLED", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+		"STRIPE_PREMIUM_PRICE_MONTHLY", "STRIPE_PREMIUM_PRICE_YEARLY", "STRIPE_PREMIUM_PRICE_LIFETIME",
+		"STRIPE_TIP_PRICE_5", "STRIPE_TIP_PRICE_10", "STRIPE_TIP_PRICE_20",
 	}
 	for _, v := range envVars {
 		os.Unsetenv(v)
@@ -112,6 +115,14 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.OAuth.Google.Scopes[0] != "openid" {
 		t.Errorf("expected OAuth.Google.Scopes[0] to be openid, got %q", cfg.OAuth.Google.Scopes[0])
 	}
+
+	// Billing defaults
+	if cfg.Billing.Enabled != false {
+		t.Error("expected Billing.Enabled to be false")
+	}
+	if cfg.Billing.StripeSecretKey != "" {
+		t.Errorf("expected Billing.StripeSecretKey to be empty, got %q", cfg.Billing.StripeSecretKey)
+	}
 }
 
 func TestLoad_CustomValues(t *testing.T) {
@@ -139,6 +150,15 @@ func TestLoad_CustomValues(t *testing.T) {
 	os.Setenv("GOOGLE_OAUTH_REDIRECT_URL", "https://example.com/callback")
 	os.Setenv("GOOGLE_OIDC_ISSUER_URL", "https://issuer.example.com")
 	os.Setenv("GOOGLE_OIDC_SCOPES", "openid,email")
+	os.Setenv("BILLING_ENABLED", "true")
+	os.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
+	os.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
+	os.Setenv("STRIPE_PREMIUM_PRICE_MONTHLY", "price_month")
+	os.Setenv("STRIPE_PREMIUM_PRICE_YEARLY", "price_year")
+	os.Setenv("STRIPE_PREMIUM_PRICE_LIFETIME", "price_life")
+	os.Setenv("STRIPE_TIP_PRICE_5", "price_tip5")
+	os.Setenv("STRIPE_TIP_PRICE_10", "price_tip10")
+	os.Setenv("STRIPE_TIP_PRICE_20", "price_tip20")
 
 	defer func() {
 		// Clean up
@@ -165,6 +185,15 @@ func TestLoad_CustomValues(t *testing.T) {
 		os.Unsetenv("GOOGLE_OAUTH_REDIRECT_URL")
 		os.Unsetenv("GOOGLE_OIDC_ISSUER_URL")
 		os.Unsetenv("GOOGLE_OIDC_SCOPES")
+		os.Unsetenv("BILLING_ENABLED")
+		os.Unsetenv("STRIPE_SECRET_KEY")
+		os.Unsetenv("STRIPE_WEBHOOK_SECRET")
+		os.Unsetenv("STRIPE_PREMIUM_PRICE_MONTHLY")
+		os.Unsetenv("STRIPE_PREMIUM_PRICE_YEARLY")
+		os.Unsetenv("STRIPE_PREMIUM_PRICE_LIFETIME")
+		os.Unsetenv("STRIPE_TIP_PRICE_5")
+		os.Unsetenv("STRIPE_TIP_PRICE_10")
+		os.Unsetenv("STRIPE_TIP_PRICE_20")
 	}()
 
 	cfg, err := Load()
@@ -250,6 +279,16 @@ func TestLoad_CustomValues(t *testing.T) {
 	if len(cfg.OAuth.Google.Scopes) != 2 || cfg.OAuth.Google.Scopes[1] != "email" {
 		t.Errorf("unexpected OAuth.Google.Scopes: %#v", cfg.OAuth.Google.Scopes)
 	}
+
+	if cfg.Billing.Enabled != true {
+		t.Error("expected Billing.Enabled to be true")
+	}
+	if cfg.Billing.StripeSecretKey != "sk_test_123" {
+		t.Errorf("expected Billing.StripeSecretKey to be sk_test_123, got %q", cfg.Billing.StripeSecretKey)
+	}
+	if cfg.Billing.StripePremiumMonthlyPriceID != "price_month" {
+		t.Errorf("unexpected Billing.StripePremiumMonthlyPriceID: %q", cfg.Billing.StripePremiumMonthlyPriceID)
+	}
 }
 
 func TestLoad_InvalidIntFallsBackToDefault(t *testing.T) {
@@ -277,6 +316,20 @@ func TestLoad_InvalidBoolFallsBackToDefault(t *testing.T) {
 
 	if cfg.Server.Secure != false {
 		t.Error("expected Server.Secure to fall back to false")
+	}
+}
+
+func TestLoad_BillingEnabledInProduction_RequiresStripeEnv(t *testing.T) {
+	os.Setenv("APP_ENV", "production")
+	os.Setenv("BILLING_ENABLED", "true")
+	defer func() {
+		os.Unsetenv("APP_ENV")
+		os.Unsetenv("BILLING_ENABLED")
+	}()
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error")
 	}
 }
 

@@ -2,6 +2,8 @@
 
 const App = {
   user: null,
+  isPremium: false,
+  billingStatus: null,
   currentCard: null,
   suggestions: [],
   usedSuggestions: new Set(),
@@ -180,6 +182,24 @@ const App = {
       case 'resend-verification-and-route':
         this.resendVerification();
         this.navigate(`/check-email?type=verification&email=${encodeURIComponent(this.user?.email || '')}`, { skipWarning: true });
+        break;
+      case 'open-upgrade-modal':
+        this.openUpgradeModal();
+        break;
+      case 'open-billing-portal':
+        this.openBillingPortal();
+        break;
+      case 'billing-checkout-subscription':
+        this.startSubscriptionCheckout(target);
+        break;
+      case 'billing-checkout-lifetime':
+        this.startLifetimeCheckout();
+        break;
+      case 'billing-checkout-tip':
+        this.startTipCheckout(target);
+        break;
+      case 'billing-redeem-code':
+        this.redeemPremiumCode(target);
         break;
       case 'select-all-cards':
         this.selectAllCards();
@@ -709,6 +729,7 @@ const App = {
     try {
       const response = await API.auth.me();
       this.user = response.user;
+      this.isPremium = !!response.is_premium;
       if (this.user) {
         this.isAnonymousMode = false;
         await this.refreshNotificationCount();
@@ -716,6 +737,7 @@ const App = {
       }
     } catch (error) {
       this.user = null;
+      this.isPremium = false;
       this.stopNotificationPolling();
     }
   },
@@ -2212,6 +2234,7 @@ const App = {
       try {
         const response = await API.auth.login(email, password);
         this.user = response.user;
+        this.isPremium = !!response.is_premium;
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2295,6 +2318,7 @@ const App = {
       try {
         const response = await API.auth.register(email, password, username, searchable);
         this.user = response.user;
+        this.isPremium = !!response.is_premium;
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2350,6 +2374,7 @@ const App = {
       try {
         const response = await API.auth.providerComplete('google', username, searchable);
         this.user = response.user;
+        this.isPremium = !!response.is_premium;
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2425,6 +2450,7 @@ const App = {
     try {
       const response = await API.auth.verifyMagicLink(token);
       this.user = response.user;
+      this.isPremium = !!response.is_premium;
       this.setupNavigation();
       this.redirectAfterAuth('/dashboard');
       this.toast('Welcome back!', 'success');
@@ -2535,6 +2561,7 @@ const App = {
       try {
         const response = await API.auth.resetPassword(token, password);
         this.user = response.user;
+        this.isPremium = !!response.is_premium;
         this.setupNavigation();
         this.navigate('/dashboard', { skipWarning: true });
         this.toast('Password reset successfully!', 'success');
@@ -6489,10 +6516,11 @@ const App = {
         friendsListEl.innerHTML = friends.map(friend => {
           const otherUserId = friend.user_id === this.user.id ? friend.friend_id : friend.user_id;
           const friendName = this.escapeHtml(friend.friend_username);
+          const premiumBadge = friend.friend_is_premium ? '<span class="badge badge-premium badge--sm">Premium</span>' : '';
           return `
             <div class="friend-item">
               <div>
-                <strong>${friendName}</strong>
+                <strong>${friendName} ${premiumBadge}</strong>
               </div>
               <div class="friend-actions">
                 <a href="/friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
@@ -6636,6 +6664,7 @@ const App = {
 	    const isArchived = this.currentCard.year < currentYear;
 	    const displayName = this.getCardDisplayName(this.currentCard);
 	    const categoryBadge = this.getCategoryBadge(this.currentCard);
+	    const ownerPremiumBadge = this.friendCardOwner?.is_premium ? '<span class="badge badge-premium badge--sm">Premium</span>' : '';
 
     // Build card selector if multiple cards
     let cardSelector = '';
@@ -6660,6 +6689,7 @@ const App = {
           <div class="friend-card-title">
             <div class="flex items-center gap-sm flex-wrap justify-center">
               <h2 class="m-0">${this.escapeHtml(this.friendCardOwner?.username || 'Friend')}'s ${displayName}</h2>
+              ${ownerPremiumBadge}
               <span class="year-badge">${this.currentCard.year}</span>
               ${categoryBadge}
               ${isArchived ? '<span class="archive-badge">Archived</span>' : ''}
@@ -6813,6 +6843,10 @@ const App = {
       ? '<span class="badge badge-success">Verified</span>'
       : '<span class="badge badge-warning">Not verified</span>';
 
+    const premiumBadge = this.isPremium
+      ? '<span class="badge badge-premium">Premium</span>'
+      : '';
+
     const verificationSection = this.user.email_verified
       ? ''
       : `
@@ -6838,7 +6872,7 @@ const App = {
             <div class="profile-info-grid">
               <div class="profile-info-item">
                 <label>Username</label>
-                <span>${this.escapeHtml(this.user.username)}</span>
+                <span>${this.escapeHtml(this.user.username)} <span id="premium-badge-slot">${premiumBadge}</span></span>
               </div>
               <div class="profile-info-item">
                 <label>Email</label>
@@ -6848,6 +6882,13 @@ const App = {
                 <label>Member Since</label>
                 <span>${new Date(this.user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
+            </div>
+          </div>
+
+          <div class="card profile-section" id="billing-section">
+            <h3>Plan</h3>
+            <div id="billing-status" class="billing-status">
+              <div class="text-center"><div class="spinner spinner--small"></div></div>
             </div>
           </div>
 
@@ -6941,6 +6982,8 @@ const App = {
     this.loadNotificationSettings();
     this.loadReminderSettings();
     this.loadApiTokens();
+    this.loadBillingStatus();
+    this.handleBillingReturn();
   },
 
   setupProfileEvents() {
@@ -6989,6 +7032,261 @@ const App = {
         errorEl.classList.remove('hidden');
       }
     });
+  },
+
+  async loadBillingStatus() {
+    const statusEl = document.getElementById('billing-status');
+    if (!statusEl) return;
+
+    try {
+      const status = await API.billing.getStatus();
+      this.billingStatus = status;
+      this.isPremium = !!status.is_premium;
+      const badgeSlot = document.getElementById('premium-badge-slot');
+      if (badgeSlot) {
+        badgeSlot.innerHTML = this.isPremium ? '<span class="badge badge-premium">Premium</span>' : '';
+      }
+      this.renderBillingStatus(statusEl, status);
+    } catch (error) {
+      statusEl.innerHTML = '<p class="text-muted" id="billing-error"></p>';
+      const errorEl = document.getElementById('billing-error');
+      if (errorEl) errorEl.textContent = error.message;
+    }
+  },
+
+  renderBillingStatus(container, status) {
+    if (!status?.billing_enabled) {
+      container.innerHTML = `
+        <p class="text-muted">Billing is not available right now.</p>
+      `;
+      return;
+    }
+
+    const plan = status.is_premium ? 'Premium' : 'Free';
+    const periodEnd = status.current_period_end ? new Date(status.current_period_end) : null;
+    const periodText = periodEnd ? periodEnd.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : null;
+    const cancelNote = status.cancel_at_period_end && periodText
+      ? `<p class="text-muted">Cancels at period end (${periodText}).</p>`
+      : '';
+
+    if (status.is_premium) {
+      container.innerHTML = `
+        <div class="billing-plan">
+          <div class="billing-plan__row">
+            <div>
+              <div class="billing-plan__label">Plan</div>
+              <div class="billing-plan__value">${plan}</div>
+              ${periodText ? `<div class="text-muted">Renews ${periodText}</div>` : ''}
+              ${cancelNote}
+            </div>
+            <div class="billing-plan__actions">
+              <button class="btn btn-secondary btn-sm" data-action="open-billing-portal">Manage Subscription</button>
+            </div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="billing-plan">
+        <div class="billing-plan__row">
+          <div>
+            <div class="billing-plan__label">Plan</div>
+            <div class="billing-plan__value">${plan}</div>
+          </div>
+          <div class="billing-plan__actions">
+            <button class="btn btn-primary btn-sm" data-action="open-upgrade-modal">Upgrade to Premium</button>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  handleBillingReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const billingResult = params.get('billing');
+    if (!billingResult) return;
+
+    if (billingResult === 'cancel') {
+      this.toast('Checkout canceled');
+      this.stripQueryParams(['billing', 'session_id']);
+      return;
+    }
+
+    if (billingResult === 'success') {
+      this.stripQueryParams(['billing', 'session_id']);
+      this.openModal('Processing Upgrade', `
+        <div class="finalize-confirm-modal">
+          <p class="text-muted">Processing your upgrade…</p>
+          <div class="text-center"><div class="spinner spinner--small spinner--spaced"></div></div>
+          <button class="btn btn-ghost" data-action="close-modal">Close</button>
+        </div>
+      `);
+      this.pollBillingStatusUntilPremium();
+    }
+  },
+
+  stripQueryParams(keys) {
+    const url = new URL(window.location.href);
+    keys.forEach((k) => url.searchParams.delete(k));
+    window.history.replaceState({}, '', url.toString());
+  },
+
+  async pollBillingStatusUntilPremium() {
+    const start = Date.now();
+    const timeoutMs = 60000;
+
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const status = await API.billing.getStatus();
+        this.billingStatus = status;
+        this.isPremium = !!status.is_premium;
+
+        if (status.is_premium) {
+          this.toast('Premium activated!', 'success');
+          this.closeModal();
+          await this.loadBillingStatus();
+          return;
+        }
+      } catch (error) {
+        // Ignore transient errors while polling.
+      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    this.openModal('Almost There', `
+      <div class="finalize-confirm-modal">
+        <p class="text-muted">Your payment succeeded, but Premium is still processing. If this doesn’t update in a few minutes, contact support.</p>
+        <button class="btn btn-ghost" data-action="close-modal">Close</button>
+      </div>
+    `);
+  },
+
+  openUpgradeModal() {
+    if (!this.billingStatus?.billing_enabled) {
+      this.toast('Billing is not available right now', 'error');
+      return;
+    }
+
+    this.openModal('Upgrade to Premium', `
+      <div class="upgrade-modal">
+        <p class="text-muted">Premium only adds features — nothing you use today gets removed.</p>
+
+        <h4 class="mt-lg">Premium Benefits</h4>
+        <ul class="upgrade-list">
+          <li>Shareable PNG links</li>
+          <li>Templates + 1‑click New Year rollover</li>
+          <li>AI Enhancements: 100/month</li>
+          <li>Premium badge (visible to friends)</li>
+        </ul>
+
+        <h4 class="mt-lg">Choose an option</h4>
+        <div class="upgrade-actions">
+          <button class="btn btn-primary" data-action="billing-checkout-subscription" data-interval="month">Monthly</button>
+          <button class="btn btn-secondary" data-action="billing-checkout-subscription" data-interval="year">Yearly</button>
+          <button class="btn btn-ghost" data-action="billing-checkout-lifetime">Lifetime</button>
+        </div>
+
+        <h4 class="mt-lg">Tip Jar</h4>
+        <div class="upgrade-actions">
+          <button class="btn btn-ghost" data-action="billing-checkout-tip" data-amount="5">$5</button>
+          <button class="btn btn-ghost" data-action="billing-checkout-tip" data-amount="10">$10</button>
+          <button class="btn btn-ghost" data-action="billing-checkout-tip" data-amount="20">$20</button>
+        </div>
+
+        <h4 class="mt-lg">Have a code?</h4>
+        <div class="upgrade-redeem">
+          <input id="premium-code-input" class="form-input" type="text" autocomplete="off" placeholder="YOBP-...." />
+          <button class="btn btn-secondary" data-action="billing-redeem-code">Redeem</button>
+        </div>
+
+        <div class="mt-lg">
+          <button class="btn btn-ghost" data-action="close-modal">Close</button>
+        </div>
+      </div>
+    `);
+
+    const input = document.getElementById('premium-code-input');
+    if (input) input.focus();
+  },
+
+  async openBillingPortal() {
+    try {
+      const resp = await API.billing.createPortalSession();
+      if (resp?.url) {
+        window.location.href = resp.url;
+      }
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async startSubscriptionCheckout(target) {
+    const interval = target?.dataset?.interval;
+    if (interval !== 'month' && interval !== 'year') {
+      this.toast('Invalid interval', 'error');
+      return;
+    }
+
+    try {
+      this.setButtonLoading(target, true);
+      const resp = await API.billing.createSubscriptionCheckoutSession(interval);
+      if (resp?.url) window.location.href = resp.url;
+    } catch (error) {
+      this.toast(error.message, 'error');
+    } finally {
+      this.setButtonLoading(target, false);
+    }
+  },
+
+  async startLifetimeCheckout() {
+    try {
+      const resp = await API.billing.createLifetimeCheckoutSession();
+      if (resp?.url) window.location.href = resp.url;
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
+
+  async startTipCheckout(target) {
+    const amount = parseInt(target?.dataset?.amount || '', 10);
+    if (![5, 10, 20].includes(amount)) {
+      this.toast('Invalid tip amount', 'error');
+      return;
+    }
+    try {
+      this.setButtonLoading(target, true);
+      const resp = await API.billing.createTipCheckoutSession(amount);
+      if (resp?.url) window.location.href = resp.url;
+    } catch (error) {
+      this.toast(error.message, 'error');
+    } finally {
+      this.setButtonLoading(target, false);
+    }
+  },
+
+  async redeemPremiumCode(target) {
+    const modal = target?.closest?.('.upgrade-modal');
+    const input = modal ? modal.querySelector('#premium-code-input') : document.getElementById('premium-code-input');
+    const code = input?.value || '';
+
+    if (!code.trim()) {
+      this.toast('Enter a code', 'error');
+      return;
+    }
+
+    try {
+      this.setButtonLoading(target, true);
+      await API.billing.redeemCode(code);
+      this.toast('Premium activated!', 'success');
+      this.closeModal();
+      await this.loadBillingStatus();
+    } catch (error) {
+      this.toast(error.message, 'error');
+    } finally {
+      this.setButtonLoading(target, false);
+    }
   },
 
   // Archive card view (for viewing individual archived cards)

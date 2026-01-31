@@ -23,10 +23,20 @@ func NewCSRFMiddleware(secure bool) *CSRFMiddleware {
 	return &CSRFMiddleware{secure: secure}
 }
 
+var csrfExemptPostPaths = map[string]bool{
+	"/api/billing/webhook": true,
+}
+
 func (m *CSRFMiddleware) Protect(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Public tokenized endpoints (no session) should not require CSRF headers/cookies.
 		if r.URL.Path == "/r/unsubscribe" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Stripe webhooks cannot send CSRF tokens.
+		if r.Method == http.MethodPost && csrfExemptPostPaths[r.URL.Path] {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -1,5 +1,6 @@
 services:
   app:
+    image: localhost/yearofbingo_app:latest
     build:
       context: .
       dockerfile: Containerfile
@@ -63,6 +64,7 @@ services:
           target: /app/web
 
   playwright:
+    image: localhost/yearofbingo_playwright:latest
     build:
       context: .
       dockerfile: Containerfile.playwright
@@ -125,6 +127,7 @@ services:
       - MP_SMTP_AUTH_ALLOW_INSECURE=1
 
   oidc:
+    image: localhost/yearofbingo_oidc:latest
     build:
       context: .
       dockerfile: Containerfile.oidc

@@ -19,6 +19,7 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
+	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
 )
 
 func main() {
@@ -104,6 +105,9 @@ func run() error {
 	reminderService := services.NewReminderService(dbAdapter, emailService, cfg.Email.BaseURL)
 	accountService := services.NewAccountService(dbAdapter)
 	aiService := ai.NewService(cfg, dbAdapter)
+	billingStore := billing.NewStore(dbAdapter)
+	stripeClient := billing.NewStripeHTTPClient(cfg.Billing.StripeSecretKey)
+	billingService := billing.NewService(cfg.Billing, cfg.Email.BaseURL, billingStore, stripeClient)
 
 	oauthProviders := map[services.Provider]services.OAuthProvider{}
 	if cfg.OAuth.Google.Enabled {
@@ -141,6 +145,7 @@ func run() error {
 	reminderHandler := handlers.NewReminderHandler(reminderService)
 	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
+	billingHandler := handlers.NewBillingHandler(billingService)
 	accountHandler := handlers.NewAccountHandler(accountService, authService, cfg.Server.Secure)
 	pageHandler, err := handlers.NewPageHandler("web/templates", handlers.PageOAuthConfig{
 		GoogleEnabled: cfg.OAuth.Google.Enabled,
@@ -229,6 +234,14 @@ func run() error {
 	aiRateLimit := resolveAIRateLimit(cfg, logger, os.LookupEnv)
 
 	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {
+		user := handlers.GetUserFromContext(r.Context())
+		if user != nil {
+			return user.ID.String()
+		}
+		return ""
+	}, false)
+
+	redeemLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:redeem:", func(r *http.Request) string {
 		user := handlers.GetUserFromContext(r.Context())
 		if user != nil {
 			return user.ID.String()
@@ -401,6 +414,15 @@ func run() error {
 	// AI endpoint
 	mux.Handle("POST /api/ai/generate", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Generate))))
 	mux.Handle("POST /api/ai/guide", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Guide))))
+
+	// Billing endpoints (session cookie only)
+	mux.Handle("GET /api/billing/status", requireSession(requireRead(http.HandlerFunc(billingHandler.Status))))
+	mux.Handle("POST /api/billing/checkout/subscription", requireSession(http.HandlerFunc(billingHandler.CheckoutSubscription)))
+	mux.Handle("POST /api/billing/checkout/lifetime", requireSession(http.HandlerFunc(billingHandler.CheckoutLifetime)))
+	mux.Handle("POST /api/billing/checkout/tip", requireSession(http.HandlerFunc(billingHandler.CheckoutTip)))
+	mux.Handle("POST /api/billing/portal", requireSession(http.HandlerFunc(billingHandler.Portal)))
+	mux.Handle("POST /api/billing/redeem", requireSession(redeemLimiter.Middleware(http.HandlerFunc(billingHandler.Redeem))))
+	mux.Handle("POST /api/billing/webhook", http.HandlerFunc(billingHandler.Webhook))
 
 	// Static files
 	fs := http.FileServer(http.Dir("web/static"))

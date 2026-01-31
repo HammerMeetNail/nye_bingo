@@ -2651,6 +2651,62 @@ progress.progress-bar::-moz-progress-bar {
   color: var(--text-dark);
 }
 
+.badge-premium {
+  background: var(--color-gold);
+  color: var(--text-dark);
+}
+
+.badge--sm {
+  font-size: var(--font-size-xs);
+  padding: 0.15em 0.45em;
+}
+
+.billing-plan__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.billing-plan__label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.billing-plan__value {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+}
+
+.billing-plan__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.upgrade-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.upgrade-list {
+  margin: var(--spacing-sm) 0 0 1.25rem;
+  color: var(--color-text-secondary);
+}
+
+.upgrade-redeem {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.upgrade-redeem .form-input {
+  flex: 1;
+  min-width: 12rem;
+}
+
 /* Archive Page */
 .archive-page {
   max-width: 800px;

@@ -52,7 +52,8 @@ type FriendCardsResponse struct {
 }
 
 type FriendOwner struct {
-	Username string `json:"username"`
+	Username  string `json:"username"`
+	IsPremium bool   `json:"is_premium"`
 }
 
 func (h *FriendHandler) Search(w http.ResponseWriter, r *http.Request) {
@@ -343,6 +344,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerName string
+	var ownerIsPremium bool
 	for _, f := range friends {
 		friendID := f.FriendID
 		if f.UserID != user.ID {
@@ -350,13 +352,14 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 		}
 		if friendID == friendUserID {
 			ownerName = f.FriendUsername
+			ownerIsPremium = f.FriendIsPremium
 			break
 		}
 	}
 
 	writeJSON(w, http.StatusOK, FriendCardResponse{
 		Card:  activeCard,
-		Owner: &FriendOwner{Username: ownerName},
+		Owner: &FriendOwner{Username: ownerName, IsPremium: ownerIsPremium},
 	})
 }
 
@@ -414,6 +417,7 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ownerName string
+	var ownerIsPremium bool
 	for _, f := range friends {
 		friendID := f.FriendID
 		if f.UserID != user.ID {
@@ -421,13 +425,14 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 		}
 		if friendID == friendUserID {
 			ownerName = f.FriendUsername
+			ownerIsPremium = f.FriendIsPremium
 			break
 		}
 	}
 
 	writeJSON(w, http.StatusOK, FriendCardsResponse{
 		Cards: finalizedCards,
-		Owner: &FriendOwner{Username: ownerName},
+		Owner: &FriendOwner{Username: ownerName, IsPremium: ownerIsPremium},
 	})
 }
 

@@ -636,6 +636,33 @@ const API = {
     },
   },
 
+  // Billing endpoints (session cookie only)
+  billing: {
+    async getStatus() {
+      return API.request('GET', '/api/billing/status');
+    },
+
+    async createSubscriptionCheckoutSession(interval) {
+      return API.request('POST', '/api/billing/checkout/subscription', { interval });
+    },
+
+    async createLifetimeCheckoutSession() {
+      return API.request('POST', '/api/billing/checkout/lifetime');
+    },
+
+    async createTipCheckoutSession(amount) {
+      return API.request('POST', '/api/billing/checkout/tip', { amount });
+    },
+
+    async createPortalSession() {
+      return API.request('POST', '/api/billing/portal');
+    },
+
+    async redeemCode(code) {
+      return API.request('POST', '/api/billing/redeem', { code });
+    },
+  },
+
   // AI endpoints
   ai: {
     async generate(category, focus, difficulty, budget, context, count = 24) {

@@ -1,5 +1,15 @@
 .PHONY: local down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release
 
+# Force Podman to use a Linux compose provider (important in WSL where it may
+# otherwise auto-detect a Windows Docker Desktop docker-compose binary).
+PODMAN_COMPOSE_PROVIDER ?= podman-compose
+PODMAN_COMPOSE_PROVIDER_PATH ?= $(shell command -v $(PODMAN_COMPOSE_PROVIDER) 2>/dev/null)
+PODMAN_COMPOSE_ENV := PODMAN_COMPOSE_PROVIDER=$(PODMAN_COMPOSE_PROVIDER) PODMAN_COMPOSE_PROVIDER_PATH=$(PODMAN_COMPOSE_PROVIDER_PATH)
+PODMAN_COMPOSE := $(PODMAN_COMPOSE_ENV) podman compose
+
+# Tooling versions (override via env, e.g. `make lint GOLANGCI_LINT_VERSION=v2.0.0`)
+GOLANGCI_LINT_VERSION ?= v2.6.2
+
 # Run full local rebuild: down, build assets, build container, up in background
 local: down assets build up
 	@echo "Local environment running. Use 'make logs' to view output or 'make down' to stop."
@@ -10,19 +20,19 @@ assets:
 
 # Stop and remove containers
 down:
-	podman compose down
+	$(PODMAN_COMPOSE) down
 
 # Build containers
 build:
-	podman compose build
+	$(PODMAN_COMPOSE) build
 
 # Start containers in background
 up:
-	podman compose up -d
+	$(PODMAN_COMPOSE) up -d
 
 # View logs (follow mode)
 logs:
-	podman compose logs -f
+	$(PODMAN_COMPOSE) logs -f
 
 # Run all tests in container
 test:
@@ -46,13 +56,21 @@ coverage:
 # Run linter
 lint:
 	@chmod -R u+w .cache 2>/dev/null || true
-	rm -rf .cache
-	@mkdir -p .cache/go-build .cache/go-mod .cache/golangci-lint
-	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod GOLANGCI_LINT_CACHE=$(PWD)/.cache/golangci-lint golangci-lint run
+	rm -rf .cache/go-build .cache/go-mod .cache/golangci-lint
+	@mkdir -p .cache/bin .cache/go-build .cache/go-mod .cache/golangci-lint
+	@set -e; \
+	if command -v golangci-lint >/dev/null 2>&1 && golangci-lint version 2>/dev/null | grep -Eq 'version 2\\.'; then \
+		GOLANGCI_LINT=golangci-lint; \
+	else \
+		echo "Using golangci-lint $(GOLANGCI_LINT_VERSION) (v2 config detected)"; \
+		GOBIN=$(PWD)/.cache/bin GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION); \
+		GOLANGCI_LINT=$(PWD)/.cache/bin/golangci-lint; \
+	fi; \
+	GOCACHE=$(PWD)/.cache/go-build GOMODCACHE=$(PWD)/.cache/go-mod GOLANGCI_LINT_CACHE=$(PWD)/.cache/golangci-lint $$GOLANGCI_LINT run
 
 # Clean up everything including volumes
 clean:
-	podman compose down -v
+	$(PODMAN_COMPOSE) down -v
 
 # Run Playwright E2E tests (destructive: resets volumes)
 e2e:

@@ -54,6 +54,7 @@ The following security controls are in place; be aware of them when modifying re
 ### Feature Specs (`plans/`)
 - Cards (grid sizes, FREE, finalize/immutability, clone): `plans/flexible_cards.md`
 - Sharing + OpenGraph (`/s/{token}`, `/og/...`): `plans/card_share.md`
+- Monetization / Billing (Stripe + Premium entitlements): `plans/monetization.md`
 - Export: `plans/export.md`
 - Account deletion: `plans/delete_account.md`
 - AI (wizard/assist, gating, rate limits): `plans/ai_goals.md` and `plans/ai_guide.md`
