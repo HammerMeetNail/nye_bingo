@@ -976,6 +976,28 @@ func TestBillingWebhook_InvalidSignatureRejected(t *testing.T) {
 ### Integration-ish Tests (optional, still offline)
 - Webhook handler with a captured fixture payload + computed signature.
 
+### E2E Tests (Playwright, mocked Stripe; no Stripe listener)
+We want billing coverage in `make e2e` without depending on the Stripe CLI listener/webhook forwarding.
+
+Approach:
+- Add an env var to point the server-side Stripe HTTP client at a local mock:
+  - `STRIPE_API_BASE_URL` (defaults to Stripe when unset).
+- Run a lightweight mock Stripe API in the E2E stack:
+  - `tests/stripe_mock/` + `Containerfile.stripe-mock`
+  - Minimal endpoints the app uses (`/v1/customers`, `/v1/checkout/sessions`, `/v1/billing_portal/sessions`)
+  - Test/debug endpoints used by Playwright (e.g. `GET /test/last-checkout-session`)
+- In Playwright, simulate Stripe webhooks by POSTing signed events directly to:
+  - `POST /api/billing/webhook` (same signature verification as production)
+
+Coverage:
+- `tests/e2e/billing-premium.spec.js`:
+  - "subscription + tip" combined checkout (multiple line items) + webhook activation
+  - "lifetime" purchase + webhook activation
+
+How to run:
+- Targeted: `./scripts/e2e.sh tests/e2e/billing-premium.spec.js`
+- Full suite: `make e2e` (uses `./scripts/e2e.sh`)
+
 ### Manual Verification Checklist
 1. Start checkout from Profile → redirect to Stripe Checkout.
 2. Complete payment in test mode → return to app, Premium becomes active within ~1 minute.

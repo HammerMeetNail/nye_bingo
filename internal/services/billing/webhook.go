@@ -6,6 +6,8 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -81,6 +83,21 @@ func VerifyStripeSignatureWithTolerance(secret string, payload []byte, sigHeader
 		if subtle.ConstantTimeCompare([]byte(expected), []byte(sig)) == 1 {
 			return nil
 		}
+	}
+
+	// Debug aid for E2E: signature mismatches are hard to inspect otherwise.
+	// We log only hashes of the secret and payload, plus the expected/provided v1 values.
+	if os.Getenv("E2E_DEBUG_STRIPE_SIG") == "1" {
+		sum := sha256.Sum256(payload)
+		secretSum := sha256.Sum256([]byte(secret))
+		slog.Info(
+			"billing: stripe signature mismatch",
+			"ts", ts,
+			"expected_v1", expected,
+			"provided_v1", strings.Join(v1Sigs, "|"),
+			"payload_sha256", hex.EncodeToString(sum[:]),
+			"secret_sha256", hex.EncodeToString(secretSum[:]),
+		)
 	}
 
 	return ErrStripeSignatureInvalid

@@ -40,11 +40,11 @@ down: stripe-stop
 
 # Build containers
 build:
-	$(PODMAN_COMPOSE) build
+	$(PODMAN_COMPOSE) build app postgres redis mailpit
 
 # Start containers in background
 up:
-	$(PODMAN_COMPOSE) up -d
+	$(PODMAN_COMPOSE) up -d app postgres redis mailpit
 
 # View logs (follow mode)
 logs:

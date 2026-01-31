@@ -25,12 +25,21 @@ type stripeHTTPClient struct {
 }
 
 func NewStripeHTTPClient(secretKey string) StripeClient {
+	return NewStripeHTTPClientWithAPIBase(secretKey, "")
+}
+
+func NewStripeHTTPClientWithAPIBase(secretKey, apiBase string) StripeClient {
+	apiBase = strings.TrimSpace(apiBase)
+	if apiBase == "" {
+		apiBase = "https://api.stripe.com"
+	}
+
 	return &stripeHTTPClient{
 		secretKey: secretKey,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		apiBase: "https://api.stripe.com",
+		apiBase: apiBase,
 	}
 }
 

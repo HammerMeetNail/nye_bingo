@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const MAILPIT_BASE_URL = process.env.MAILPIT_BASE_URL || 'http://mailpit:8025';
 const MAILPIT_WAIT_TIMEOUT_MS = Number.parseInt(process.env.MAILPIT_WAIT_TIMEOUT_MS || '30000', 10);
 const OIDC_BASE_URL = process.env.OIDC_BASE_URL || 'http://oidc:5555';
+const STRIPE_MOCK_BASE_URL = process.env.STRIPE_MOCK_BASE_URL || 'http://stripe-mock:12111';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 function buildUser(testInfo, prefix, options = {}) {
   const workerIndex = testInfo && Number.isInteger(testInfo.workerIndex) ? testInfo.workerIndex : 0;
@@ -346,6 +348,45 @@ function extractTokenFromEmail(message, route) {
   return tokenMatch[1];
 }
 
+function stripeSignatureHeader(secret, payload, timestampSec) {
+  const ts = Number.isFinite(timestampSec) ? timestampSec : Math.floor(Date.now() / 1000);
+  const signed = `${ts}.${payload}`;
+  const mac = crypto.createHmac('sha256', secret).update(Buffer.from(signed, 'utf8')).digest('hex');
+  return `t=${ts},v1=${mac}`;
+}
+
+async function postStripeWebhook(request, payloadObject, { secret } = {}) {
+  const webhookSecret = String(secret || STRIPE_WEBHOOK_SECRET || '').trim();
+  if (!webhookSecret) {
+    throw new Error('Missing STRIPE_WEBHOOK_SECRET for E2E webhook signing');
+  }
+  const payload = JSON.stringify(payloadObject);
+  const payloadBytes = Buffer.from(payload, 'utf8');
+  const sig = stripeSignatureHeader(webhookSecret, payload, Math.floor(Date.now() / 1000));
+  // Playwright's APIRequestContext uses `data` for request bodies (not `body`).
+  // If you pass `body`, the payload can be dropped and Stripe signature verification will fail.
+  const response = await request.post('/api/billing/webhook', {
+    headers: {
+      'Content-Type': 'application/json',
+      'Stripe-Signature': sig,
+    },
+    data: payloadBytes,
+  });
+  if (!response.ok()) {
+    const text = await response.text();
+    throw new Error(`Stripe webhook failed: ${response.status()} ${text}`);
+  }
+}
+
+async function getLastStripeCheckoutSession(request) {
+  const response = await request.get(`${STRIPE_MOCK_BASE_URL}/test/last-checkout-session`);
+  if (!response.ok()) {
+    const text = await response.text();
+    throw new Error(`Failed to fetch last Stripe checkout session: ${response.status()} ${text}`);
+  }
+  return response.json();
+}
+
 module.exports = {
   buildUser,
   register,
@@ -365,4 +406,6 @@ module.exports = {
   waitForEmail,
   expectNoEmail,
   extractTokenFromEmail,
+  postStripeWebhook,
+  getLastStripeCheckoutSession,
 };

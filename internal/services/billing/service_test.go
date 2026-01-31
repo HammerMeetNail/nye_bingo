@@ -369,7 +369,7 @@ func TestService_CreateCombinedCheckoutURL_TipOnly(t *testing.T) {
 		},
 	}
 	svc := NewService(config.BillingConfig{
-		Enabled:           true,
+		Enabled:            true,
 		StripeTip10PriceID: "price_tip10",
 	}, "https://example.test", store, stripe)
 

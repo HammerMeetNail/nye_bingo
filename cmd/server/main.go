@@ -106,7 +106,7 @@ func run() error {
 	accountService := services.NewAccountService(dbAdapter)
 	aiService := ai.NewService(cfg, dbAdapter)
 	billingStore := billing.NewStore(dbAdapter)
-	stripeClient := billing.NewStripeHTTPClient(cfg.Billing.StripeSecretKey)
+	stripeClient := billing.NewStripeHTTPClientWithAPIBase(cfg.Billing.StripeSecretKey, cfg.Billing.StripeAPIBaseURL)
 	billingService := billing.NewService(cfg.Billing, cfg.Email.BaseURL, billingStore, stripeClient)
 
 	oauthProviders := map[services.Provider]services.OAuthProvider{}

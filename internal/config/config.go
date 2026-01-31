@@ -82,6 +82,7 @@ type BillingConfig struct {
 	Enabled                      bool
 	StripeSecretKey              string
 	StripeWebhookSecret          string
+	StripeAPIBaseURL             string
 	StripePremiumMonthlyPriceID  string
 	StripePremiumYearlyPriceID   string
 	StripePremiumLifetimePriceID string
@@ -159,6 +160,7 @@ func Load() (*Config, error) {
 			Enabled:                      getEnvBool("BILLING_ENABLED", false),
 			StripeSecretKey:              getEnv("STRIPE_SECRET_KEY", ""),
 			StripeWebhookSecret:          getEnv("STRIPE_WEBHOOK_SECRET", ""),
+			StripeAPIBaseURL:             getEnv("STRIPE_API_BASE_URL", ""),
 			StripePremiumMonthlyPriceID:  getEnv("STRIPE_PREMIUM_PRICE_MONTHLY", ""),
 			StripePremiumYearlyPriceID:   getEnv("STRIPE_PREMIUM_PRICE_YEARLY", ""),
 			StripePremiumLifetimePriceID: getEnv("STRIPE_PREMIUM_PRICE_LIFETIME", ""),

@@ -28,11 +28,13 @@ services:
       - SMTP_PORT=1025
       - EMAIL_FROM_ADDRESS=noreply@yearofbingo.com
       - EMAIL_FROM_NAME=Year of Bingo
-      - APP_BASE_URL=http://localhost:8080
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8080}
+      - E2E_DEBUG_STRIPE_SIG=${E2E_DEBUG_STRIPE_SIG}
       # Billing (Stripe)
       - BILLING_ENABLED=${BILLING_ENABLED:-false}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_API_BASE_URL=${STRIPE_API_BASE_URL}
       - STRIPE_PREMIUM_PRICE_MONTHLY=${STRIPE_PREMIUM_PRICE_MONTHLY}
       - STRIPE_PREMIUM_PRICE_YEARLY=${STRIPE_PREMIUM_PRICE_YEARLY}
       - STRIPE_PREMIUM_PRICE_LIFETIME=${STRIPE_PREMIUM_PRICE_LIFETIME}
@@ -154,6 +156,25 @@ services:
       - "5555:5555"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5555/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  stripe-mock:
+    image: localhost/yearofbingo_stripe_mock:latest
+    build:
+      context: .
+      dockerfile: Containerfile.stripe-mock
+    environment:
+      - STRIPE_MOCK_PUBLIC_BASE_URL=${STRIPE_MOCK_PUBLIC_BASE_URL}
+    profiles:
+      - e2e
+    expose:
+      - "12111"
+    ports:
+      - "12111:12111"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:12111/health"]
       interval: 5s
       timeout: 3s
       retries: 5
