@@ -52,7 +52,7 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
 
 **Not implemented yet (planned for later / still TODO):**
 - Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.
-- “Premium features” themselves (templates / premium AI / PNG gating) remain separate plans.
+- “Premium features” themselves (templates / premium AI) remain separate plans.
 
 ## Decisions (Owner Inputs)
 
@@ -838,7 +838,6 @@ Anonymous users:
    - `API.billing.redeemCode(code)`
 2. “Upgrade” modal/page with:
    - Clear list of premium benefits (additive). Suggested copy:
-     - “Shareable PNG links” (create public share links for cards)
      - “Templates + 1‑click New Year rollover”
      - “AI Enhancements: 100/month” (Goal Assistant, Regenerate, AI Fill Empty)
      - “AI requires a verified email after 5 total generations” (anti-abuse; same rule as free users)
@@ -881,22 +880,17 @@ Any premium-only endpoint must:
 
 ---
 
-## Three Premium Features People Will Pay For (Additive Roadmap)
+## Premium Features People Will Pay For (Additive Roadmap)
 
 These are intentionally chosen to feel “worth it” without harming free users.
 
-### 1) Shareable PNG Links (Premium)
-- Implement `plans/png.md`.
-- Monetization tie-in: require Premium to create share links; public viewing remains public.
-- This is concrete and already has a plan; update that plan during implementation to reflect Premium gating.
-
-### 2) Templates + 1‑Click “New Year” Rollover (Premium)
+### 1) Templates + 1‑Click “New Year” Rollover (Premium)
 - Premium users can mark a card as a reusable template and generate next year’s card in one click.
 - Includes safe options like “carry over incomplete items” and “reshuffle layout”.
 - Requires a dedicated plan before implementation:
   - **Create** `plans/premium_templates.md` (same style: schema, endpoints, UX, tests, rollout).
 
-### 3) Premium AI Boost (Cost‑Bounded) (Premium)
+### 2) Premium AI Boost (Cost‑Bounded) (Premium)
 - Premium includes a **simple monthly allowance** of “AI Enhancements” and adds goal-focused tools:
   - Goal Assistant / ideator (strictly tied to a specific bingo goal)
   - Regenerate a goal in the wizard
@@ -1017,8 +1011,6 @@ This ordering minimizes risk and keeps each step testable:
    - Pure app/DB logic; no external cost; easiest premium feature to validate and ship safely.
 3. `plans/premium_ai.md`
    - Cost-sensitive and more complex; implement after entitlements are stable.
-4. `plans/png.md`
-   - Adds a new rendering dependency + storage concerns; implement last and gate only “create share link” behind Premium (public viewing stays public).
 
 ## Rollout Plan (Low Risk)
 

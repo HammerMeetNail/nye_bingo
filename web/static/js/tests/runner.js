@@ -245,8 +245,11 @@ describe('Premium navigation + page wiring', () => {
     if (!appJs.includes('nav-link--premium')) {
       throw new Error("Expected setupNavigation() to render an element with class 'nav-link--premium'");
     }
-    if (!appJs.includes('href="/premium?upgrade=1"') && !appJs.includes("href='/premium?upgrade=1'")) {
-      throw new Error("Expected Premium navbar link to point to /premium?upgrade=1");
+    if (!appJs.includes('href="/premium"') && !appJs.includes("href='/premium'")) {
+      throw new Error('Expected Premium navbar link to point to /premium');
+    }
+    if (appJs.includes('href="/premium?upgrade=1"') || appJs.includes("href='/premium?upgrade=1'")) {
+      throw new Error('Expected Premium navbar link to not auto-open the upgrade modal');
     }
   });
 

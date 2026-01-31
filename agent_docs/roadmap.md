@@ -30,6 +30,4 @@ The following plans are ready for implementation:
 
 - **`plans/increase_test_coverage_via_interfaces.md`** - Interface-based dependency injection to enable comprehensive unit testing. Introduces interfaces between handlers and services, enabling mock injection. Target: 70%+ handler coverage (currently ~31%).
 
-- **`plans/png.md`** - Shareable PNG images of bingo cards. Server-side generation using `fogleman/gg`, public share links with configurable expiration (default 18 months), OG meta tags for rich social previews. Users control whether completions are visible.
-
-- **`plans/flexible_cards.md`** - Custom card dimensions beyond 5x5 BINGO. Header word determines columns (2-10 chars), rows configurable (2-10). Optional user-placed FREE space. Classic BINGO cards preserved as separate type. Significant impact on PNG generation and UI.
+- **`plans/flexible_cards.md`** - Custom card dimensions beyond 5x5 BINGO. Header word determines columns (2-10 chars), rows configurable (2-10). Optional user-placed FREE space. Classic BINGO cards preserved as separate type. Significant impact on rendering and UI.

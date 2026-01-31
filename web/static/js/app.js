@@ -765,7 +765,7 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="/dashboard" class="nav-link nav-link--primary">My Cards</a>
-        <a href="/premium?upgrade=1" class="nav-link nav-link--premium" aria-label="Premium">
+        <a href="/premium" class="nav-link nav-link--premium" aria-label="Premium">
           <i class="fa-solid fa-star" aria-hidden="true"></i>
           <span>Premium</span>
         </a>
@@ -795,7 +795,7 @@ const App = {
         <div class="nav-menu">
           <a href="/faq" class="nav-link">FAQ</a>
         </div>
-        <a href="/premium?upgrade=1" class="nav-link nav-link--premium" aria-label="Premium">
+        <a href="/premium" class="nav-link nav-link--premium" aria-label="Premium">
           <i class="fa-solid fa-star" aria-hidden="true"></i>
           <span>Premium</span>
         </a>
@@ -7266,8 +7266,36 @@ const App = {
   },
 
   openUpgradeModal() {
-    if (!this.billingStatus?.billing_enabled) {
+    // The Premium page renders quickly and loads billing status async.
+    // If a user clicks before status loads, fetch it here so the modal can open reliably.
+    if (!this.billingStatus) {
+      API.billing.getStatus()
+        .then((status) => {
+          this.billingStatus = status;
+          this.isPremium = !!status.is_premium;
+          this.openUpgradeModal();
+        })
+        .catch((error) => {
+          this.toast(error.message, 'error');
+        });
+      return;
+    }
+
+    if (!this.billingStatus.billing_enabled) {
       this.toast('Billing is not available right now', 'error');
+      return;
+    }
+
+    if (this.billingStatus.is_premium) {
+      this.openModal('Premium', `
+        <div class="finalize-confirm-modal">
+          <p class="text-muted">You're already Premium.</p>
+          <div class="upgrade-actions mt-md">
+            <button class="btn btn-secondary" data-action="open-billing-portal">Manage subscription</button>
+            <button class="btn btn-ghost" data-action="close-modal">Close</button>
+          </div>
+        </div>
+      `);
       return;
     }
 
@@ -7278,7 +7306,6 @@ const App = {
         <h4 class="mt-lg">Premium Benefits</h4>
         <ul class="upgrade-list">
           <li>Premium badge (visible to friends)</li>
-          <li>Shareable PNG links <span class="text-muted">(coming soon)</span></li>
           <li>Templates + 1‑click New Year rollover <span class="text-muted">(coming soon)</span></li>
           <li>AI Enhancements: 100/month <span class="text-muted">(coming soon)</span></li>
         </ul>
@@ -8418,7 +8445,7 @@ const App = {
           </div>
           <div class="card premium-feature">
             <h3>Coming soon</h3>
-            <p class="text-muted">Shareable PNG links, templates, New Year rollover, and AI enhancements are planned next.</p>
+            <p class="text-muted">Templates, New Year rollover, and AI enhancements are planned next.</p>
           </div>
         </div>
 
@@ -8443,11 +8470,6 @@ const App = {
     const ctaSlot = document.getElementById('premium-cta-slot');
     const statusEl = document.getElementById('premium-billing-status');
 
-    const wantsUpgrade = queryParams?.get?.('upgrade') === '1';
-    if (wantsUpgrade) {
-      this.stripQueryParams(['upgrade']);
-    }
-
     const wantsRedeem = queryParams?.get?.('redeem') === '1';
     if (wantsRedeem) {
       this.stripQueryParams(['redeem']);
@@ -8457,8 +8479,8 @@ const App = {
       if (ctaSlot) {
         ctaSlot.innerHTML = `
           <div class="premium-hero__cta-row">
-            <a href="/login" class="btn btn-primary" data-action="set-post-auth-next" data-next="/premium?upgrade=1">Sign in to upgrade</a>
-            <a href="/register" class="btn btn-secondary" data-action="set-post-auth-next" data-next="/premium?upgrade=1">Create account</a>
+            <a href="/login" class="btn btn-primary" data-action="set-post-auth-next" data-next="/premium">Sign in to upgrade</a>
+            <a href="/register" class="btn btn-secondary" data-action="set-post-auth-next" data-next="/premium">Create account</a>
             <button class="btn btn-ghost" data-action="open-premium-code-modal">Have a code?</button>
           </div>
         `;
@@ -8470,7 +8492,21 @@ const App = {
     }
 
     if (ctaSlot) {
-      ctaSlot.innerHTML = `<div class="text-center"><div class="spinner spinner--small"></div></div>`;
+      // Render a usable CTA immediately; billing status loads async and will refine this UI.
+      if (this.isPremium) {
+        ctaSlot.innerHTML = `
+          <div class="premium-hero__cta-row">
+            <a href="/profile" class="btn btn-ghost">View profile</a>
+          </div>
+        `;
+      } else {
+        ctaSlot.innerHTML = `
+          <div class="premium-hero__cta-row">
+            <button class="btn btn-primary" data-action="open-upgrade-modal">Upgrade to Premium</button>
+            <button class="btn btn-secondary" data-action="open-premium-code-modal">Have a code?</button>
+          </div>
+        `;
+      }
     }
 
     let status = null;
@@ -8488,8 +8524,10 @@ const App = {
     }
 
     if (ctaSlot) {
+      // If we couldn't load status, keep the optimistic CTA already rendered above.
       if (!status) {
-        ctaSlot.innerHTML = `<p class="text-muted">Unable to load billing status.</p>`;
+        // Keep the existing CTA as a best-effort (user can still attempt checkout).
+        // Billing endpoints will respond with a clear error if billing is actually disabled.
       } else if (!status.billing_enabled) {
         ctaSlot.innerHTML = `<p class="text-muted">Premium is not available right now.</p>`;
       } else if (status.is_premium) {
@@ -8529,24 +8567,6 @@ const App = {
         this.toast(error.message, 'error');
         this.openPremiumCodeModal({ errorMessage: error.message, initialCode: '' });
       }
-    }
-
-    if (wantsUpgrade && status?.billing_enabled) {
-      if (status.is_premium) {
-        this.openModal('Premium', `
-          <div class="finalize-confirm-modal">
-            <p class="text-muted">You're already Premium.</p>
-            <div class="upgrade-actions mt-md">
-              <button class="btn btn-secondary" data-action="open-billing-portal">Manage subscription</button>
-              <button class="btn btn-ghost" data-action="close-modal">Close</button>
-            </div>
-          </div>
-        `);
-      } else {
-        this.openUpgradeModal();
-      }
-    } else if (wantsUpgrade && status && !status.billing_enabled) {
-      this.toast('Billing is not available right now', 'error');
     }
   },
 
