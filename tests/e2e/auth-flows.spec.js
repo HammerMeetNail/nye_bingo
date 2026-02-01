@@ -120,8 +120,11 @@ test('verification link does not break authenticated actions in an already-open 
 
   await page.getByRole('link', { name: '← Back' }).click();
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
-  await page.getByRole('link', { name: 'Create Your First Card' }).click();
+  await page.getByRole('button', { name: 'Create Your First Card' }).click();
 
-  await createCardFromAuthenticatedCreate(page);
+  // The button opens a modal; complete card creation from the modal
+  await expect(page.locator('#modal-title')).toHaveText('Create New Card');
+  await page.getByRole('button', { name: 'Create Card' }).click();
+  await expect(page.locator('#item-input')).toBeVisible();
   expect(page.url()).toContain('/card/');
 });

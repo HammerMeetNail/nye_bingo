@@ -323,7 +323,24 @@ func TestAuthMiddleware_Authenticate_BearerToken(t *testing.T) {
 			}
 			if strings.Contains(sql, "FROM users") {
 				return middlewareFakeRow{values: []any{
-					userID, "user@example.com", "hash", "user", true, (*time.Time)(nil), 0, true, now, now,
+					userID,
+					"user@example.com",
+					(*string)(nil),
+					"user",
+					true,
+					(*time.Time)(nil),
+					0,
+					true,
+					(*string)(nil),
+					(*string)(nil),
+					"free",
+					"none",
+					"inactive",
+					(*time.Time)(nil),
+					false,
+					now,
+					now,
+					now,
 				}}
 			}
 			return middlewareFakeRow{values: []any{}}

@@ -8,12 +8,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 // Test state
 let testCount = 0;
 let passCount = 0;
 let failCount = 0;
 let currentSuite = '';
+const registeredTests = [];
 
 const colors = {
   reset: '\x1b[0m',
@@ -27,20 +29,11 @@ const colors = {
 function describe(name, fn) {
   currentSuite = name;
   console.log(`\n${colors.blue}${name}${colors.reset}`);
-  fn();
+  fn(); // Registers tests via test(...)
 }
 
 function test(name, fn) {
-  testCount++;
-  try {
-    fn();
-    passCount++;
-    console.log(`  ${colors.green}✓${colors.reset} ${colors.dim}${name}${colors.reset}`);
-  } catch (error) {
-    failCount++;
-    console.log(`  ${colors.red}✗ ${name}${colors.reset}`);
-    console.log(`    ${colors.red}${error.message}${colors.reset}`);
-  }
+  registeredTests.push({ suite: currentSuite, name, fn });
 }
 
 function expect(actual) {
@@ -212,6 +205,183 @@ describe('truncateText', () => {
 
   test('handles exact length', () => {
     expect(truncateText('hello', 5)).toBe('hello');
+  });
+});
+
+describe('Premium navigation + page wiring', () => {
+  class MockClassList {
+    constructor() {
+      this._set = new Set();
+    }
+    add(...names) { names.forEach((n) => this._set.add(n)); }
+    remove(...names) { names.forEach((n) => this._set.delete(n)); }
+    contains(name) { return this._set.has(name); }
+  }
+
+  class MockElement {
+    constructor(doc, { id = '', tagName = 'DIV' } = {}) {
+      this._doc = doc;
+      this.id = id;
+      this.tagName = tagName;
+      this.classList = new MockClassList();
+      this.style = {};
+      this._innerHTML = '';
+    }
+    set innerHTML(html) {
+      this._innerHTML = String(html || '');
+      this._doc._indexIDsFromHTML(this._innerHTML);
+    }
+    get innerHTML() {
+      return this._innerHTML;
+    }
+    setAttribute() {}
+    getAttribute() { return null; }
+    remove() {}
+  }
+
+  class MockDocument {
+    constructor() {
+      this._byID = new Map();
+      this.head = new MockElement(this, { tagName: 'HEAD' });
+      this.body = new MockElement(this, { tagName: 'BODY' });
+      this._listeners = {};
+      this._pageEl = new MockElement(this, { tagName: 'DIV' });
+      this._pageEl.classList.add('page');
+    }
+    addEventListener(type, cb) {
+      this._listeners[type] = cb;
+    }
+    createElement(tag) {
+      return new MockElement(this, { tagName: String(tag || 'DIV').toUpperCase() });
+    }
+    getElementById(id) {
+      return this._byID.get(id) || null;
+    }
+    querySelector(selector) {
+      if (selector === '.page') return this._pageEl;
+      return null;
+    }
+    _indexIDsFromHTML(html) {
+      const re = /id=\"([a-zA-Z0-9_-]+)\"/g;
+      let m;
+      while ((m = re.exec(html)) !== null) {
+        const id = m[1];
+        if (!this._byID.has(id)) {
+          this._byID.set(id, new MockElement(this, { id }));
+        }
+      }
+    }
+  }
+
+  function loadBrowserApp() {
+    const doc = new MockDocument();
+    doc._byID.set('nav', new MockElement(doc, { id: 'nav', tagName: 'NAV' }));
+    doc._byID.set('main-container', new MockElement(doc, { id: 'main-container' }));
+
+    class MockStorage {
+      constructor() { this._m = new Map(); }
+      getItem(k) { return this._m.has(String(k)) ? this._m.get(String(k)) : null; }
+      setItem(k, v) { this._m.set(String(k), String(v)); }
+      removeItem(k) { this._m.delete(String(k)); }
+      clear() { this._m.clear(); }
+    }
+
+    const win = {
+      location: { pathname: '/', search: '', hash: '', origin: 'http://example.test' },
+      addEventListener() {},
+      scrollTo() {},
+      history: { replaceState() {} },
+    };
+
+    const context = {
+      console,
+      window: win,
+      document: doc,
+      history: win.history,
+      navigator: { onLine: true },
+      localStorage: new MockStorage(),
+      sessionStorage: new MockStorage(),
+      URL,
+      URLSearchParams,
+      setTimeout,
+      clearTimeout,
+      setInterval,
+      clearInterval,
+    };
+
+    const appJsPath = path.join(__dirname, '..', 'app.js');
+    const code = fs.readFileSync(appJsPath, 'utf8') + '\n;globalThis.__AppForTests = App;\n';
+    vm.createContext(context);
+    vm.runInContext(code, context, { filename: 'app.js' });
+
+    const AppForTests = context.__AppForTests;
+    if (!AppForTests) {
+      throw new Error('Failed to load App from app.js');
+    }
+
+    // Prevent any incidental work in route()/meta helpers.
+    AppForTests.setRobotsMeta = () => {};
+
+    return { App: AppForTests, document: doc, window: win };
+  }
+
+  test('router supports /premium', () => {
+    const { App } = loadBrowserApp();
+    const { page } = App.getRouteFromPath('/premium', '');
+    expect(page).toBe('premium');
+  });
+
+  test('route() closes any open modal overlay', () => {
+    const { App, window } = loadBrowserApp();
+    let closed = 0;
+    App.closeMobileMenu = () => {};
+    App.closeModal = () => { closed += 1; };
+    App.renderPremium = () => {};
+    window.location.pathname = '/premium';
+    window.location.search = '';
+    App.route();
+    expect(closed).toBeGreaterThan(0);
+  });
+
+  test('premium route is considered SPA-routable', () => {
+    const { App } = loadBrowserApp();
+    expect(App.isRoutablePage('premium')).toBe(true);
+  });
+
+  test('navbar renders a Premium link without auto-opening upgrade', () => {
+    const { App, document } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.notificationUnreadCount = 0;
+    App.updateNotificationBadge = () => {};
+    App.setupNavigation();
+    const nav = document.getElementById('nav');
+    expect(!!nav).toBe(true);
+    expect(nav.innerHTML.includes('nav-link--premium')).toBe(true);
+    expect(nav.innerHTML.includes('href="/premium"')).toBe(true);
+    expect(nav.innerHTML.includes('href="/premium?upgrade=1"')).toBe(false);
+  });
+
+  test('premium page does not include See options button', async () => {
+    const { App, document } = loadBrowserApp();
+    const container = document.getElementById('main-container');
+    App.user = null;
+    await App.renderPremium(container, new URLSearchParams());
+    expect(container.innerHTML.includes('See options')).toBe(false);
+  });
+
+  test('premium page includes a Have a code entry point', async () => {
+    const { App, document } = loadBrowserApp();
+    const container = document.getElementById('main-container');
+    App.user = null;
+    await App.renderPremium(container, new URLSearchParams());
+    const cta = document.getElementById('premium-cta-slot');
+    expect(!!cta).toBe(true);
+    expect(cta.innerHTML.includes('data-action="open-premium-code-modal"')).toBe(true);
+
+    let modalHTML = '';
+    App.openModal = (_title, html) => { modalHTML = String(html || ''); };
+    App.openPremiumCodeModal({ errorMessage: 'Invalid code' });
+    expect(modalHTML.includes('id="premium-code-error"')).toBe(true);
   });
 });
 
@@ -439,27 +609,47 @@ describe('Grid Position Calculations', () => {
 // SUMMARY
 // ============================================================
 
-console.log('\n' + '='.repeat(40));
-console.log(`${colors.blue}Summary${colors.reset}`);
-console.log(`Total:  ${testCount}`);
-console.log(`${colors.green}Passed: ${passCount}${colors.reset}`);
-if (failCount > 0) {
-  console.log(`${colors.red}Failed: ${failCount}${colors.reset}`);
+async function runAll() {
+  for (const t of registeredTests) {
+    testCount++;
+    try {
+      const result = t.fn();
+      if (result && typeof result.then === 'function') {
+        await result;
+      }
+      passCount++;
+      console.log(`  ${colors.green}✓${colors.reset} ${colors.dim}${t.name}${colors.reset}`);
+    } catch (error) {
+      failCount++;
+      console.log(`  ${colors.red}✗ ${t.name}${colors.reset}`);
+      console.log(`    ${colors.red}${error.message}${colors.reset}`);
+    }
+  }
+
+  console.log('\n' + '='.repeat(40));
+  console.log(`${colors.blue}Summary${colors.reset}`);
+  console.log(`Total:  ${testCount}`);
+  console.log(`${colors.green}Passed: ${passCount}${colors.reset}`);
+  if (failCount > 0) {
+    console.log(`${colors.red}Failed: ${failCount}${colors.reset}`);
+  }
+
+  // Coverage info
+  const testedFunctions = [
+    'escapeHtml',
+    'truncateText',
+    'parseHash',
+    'isValidPosition',
+    'calculateProgress',
+    'checkBingo',
+    'countBingos',
+    'Grid calculations',
+  ];
+  console.log(`\n${colors.blue}Functions tested:${colors.reset}`);
+  testedFunctions.forEach(fn => console.log(`  - ${fn}`));
+
+  console.log('');
+  process.exit(failCount > 0 ? 1 : 0);
 }
 
-// Coverage info
-const testedFunctions = [
-  'escapeHtml',
-  'truncateText',
-  'parseHash',
-  'isValidPosition',
-  'calculateProgress',
-  'checkBingo',
-  'countBingos',
-  'Grid calculations',
-];
-console.log(`\n${colors.blue}Functions tested:${colors.reset}`);
-testedFunctions.forEach(fn => console.log(`  - ${fn}`));
-
-console.log('');
-process.exit(failCount > 0 ? 1 : 0);
+runAll();

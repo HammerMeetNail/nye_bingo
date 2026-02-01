@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"testing"
 	"time"
 
@@ -9,11 +8,51 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
 )
 
-func TestResolveAIRateLimit_Defaults(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	cfg := &config.Config{Server: config.ServerConfig{Environment: "production"}}
+func TestResolveAuthRateLimits_Development(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "development"},
+	}
+	limits := resolveAuthRateLimits(cfg)
+	if limits.loginIP != 1000 || limits.loginEmail != 500 {
+		t.Fatalf("expected dev limits, got %+v", limits)
+	}
+}
 
+func TestResolveAuthRateLimits_Production(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "production"},
+	}
+	limits := resolveAuthRateLimits(cfg)
+	if limits.loginIP != 30 || limits.registerEmail != 5 {
+		t.Fatalf("expected prod limits, got %+v", limits)
+	}
+}
+
+func TestResolveAIRateLimit_EnvOverride(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "production"},
+	}
+	logger := logging.New()
 	limit := resolveAIRateLimit(cfg, logger, func(key string) (string, bool) {
+		if key == "AI_RATE_LIMIT" {
+			return "25", true
+		}
+		return "", false
+	})
+	if limit != 25 {
+		t.Fatalf("expected override limit 25, got %d", limit)
+	}
+}
+
+func TestResolveAIRateLimit_InvalidEnv(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "production"},
+	}
+	logger := logging.New()
+	limit := resolveAIRateLimit(cfg, logger, func(key string) (string, bool) {
+		if key == "AI_RATE_LIMIT" {
+			return "bad", true
+		}
 		return "", false
 	})
 	if limit != 10 {
@@ -22,9 +61,10 @@ func TestResolveAIRateLimit_Defaults(t *testing.T) {
 }
 
 func TestResolveAIRateLimit_DevelopmentDefault(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	cfg := &config.Config{Server: config.ServerConfig{Environment: "development"}}
-
+	cfg := &config.Config{
+		Server: config.ServerConfig{Environment: "development"},
+	}
+	logger := logging.New()
 	limit := resolveAIRateLimit(cfg, logger, func(key string) (string, bool) {
 		return "", false
 	})
@@ -33,56 +73,28 @@ func TestResolveAIRateLimit_DevelopmentDefault(t *testing.T) {
 	}
 }
 
-func TestResolveAIRateLimit_FromEnv(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	cfg := &config.Config{Server: config.ServerConfig{Environment: "production"}}
-
-	limit := resolveAIRateLimit(cfg, logger, func(key string) (string, bool) {
-		return "25", true
-	})
-	if limit != 25 {
-		t.Fatalf("expected env limit 25, got %d", limit)
-	}
-}
-
-func TestResolveAIRateLimit_InvalidEnv(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	cfg := &config.Config{Server: config.ServerConfig{Environment: "production"}}
-
-	limit := resolveAIRateLimit(cfg, logger, func(key string) (string, bool) {
-		return "nope", true
-	})
-	if limit != 10 {
-		t.Fatalf("expected fallback limit 10, got %d", limit)
-	}
-}
-
-func TestResolveRemindersPollInterval_Defaults(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
+func TestResolveRemindersPollInterval_EnvOverride(t *testing.T) {
+	logger := logging.New()
 	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {
+		if key == "REMINDERS_POLL_INTERVAL" {
+			return "2m", true
+		}
+		return "", false
+	})
+	if interval != 2*time.Minute {
+		t.Fatalf("expected 2m, got %s", interval)
+	}
+}
+
+func TestResolveRemindersPollInterval_Invalid(t *testing.T) {
+	logger := logging.New()
+	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {
+		if key == "REMINDERS_POLL_INTERVAL" {
+			return "bad", true
+		}
 		return "", false
 	})
 	if interval != time.Minute {
-		t.Fatalf("expected default interval 1m, got %v", interval)
-	}
-}
-
-func TestResolveRemindersPollInterval_FromEnv(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {
-		return "30s", true
-	})
-	if interval != 30*time.Second {
-		t.Fatalf("expected interval 30s, got %v", interval)
-	}
-}
-
-func TestResolveRemindersPollInterval_InvalidEnv(t *testing.T) {
-	logger := logging.New().SetOutput(&bytes.Buffer{})
-	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {
-		return "nope", true
-	})
-	if interval != time.Minute {
-		t.Fatalf("expected fallback interval 1m, got %v", interval)
+		t.Fatalf("expected 1m, got %s", interval)
 	}
 }

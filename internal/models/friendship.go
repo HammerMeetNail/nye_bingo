@@ -24,7 +24,8 @@ type Friendship struct {
 
 type FriendWithUser struct {
 	Friendship
-	FriendUsername string `json:"friend_username"`
+	FriendUsername  string `json:"friend_username"`
+	FriendIsPremium bool   `json:"friend_is_premium"`
 }
 
 type FriendRequest struct {

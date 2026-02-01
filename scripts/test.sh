@@ -51,7 +51,14 @@ echo ""
 
 # Build test container
 echo -e "${BLUE}Building test container...${NC}"
-podman build -f "${PROJECT_DIR}/Containerfile.test" -t year_of_bingo_test "${PROJECT_DIR}" >/dev/null 2>&1
+BUILD_LOG="$(mktemp)"
+if ! podman build -f "${PROJECT_DIR}/Containerfile.test" -t year_of_bingo_test "${PROJECT_DIR}" >"$BUILD_LOG" 2>&1; then
+    echo -e "${RED}Failed to build test container:${NC}" >&2
+    cat "$BUILD_LOG" >&2
+    rm -f "$BUILD_LOG"
+    exit 1
+fi
+rm -f "$BUILD_LOG"
 
 # Run tests
 echo -e "${BLUE}Running tests...${NC}"

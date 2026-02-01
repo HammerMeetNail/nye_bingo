@@ -14,6 +14,7 @@ type Config struct {
 	Email    EmailConfig
 	AI       AIConfig
 	OAuth    OAuthConfig
+	Billing  BillingConfig
 }
 
 type ServerConfig struct {
@@ -75,6 +76,19 @@ type OAuthProviderConfig struct {
 	RedirectURL  string
 	IssuerURL    string
 	Scopes       []string
+}
+
+type BillingConfig struct {
+	Enabled                      bool
+	StripeSecretKey              string
+	StripeWebhookSecret          string
+	StripeAPIBaseURL             string
+	StripePremiumMonthlyPriceID  string
+	StripePremiumYearlyPriceID   string
+	StripePremiumLifetimePriceID string
+	StripeTip5PriceID            string
+	StripeTip10PriceID           string
+	StripeTip20PriceID           string
 }
 
 func (d DatabaseConfig) DSN() string {
@@ -142,9 +156,51 @@ func Load() (*Config, error) {
 				Scopes:       getEnvList("GOOGLE_OIDC_SCOPES", []string{"openid", "email", "profile"}),
 			},
 		},
+		Billing: BillingConfig{
+			Enabled:                      getEnvBool("BILLING_ENABLED", false),
+			StripeSecretKey:              getEnv("STRIPE_SECRET_KEY", ""),
+			StripeWebhookSecret:          getEnv("STRIPE_WEBHOOK_SECRET", ""),
+			StripeAPIBaseURL:             getEnv("STRIPE_API_BASE_URL", ""),
+			StripePremiumMonthlyPriceID:  getEnv("STRIPE_PREMIUM_PRICE_MONTHLY", ""),
+			StripePremiumYearlyPriceID:   getEnv("STRIPE_PREMIUM_PRICE_YEARLY", ""),
+			StripePremiumLifetimePriceID: getEnv("STRIPE_PREMIUM_PRICE_LIFETIME", ""),
+			StripeTip5PriceID:            getEnv("STRIPE_TIP_PRICE_5", ""),
+			StripeTip10PriceID:           getEnv("STRIPE_TIP_PRICE_10", ""),
+			StripeTip20PriceID:           getEnv("STRIPE_TIP_PRICE_20", ""),
+		},
+	}
+
+	if cfg.Server.Environment == "production" && cfg.Billing.Enabled {
+		if err := validateBillingConfig(cfg.Billing); err != nil {
+			return nil, err
+		}
 	}
 
 	return cfg, nil
+}
+
+func validateBillingConfig(b BillingConfig) error {
+	required := map[string]string{
+		"STRIPE_SECRET_KEY":             b.StripeSecretKey,
+		"STRIPE_WEBHOOK_SECRET":         b.StripeWebhookSecret,
+		"STRIPE_PREMIUM_PRICE_MONTHLY":  b.StripePremiumMonthlyPriceID,
+		"STRIPE_PREMIUM_PRICE_YEARLY":   b.StripePremiumYearlyPriceID,
+		"STRIPE_PREMIUM_PRICE_LIFETIME": b.StripePremiumLifetimePriceID,
+		"STRIPE_TIP_PRICE_5":            b.StripeTip5PriceID,
+		"STRIPE_TIP_PRICE_10":           b.StripeTip10PriceID,
+		"STRIPE_TIP_PRICE_20":           b.StripeTip20PriceID,
+	}
+
+	var missing []string
+	for k, v := range required {
+		if strings.TrimSpace(v) == "" {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("billing enabled but missing required env vars: %s", strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 func getEnv(key, defaultValue string) string {

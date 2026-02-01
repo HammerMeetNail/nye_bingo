@@ -1,5 +1,6 @@
 services:
   app:
+    image: localhost/yearofbingo_app:latest
     build:
       context: .
       dockerfile: Containerfile
@@ -27,7 +28,19 @@ services:
       - SMTP_PORT=1025
       - EMAIL_FROM_ADDRESS=noreply@yearofbingo.com
       - EMAIL_FROM_NAME=Year of Bingo
-      - APP_BASE_URL=http://localhost:8080
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8080}
+      - E2E_DEBUG_STRIPE_SIG=${E2E_DEBUG_STRIPE_SIG}
+      # Billing (Stripe)
+      - BILLING_ENABLED=${BILLING_ENABLED:-false}
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - STRIPE_API_BASE_URL=${STRIPE_API_BASE_URL}
+      - STRIPE_PREMIUM_PRICE_MONTHLY=${STRIPE_PREMIUM_PRICE_MONTHLY}
+      - STRIPE_PREMIUM_PRICE_YEARLY=${STRIPE_PREMIUM_PRICE_YEARLY}
+      - STRIPE_PREMIUM_PRICE_LIFETIME=${STRIPE_PREMIUM_PRICE_LIFETIME}
+      - STRIPE_TIP_PRICE_5=${STRIPE_TIP_PRICE_5}
+      - STRIPE_TIP_PRICE_10=${STRIPE_TIP_PRICE_10}
+      - STRIPE_TIP_PRICE_20=${STRIPE_TIP_PRICE_20}
       - REMINDERS_POLL_INTERVAL=${REMINDERS_POLL_INTERVAL:-1m}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL}
@@ -63,6 +76,7 @@ services:
           target: /app/web
 
   playwright:
+    image: localhost/yearofbingo_playwright:latest
     build:
       context: .
       dockerfile: Containerfile.playwright
@@ -80,6 +94,15 @@ services:
       - PLAYWRIGHT_OUTPUT_DIR=${PLAYWRIGHT_OUTPUT_DIR:-/test-results}
       - PLAYWRIGHT_REPORT_DIR=${PLAYWRIGHT_REPORT_DIR:-/playwright-report}
       - OIDC_BASE_URL=${OIDC_BASE_URL:-http://oidc:5555}
+      # Stripe/billing test env vars
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_MOCK_BASE_URL=${STRIPE_MOCK_BASE_URL:-http://stripe-mock:12111}
+      - STRIPE_PREMIUM_PRICE_MONTHLY=${STRIPE_PREMIUM_PRICE_MONTHLY:-price_premium_monthly}
+      - STRIPE_PREMIUM_PRICE_YEARLY=${STRIPE_PREMIUM_PRICE_YEARLY:-price_premium_yearly}
+      - STRIPE_PREMIUM_PRICE_LIFETIME=${STRIPE_PREMIUM_PRICE_LIFETIME:-price_premium_lifetime}
+      - STRIPE_TIP_PRICE_5=${STRIPE_TIP_PRICE_5:-price_tip_5}
+      - STRIPE_TIP_PRICE_10=${STRIPE_TIP_PRICE_10:-price_tip_10}
+      - STRIPE_TIP_PRICE_20=${STRIPE_TIP_PRICE_20:-price_tip_20}
     volumes:
       - ./:/app:ro
       - ./test-results:/test-results
@@ -125,6 +148,7 @@ services:
       - MP_SMTP_AUTH_ALLOW_INSECURE=1
 
   oidc:
+    image: localhost/yearofbingo_oidc:latest
     build:
       context: .
       dockerfile: Containerfile.oidc
@@ -141,6 +165,25 @@ services:
       - "5555:5555"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5555/.well-known/openid-configuration"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  stripe-mock:
+    image: localhost/yearofbingo_stripe_mock:latest
+    build:
+      context: .
+      dockerfile: Containerfile.stripe-mock
+    environment:
+      - STRIPE_MOCK_PUBLIC_BASE_URL=${STRIPE_MOCK_PUBLIC_BASE_URL}
+    profiles:
+      - e2e
+    expose:
+      - "12111"
+    ports:
+      - "12111:12111"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:12111/health"]
       interval: 5s
       timeout: 3s
       retries: 5

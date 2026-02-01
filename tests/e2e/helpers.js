@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const MAILPIT_BASE_URL = process.env.MAILPIT_BASE_URL || 'http://mailpit:8025';
 const MAILPIT_WAIT_TIMEOUT_MS = Number.parseInt(process.env.MAILPIT_WAIT_TIMEOUT_MS || '30000', 10);
 const OIDC_BASE_URL = process.env.OIDC_BASE_URL || 'http://oidc:5555';
+const STRIPE_MOCK_BASE_URL = process.env.STRIPE_MOCK_BASE_URL || 'http://stripe-mock:12111';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 function buildUser(testInfo, prefix, options = {}) {
   const workerIndex = testInfo && Number.isInteger(testInfo.workerIndex) ? testInfo.workerIndex : 0;
@@ -59,55 +61,35 @@ async function createCardFromAuthenticatedCreate(page, { title } = {}) {
 async function createCardFromModal(page, { title, gridSize, header, hasFree = true, year } = {}) {
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
-  const addButton = page.getByRole('button', { name: '+ Card' });
-  if (await addButton.isVisible()) {
-    await addButton.click();
-    await expect(page.locator('#modal-title')).toHaveText('Create New Card');
+  // Wait for dashboard to finish loading (spinner disappears, cards list or empty state renders).
+  // Both the "+ Card" button (when cards exist) and "Create Your First Card" button (empty state)
+  // use data-action="show-create-card-modal".
+  const createButton = page.locator('[data-action="show-create-card-modal"]');
+  await expect(createButton).toBeVisible({ timeout: 15000 });
+  await createButton.click();
+  await expect(page.locator('#modal-title')).toHaveText('Create New Card');
 
-    if (title) {
-      await page.fill('#modal-card-title', title);
-    }
-    if (year) {
-      await page.selectOption('#modal-card-year', String(year));
-    }
-    if (gridSize) {
-      await page.selectOption('#modal-card-grid-size', String(gridSize));
-    }
-    if (header) {
-      await page.fill('#modal-card-header', header);
-    }
-    if (!hasFree) {
-      const freeToggle = page.locator('#modal-card-free-space');
-      if (await freeToggle.isChecked()) {
-        await freeToggle.uncheck();
-      }
-    }
-
-    await page.getByRole('button', { name: 'Create Card' }).click();
-    await expect(page.locator('#item-input')).toBeVisible();
-    return;
-  }
-
-  await page.goto('/create');
-  await expect(page.getByRole('heading', { name: 'Create New Card' })).toBeVisible();
-  if (year) {
-    await page.selectOption('#card-year', String(year));
-  }
   if (title) {
-    await page.fill('#card-title', title);
+    await page.fill('#modal-card-title', title);
   }
-  await page.locator('#create-card-form button[type="submit"]').click();
-  await expect(page.locator('#item-input')).toBeVisible();
+  if (year) {
+    await page.selectOption('#modal-card-year', String(year));
+  }
+  if (gridSize) {
+    await page.selectOption('#modal-card-grid-size', String(gridSize));
+  }
   if (header) {
-    await page.fill('#card-header-input', header);
-    await page.dispatchEvent('#card-header-input', 'change');
+    await page.fill('#modal-card-header', header);
   }
   if (!hasFree) {
-    const freeToggle = page.locator('#card-free-toggle');
+    const freeToggle = page.locator('#modal-card-free-space');
     if (await freeToggle.isChecked()) {
       await freeToggle.uncheck();
     }
   }
+
+  await page.getByRole('button', { name: 'Create Card' }).click();
+  await expect(page.locator('#item-input')).toBeVisible();
 }
 
 async function createFinalizedCardFromModal(page, options) {
@@ -346,6 +328,45 @@ function extractTokenFromEmail(message, route) {
   return tokenMatch[1];
 }
 
+function stripeSignatureHeader(secret, payload, timestampSec) {
+  const ts = Number.isFinite(timestampSec) ? timestampSec : Math.floor(Date.now() / 1000);
+  const signed = `${ts}.${payload}`;
+  const mac = crypto.createHmac('sha256', secret).update(Buffer.from(signed, 'utf8')).digest('hex');
+  return `t=${ts},v1=${mac}`;
+}
+
+async function postStripeWebhook(request, payloadObject, { secret } = {}) {
+  const webhookSecret = String(secret || STRIPE_WEBHOOK_SECRET || '').trim();
+  if (!webhookSecret) {
+    throw new Error('Missing STRIPE_WEBHOOK_SECRET for E2E webhook signing');
+  }
+  const payload = JSON.stringify(payloadObject);
+  const payloadBytes = Buffer.from(payload, 'utf8');
+  const sig = stripeSignatureHeader(webhookSecret, payload, Math.floor(Date.now() / 1000));
+  // Playwright's APIRequestContext uses `data` for request bodies (not `body`).
+  // If you pass `body`, the payload can be dropped and Stripe signature verification will fail.
+  const response = await request.post('/api/billing/webhook', {
+    headers: {
+      'Content-Type': 'application/json',
+      'Stripe-Signature': sig,
+    },
+    data: payloadBytes,
+  });
+  if (!response.ok()) {
+    const text = await response.text();
+    throw new Error(`Stripe webhook failed: ${response.status()} ${text}`);
+  }
+}
+
+async function getLastStripeCheckoutSession(request) {
+  const response = await request.get(`${STRIPE_MOCK_BASE_URL}/test/last-checkout-session`);
+  if (!response.ok()) {
+    const text = await response.text();
+    throw new Error(`Failed to fetch last Stripe checkout session: ${response.status()} ${text}`);
+  }
+  return response.json();
+}
+
 module.exports = {
   buildUser,
   register,
@@ -365,4 +386,6 @@ module.exports = {
   waitForEmail,
   expectNoEmail,
   extractTokenFromEmail,
+  postStripeWebhook,
+  getLastStripeCheckoutSession,
 };

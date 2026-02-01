@@ -10,6 +10,50 @@
 - **TDD-first**: new billing logic is covered by unit tests; webhook handling is fully testable and idempotent.
 - **Positive UX**: clear value, easy upgrade/cancel, no dark patterns, no spammy nags.
 
+## Current Status (Implemented Foundation)
+
+As of **January 31, 2026**, the billing + entitlement **foundation is implemented** behind `BILLING_ENABLED` (default `false`).
+
+**Implemented (code-as-built):**
+- DB: `migrations/000021_billing_stripe.up.sql` / `.down.sql` (user billing fields + `stripe_webhook_events` + `premium_codes`).
+- Config: `internal/config/config.go` (+ tests) and `.env.example` (Stripe env vars; production startup validation when `BILLING_ENABLED=true`).
+- CSRF: explicit exemption for `POST /api/billing/webhook` in `internal/middleware/csrf.go` (+ tests).
+- Billing service: `internal/services/billing/*` including:
+  - server-side premium check: `billing.IsPremium(user, now)`
+  - webhook signature verification (HMAC) + idempotency via `stripe_webhook_events`
+  - premium code redemption (hashed codes, one-time, transactional)
+- Stripe integration: implemented via a small Stripe **HTTP API client** (`internal/services/billing/stripe_client.go`) rather than `stripe-go` (no SDK dependency).
+  - supports multiple line items in a single Checkout Session (e.g., subscription + tip)
+- Handlers/routes: `internal/handlers/billing.go` + `cmd/server/main.go`:
+  - `GET /api/billing/status`
+    - now includes `source` (`none|stripe_subscription|stripe_lifetime|code|grant`) so the UI can display accurate renewal/expiry messaging
+  - `POST /api/billing/checkout` (combined checkout; supports Premium purchase optionally combined with a tip)
+  - `POST /api/billing/checkout/subscription` (`interval: month|year`)
+  - `POST /api/billing/checkout/lifetime`
+  - `POST /api/billing/checkout/tip` (`amount: 5|10|20`)
+  - `POST /api/billing/portal`
+  - `POST /api/billing/redeem` (rate-limited `10/hour` per-user; fail-closed)
+  - `POST /api/billing/webhook` (CSRF-exempt; signature-verified)
+- Frontend: `web/static/js/api.js`, `web/static/js/app.js`, `web/static/css/styles.css`:
+  - Navbar shows a visible **Premium** entry point (star + label) that links to `/premium`
+  - `/premium` page:
+    - upgrade CTA + post-checkout polling (`?billing=success`)
+    - "Have a code?" redeem flow lives in a modal; logged-out users can enter a code and are prompted to sign in/create an account before the code is redeemed
+  - Upgrade modal supports selecting Premium option + optional tip, then a single Checkout redirect
+  - Billing UI messaging is source-aware (renew vs active-until vs expires vs no-expiration)
+  - Premium badge shown for account holder and friends (friends list + friend card view)
+- Auth responses include `is_premium` (for the current session user): `internal/handlers/auth.go`.
+- Owner/admin scripts: `scripts/create_premium_codes/`, `scripts/grant_premium/`, `scripts/revoke_premium/`.
+  - Convenience make targets added:
+    - `make premium-code` (local)
+    - `make premium-code-prod` (via SSH tunnel)
+- Dev tooling: `make local-billing` starts the Stripe webhook listener before the app so `STRIPE_WEBHOOK_SECRET` is available at boot.
+- OpenAPI: billing endpoints and schema updated in `web/static/openapi.yaml` (including the combined checkout endpoint and `BillingStatus.source`).
+
+**Not implemented yet (planned for later / still TODO):**
+- Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.
+- “Premium features” themselves (templates / premium AI) remain separate plans.
+
 ## Decisions (Owner Inputs)
 
 ### Monetization & Tiering
@@ -41,7 +85,7 @@
 - Premium usage (especially AI) must not create unbounded cost exposure.
 
 ### Technical / Ops
-- OK to use the official Stripe Go SDK (`stripe-go`).
+- Stripe integration is implemented via a small server-side Stripe HTTP client (no `stripe-go` dependency). Migrating to `stripe-go` later is optional.
 - Separate keys per environment (test vs live) via env vars (like Gemini).
 - Prod secrets stored in env vars.
 - Admin actions live in Stripe Dashboard (no in-app admin billing UI).
@@ -138,7 +182,7 @@ On the frontend, show a “Processing your upgrade…” status and poll until P
 
 ## Data Model (Minimal, Practical, Auditable)
 
-### Migration: `000014_billing_stripe.*.sql`
+### Migration: `000021_billing_stripe.*.sql`
 
 #### 1) Add billing + entitlement fields to `users`
 Add columns:
@@ -369,7 +413,7 @@ Tests (write first):
 - `internal/services/billing/*` (new: entitlements + stripe client + repo)
 - `internal/handlers/billing.go` (new: checkout/portal/status/redeem/webhook)
 - `cmd/server/main.go` (route registration)
-- `migrations/000014_billing_stripe.up.sql` + `.down.sql`
+- `migrations/000021_billing_stripe.up.sql` + `.down.sql`
 - `web/static/openapi.yaml` (endpoint docs)
 
 ### CSRF Exemption Implementation (Exact Shape)
@@ -389,77 +433,19 @@ if r.Method == http.MethodPost && csrfExempt[r.URL.Path] {
 
 Keep all other unsafe requests protected.
 
-### Stripe-Go SDK (Checkout + Portal) (Example Code)
+### Stripe API Client (As Implemented)
 
-In a Stripe client wrapper (server-side only):
-```go
-import (
-  "github.com/stripe/stripe-go/v76"
-  "github.com/stripe/stripe-go/v76/checkout/session"
-  portal "github.com/stripe/stripe-go/v76/billingportal/session"
-)
+Current implementation uses a small Stripe HTTP client wrapper (no `stripe-go`) in:
+- `internal/services/billing/stripe_client.go`
 
-func (c *StripeClient) CreateSubscriptionCheckoutURL(userID uuid.UUID, customerID, priceID, successURL, cancelURL string) (string, error) {
-  stripe.Key = c.secretKey
-
-  params := &stripe.CheckoutSessionParams{
-    Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
-    Customer: stripe.String(customerID),
-    LineItems: []*stripe.CheckoutSessionLineItemParams{
-      {Price: stripe.String(priceID), Quantity: stripe.Int64(1)},
-    },
-    SuccessURL: stripe.String(successURL),
-    CancelURL: stripe.String(cancelURL),
-
-    // Stripe Tax
-    AutomaticTax: &stripe.CheckoutSessionAutomaticTaxParams{Enabled: stripe.Bool(true)},
-    BillingAddressCollection: stripe.String("required"),
-
-    Metadata: map[string]string{
-      "user_id": userID.String(),
-      "purchase": "subscription",
-    },
-  }
-
-  s, err := session.New(params)
-  if err != nil {
-    return "", err
-  }
-  return s.URL, nil
-}
-
-func (c *StripeClient) CreateCustomerPortalURL(customerID, returnURL string) (string, error) {
-  stripe.Key = c.secretKey
-  s, err := portal.New(&stripe.BillingPortalSessionParams{
-    Customer: stripe.String(customerID),
-    ReturnURL: stripe.String(returnURL),
-  })
-  if err != nil {
-    return "", err
-  }
-  return s.URL, nil
-}
-```
-
-Notes:
-- This plan pins examples to `stripe-go/v76` to keep import paths copy/pasteable for a less-capable implementation agent.
-  - If you choose a different `stripe-go` major later, update the import paths consistently.
-- Never accept a `price_id` from the client; map `interval -> env-configured price id` server-side.
+Key rules are the same:
+- Never accept a `price_id` from the client; map `interval/amount -> env-configured price id` server-side.
+- Stripe Tax is enabled in Checkout Session creation (`automatic_tax` + `billing_address_collection`).
 
 ### Webhook Verification + Idempotency (Example Code)
 
-Signature verification:
-```go
-import "github.com/stripe/stripe-go/v76/webhook"
-
-payload, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-sig := r.Header.Get("Stripe-Signature")
-event, err := webhook.ConstructEvent(payload, sig, webhookSecret)
-if err != nil {
-  http.Error(w, "invalid signature", http.StatusBadRequest)
-  return
-}
-```
+Signature verification is implemented via HMAC verification of `Stripe-Signature`:
+- `internal/services/billing/webhook.go` (`billing.VerifyStripeSignature`)
 
 Idempotency table usage:
 1. Insert event id (unique):
@@ -524,55 +510,33 @@ In `scripts/create_premium_codes.go`:
 Because redemption checks the DB allowlist, public repo visibility does not make codes guessable.
 
 ### Phase 3: Billing Service + Stripe Client
-**New files (recommended):**
+**Files (as implemented):**
 - `internal/services/billing/service.go`
+- `internal/services/billing/store.go` (DB access behind an interface for unit tests)
 - `internal/services/billing/stripe_client.go`
 - `internal/services/billing/entitlements.go`
-- `internal/services/billing/repo.go` (DB access behind an interface for unit tests)
+- `internal/services/billing/types.go`
+- `internal/services/billing/webhook.go`
 
 Design:
 - Create a small `StripeClient` interface so tests can run without network:
-  - `CreateCustomer(ctx, user) (customerID string, err error)`
-  - `CreateCheckoutSessionSubscription(ctx, args) (url string, err error)`
-  - `CreateCheckoutSessionLifetime(ctx, args) (url string, err error)`
-  - `CreateCheckoutSessionTip(ctx, args) (url string, err error)`
-  - `CreatePortalSession(ctx, args) (url string, err error)`
-- Concrete implementation uses either:
-  - **Official Stripe Go SDK** (`stripe-go`).
+  - `CreateCustomer(ctx, email, userID string) (customerID string, err error)`
+  - `CreateCheckoutSession(ctx, params CheckoutSessionParams) (url string, err error)`
+  - `CreatePortalSession(ctx, customerID, returnURL string) (url string, err error)`
 
 **Make It Unit-Testable (No DB Required)**
 The repo’s Go tests run without a database (see `scripts/test.sh`), so billing logic must be testable with fakes.
 
-Add a small repository interface for DB operations and provide:
-- a Postgres implementation (pgxpool), and
-- an in-memory fake for unit tests.
-
-Suggested `BillingRepo` interface:
-```go
-type BillingRepo interface {
-  GetUserBilling(ctx context.Context, userID uuid.UUID) (*models.UserBilling, error)
-  SetStripeCustomerID(ctx context.Context, userID uuid.UUID, customerID string) error
-  UpsertWebhookEvent(ctx context.Context, stripeEventID, eventType string, livemode bool, createdAt time.Time) (inserted bool, err error)
-  MarkWebhookProcessed(ctx context.Context, stripeEventID string) error
-  MarkWebhookFailed(ctx context.Context, stripeEventID string, processingErr string) error
-  ApplySubscriptionUpdate(ctx context.Context, customerID, subscriptionID string, status string, currentPeriodEnd time.Time, cancelAtPeriodEnd bool) error
-  ApplyLifetimePurchase(ctx context.Context, customerID string) error
-  RedeemCode(ctx context.Context, userID uuid.UUID, codeHashHex string, now time.Time) (applied bool, err error)
-}
-```
-Notes:
-- Keep `models.UserBilling` as a small struct with only the billing fields; avoid pulling full `models.User`.
-- The in-memory fake can be a couple of maps keyed by `userID` and `stripeEventID`.
+This is implemented as `StoreInterface` in `internal/services/billing/store.go`, and unit tests provide fakes for the store and Stripe client.
 
 Stripe Tax requirements in Checkout Session creation:
 - `automatic_tax.enabled = true`
 - `billing_address_collection = required`
 - Provide `customer` (create/store Stripe customer once per user)
 
-Entitlements:
+Entitlements (as implemented):
 - `IsPremium(user, now) bool` returns true when:
   - `billing_plan == 'premium'`
-  - and `billing_status` in (`trialing`, `active`, `past_due`) (past_due is treated as “grace”)
   - and (`billing_current_period_end` is NULL OR `billing_current_period_end > now`)
 
 ### Phase 4: Billing Handlers & Routes
@@ -874,7 +838,6 @@ Anonymous users:
    - `API.billing.redeemCode(code)`
 2. “Upgrade” modal/page with:
    - Clear list of premium benefits (additive). Suggested copy:
-     - “Shareable PNG links” (create public share links for cards)
      - “Templates + 1‑click New Year rollover”
      - “AI Enhancements: 100/month” (Goal Assistant, Regenerate, AI Fill Empty)
      - “AI requires a verified email after 5 total generations” (anti-abuse; same rule as free users)
@@ -917,22 +880,17 @@ Any premium-only endpoint must:
 
 ---
 
-## Three Premium Features People Will Pay For (Additive Roadmap)
+## Premium Features People Will Pay For (Additive Roadmap)
 
 These are intentionally chosen to feel “worth it” without harming free users.
 
-### 1) Shareable PNG Links (Premium)
-- Implement `plans/png.md`.
-- Monetization tie-in: require Premium to create share links; public viewing remains public.
-- This is concrete and already has a plan; update that plan during implementation to reflect Premium gating.
-
-### 2) Templates + 1‑Click “New Year” Rollover (Premium)
+### 1) Templates + 1‑Click “New Year” Rollover (Premium)
 - Premium users can mark a card as a reusable template and generate next year’s card in one click.
 - Includes safe options like “carry over incomplete items” and “reshuffle layout”.
 - Requires a dedicated plan before implementation:
   - **Create** `plans/premium_templates.md` (same style: schema, endpoints, UX, tests, rollout).
 
-### 3) Premium AI Boost (Cost‑Bounded) (Premium)
+### 2) Premium AI Boost (Cost‑Bounded) (Premium)
 - Premium includes a **simple monthly allowance** of “AI Enhancements” and adds goal-focused tools:
   - Goal Assistant / ideator (strictly tied to a specific bingo goal)
   - Regenerate a goal in the wizard
@@ -1012,6 +970,28 @@ func TestBillingWebhook_InvalidSignatureRejected(t *testing.T) {
 ### Integration-ish Tests (optional, still offline)
 - Webhook handler with a captured fixture payload + computed signature.
 
+### E2E Tests (Playwright, mocked Stripe; no Stripe listener)
+We want billing coverage in `make e2e` without depending on the Stripe CLI listener/webhook forwarding.
+
+Approach:
+- Add an env var to point the server-side Stripe HTTP client at a local mock:
+  - `STRIPE_API_BASE_URL` (defaults to Stripe when unset).
+- Run a lightweight mock Stripe API in the E2E stack:
+  - `tests/stripe_mock/` + `Containerfile.stripe-mock`
+  - Minimal endpoints the app uses (`/v1/customers`, `/v1/checkout/sessions`, `/v1/billing_portal/sessions`)
+  - Test/debug endpoints used by Playwright (e.g. `GET /test/last-checkout-session`)
+- In Playwright, simulate Stripe webhooks by POSTing signed events directly to:
+  - `POST /api/billing/webhook` (same signature verification as production)
+
+Coverage:
+- `tests/e2e/billing-premium.spec.js`:
+  - "subscription + tip" combined checkout (multiple line items) + webhook activation
+  - "lifetime" purchase + webhook activation
+
+How to run:
+- Targeted: `./scripts/e2e.sh tests/e2e/billing-premium.spec.js`
+- Full suite: `make e2e` (uses `./scripts/e2e.sh`)
+
 ### Manual Verification Checklist
 1. Start checkout from Profile → redirect to Stripe Checkout.
 2. Complete payment in test mode → return to app, Premium becomes active within ~1 minute.
@@ -1031,8 +1011,6 @@ This ordering minimizes risk and keeps each step testable:
    - Pure app/DB logic; no external cost; easiest premium feature to validate and ship safely.
 3. `plans/premium_ai.md`
    - Cost-sensitive and more complex; implement after entitlements are stable.
-4. `plans/png.md`
-   - Adds a new rendering dependency + storage concerns; implement last and gate only “create share link” behind Premium (public viewing stays public).
 
 ## Rollout Plan (Low Risk)
 

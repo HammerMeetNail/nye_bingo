@@ -735,7 +735,7 @@ func TestFriendService_ListFriends_ReturnsRows(t *testing.T) {
 	db := &fakeDB{
 		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
 			return &fakeRows{rows: [][]any{
-				{friendshipID, userID, friendID, models.FriendshipStatusAccepted, time.Now(), "friend"},
+				{friendshipID, userID, friendID, models.FriendshipStatusAccepted, time.Now(), "friend", true},
 			}}, nil
 		},
 	}

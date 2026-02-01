@@ -127,9 +127,17 @@ func (s *ProviderAuthService) CreateUserFromProviderPending(ctx context.Context,
 	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, username, email_verified, email_verified_at, searchable)
 		 VALUES ($1, $2, $3, true, NOW(), $4)
-		 RETURNING id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at`,
+		 RETURNING id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable,
+		           stripe_customer_id, stripe_subscription_id, billing_plan, billing_source, billing_status,
+		           billing_current_period_end, billing_cancel_at_period_end, billing_updated_at,
+		           created_at, updated_at`,
 		email, nil, username, searchable,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable,
+		&user.StripeCustomerID, &user.StripeSubscriptionID, &user.BillingPlan, &user.BillingSource, &user.BillingStatus,
+		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, s.resolveUserInsertConflict(ctx, email, username, tx)
@@ -194,12 +202,20 @@ func (s *ProviderAuthService) linkIdentity(ctx context.Context, userID uuid.UUID
 func (s *ProviderAuthService) getUserByProviderSubject(ctx context.Context, provider Provider, subject string, db DBConn) (*models.User, error) {
 	user := &models.User{}
 	err := db.QueryRow(ctx,
-		`SELECT u.id, u.email, u.password_hash, u.username, u.email_verified, u.email_verified_at, u.ai_free_generations_used, u.searchable, u.created_at, u.updated_at
+		`SELECT u.id, u.email, u.password_hash, u.username, u.email_verified, u.email_verified_at, u.ai_free_generations_used, u.searchable,
+		        u.stripe_customer_id, u.stripe_subscription_id, u.billing_plan, u.billing_source, u.billing_status,
+		        u.billing_current_period_end, u.billing_cancel_at_period_end, u.billing_updated_at,
+		        u.created_at, u.updated_at
 		 FROM user_identities ui
 		 JOIN users u ON u.id = ui.user_id
 		 WHERE ui.provider = $1 AND ui.subject = $2 AND u.deleted_at IS NULL`,
 		provider, subject,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable,
+		&user.StripeCustomerID, &user.StripeSubscriptionID, &user.BillingPlan, &user.BillingSource, &user.BillingStatus,
+		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}
@@ -212,10 +228,18 @@ func (s *ProviderAuthService) getUserByProviderSubject(ctx context.Context, prov
 func (s *ProviderAuthService) getUserByEmail(ctx context.Context, email string, db DBConn) (*models.User, error) {
 	user := &models.User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable,
+		        stripe_customer_id, stripe_subscription_id, billing_plan, billing_source, billing_status,
+		        billing_current_period_end, billing_cancel_at_period_end, billing_updated_at,
+		        created_at, updated_at
 		 FROM users WHERE email = $1 AND deleted_at IS NULL`,
 		email,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable,
+		&user.StripeCustomerID, &user.StripeSubscriptionID, &user.BillingPlan, &user.BillingSource, &user.BillingStatus,
+		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}
@@ -228,10 +252,18 @@ func (s *ProviderAuthService) getUserByEmail(ctx context.Context, email string, 
 func (s *ProviderAuthService) getUserByID(ctx context.Context, userID uuid.UUID, db DBConn) (*models.User, error) {
 	user := &models.User{}
 	err := db.QueryRow(ctx,
-		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable, created_at, updated_at
+		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable,
+		        stripe_customer_id, stripe_subscription_id, billing_plan, billing_source, billing_status,
+		        billing_current_period_end, billing_cancel_at_period_end, billing_updated_at,
+		        created_at, updated_at
 		 FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		userID,
-	).Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable, &user.CreatedAt, &user.UpdatedAt)
+	).Scan(
+		&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable,
+		&user.StripeCustomerID, &user.StripeSubscriptionID, &user.BillingPlan, &user.BillingSource, &user.BillingStatus,
+		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrUserNotFound
 	}

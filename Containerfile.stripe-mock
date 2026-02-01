@@ -1,0 +1,17 @@
+FROM docker.io/library/golang:1.24-alpine AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY tests/stripe_mock ./tests/stripe_mock
+WORKDIR /src/tests/stripe_mock
+RUN go build -o /stripe-mock .
+
+FROM docker.io/library/alpine:3.20
+RUN adduser -D stripe
+USER stripe
+COPY --from=build /stripe-mock /usr/local/bin/stripe-mock
+EXPOSE 12111
+ENTRYPOINT ["/usr/local/bin/stripe-mock"]
+
