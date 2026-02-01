@@ -94,6 +94,15 @@ services:
       - PLAYWRIGHT_OUTPUT_DIR=${PLAYWRIGHT_OUTPUT_DIR:-/test-results}
       - PLAYWRIGHT_REPORT_DIR=${PLAYWRIGHT_REPORT_DIR:-/playwright-report}
       - OIDC_BASE_URL=${OIDC_BASE_URL:-http://oidc:5555}
+      # Stripe/billing test env vars
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET:-}
+      - STRIPE_MOCK_BASE_URL=${STRIPE_MOCK_BASE_URL:-http://stripe-mock:12111}
+      - STRIPE_PREMIUM_PRICE_MONTHLY=${STRIPE_PREMIUM_PRICE_MONTHLY:-price_premium_monthly}
+      - STRIPE_PREMIUM_PRICE_YEARLY=${STRIPE_PREMIUM_PRICE_YEARLY:-price_premium_yearly}
+      - STRIPE_PREMIUM_PRICE_LIFETIME=${STRIPE_PREMIUM_PRICE_LIFETIME:-price_premium_lifetime}
+      - STRIPE_TIP_PRICE_5=${STRIPE_TIP_PRICE_5:-price_tip_5}
+      - STRIPE_TIP_PRICE_10=${STRIPE_TIP_PRICE_10:-price_tip_10}
+      - STRIPE_TIP_PRICE_20=${STRIPE_TIP_PRICE_20:-price_tip_20}
     volumes:
       - ./:/app:ro
       - ./test-results:/test-results
