@@ -32,13 +32,14 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     await register(page, user);
 
     // Start checkout from the Premium page.
-    await page.goto('/premium', { waitUntil: 'domcontentloaded' });
+    await page.goto('/premium');
     await expect(page.getByRole('heading', { name: 'Premium', exact: true, level: 1 })).toBeVisible();
 
     // Click the upgrade button in the hero CTA slot.
-    // Wait explicitly for the button since CTA content loads async after billing status check.
+    // The CTA slot is populated asynchronously after checking auth and billing status.
+    // Use retry pattern to handle slow CI environments.
     const upgradeBtn = page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' });
-    await expect(upgradeBtn).toBeVisible({ timeout: 30000 });
+    await expect(upgradeBtn).toBeVisible({ timeout: 60000 });
     await upgradeBtn.click();
     await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 
@@ -95,12 +96,12 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     }));
 
     // Simulate Stripe redirect back to the app and ensure the UI completes the webhook-driven upgrade.
-    await page.goto('/?billing=success&session_id=cs_test_e2e#profile', { waitUntil: 'domcontentloaded' });
+    await page.goto('/?billing=success&session_id=cs_test_e2e#profile');
     await expect(page.locator('#premium-badge-slot')).toContainText('Premium', { timeout: 60000 });
     await expect(page.locator('#modal-overlay')).not.toHaveClass(/modal-overlay--visible/);
 
-    await page.goto('/premium', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#premium-billing-status')).toContainText('Premium');
+    await page.goto('/premium');
+    await expect(page.locator('#premium-billing-status')).toContainText('Premium', { timeout: 30000 });
     await expect(page.locator('#premium-billing-status')).toContainText(dateRegexLine('Renews'));
     // There are two "Manage subscription" buttons (one in the hero card, one in "Your plan").
     await expect(page.getByRole('button', { name: 'Manage subscription', exact: true }).first()).toBeVisible();
@@ -112,9 +113,11 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     const user = buildUser(testInfo, 'billinglife');
     await register(page, user);
 
-    await page.goto('/premium', { waitUntil: 'domcontentloaded' });
+    await page.goto('/premium');
     await expect(page.getByRole('heading', { name: 'Premium', exact: true, level: 1 })).toBeVisible();
-    await page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' }).click();
+    const upgradeBtn = page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' });
+    await expect(upgradeBtn).toBeVisible({ timeout: 60000 });
+    await upgradeBtn.click();
     await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 
     await page.getByRole('button', { name: 'Lifetime' }).click();
@@ -148,8 +151,8 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
       },
     }));
 
-    await page.goto('/premium', { waitUntil: 'domcontentloaded' });
-    await expect(page.locator('#premium-billing-status')).toContainText('Premium');
+    await page.goto('/premium');
+    await expect(page.locator('#premium-billing-status')).toContainText('Premium', { timeout: 30000 });
     await expect(page.locator('#premium-billing-status')).toContainText('No expiration');
     await expect(page.getByRole('button', { name: 'Manage Subscription' })).toHaveCount(0);
   });
