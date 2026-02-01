@@ -6,6 +6,7 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   sendFriendRequest,
+  expectToast,
 } = require('./helpers');
 
 test('bingo notifications only fire once per card', async ({ browser }, testInfo) => {
@@ -23,6 +24,7 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
   await sendFriendRequest(pageB, userA.username);
   await pageA.goto('/friends');
   await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await expectToast(pageA, 'Friend request accepted');
 
   await createCardFromModal(pageA, { title: 'Quick Bingo', gridSize: 2, hasFree: false });
   await fillCardWithSuggestions(pageA);
@@ -36,9 +38,12 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
     await pageA.getByRole('button', { name: 'Mark Complete' }).click();
   }
 
-  await pageB.goto('/notifications');
-  const bingoMessages = pageB.locator('.notification-message', { hasText: 'got a bingo' });
-  await expect(bingoMessages).toHaveCount(1);
+  // Wait for the bingo notification to be created server-side, then check
+  const bingoMessages = pageB.locator('.notification-message').filter({ hasText: 'got a bingo' });
+  await expect(async () => {
+    await pageB.goto('/notifications');
+    await expect(bingoMessages).toHaveCount(1);
+  }).toPass({ timeout: 15000 });
 
   await pageA.locator('.bingo-cell--completed').first().click();
   await pageA.getByRole('button', { name: 'Mark Incomplete' }).click();
@@ -46,7 +51,7 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
   await pageA.getByRole('button', { name: 'Mark Complete' }).click();
 
   await pageB.reload();
-  await expect(pageB.locator('.notification-message', { hasText: 'got a bingo' })).toHaveCount(1);
+  await expect(pageB.locator('.notification-message').filter({ hasText: 'got a bingo' })).toHaveCount(1, { timeout: 15000 });
 
   await contextA.close();
   await contextB.close();

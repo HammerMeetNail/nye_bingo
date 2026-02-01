@@ -36,7 +36,10 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     await expect(page.getByRole('heading', { name: 'Premium', exact: true, level: 1 })).toBeVisible();
 
     // Click the upgrade button in the hero CTA slot.
-    await page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' }).click();
+    // Wait explicitly for the button since CTA content loads async after billing status check.
+    const upgradeBtn = page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' });
+    await expect(upgradeBtn).toBeVisible({ timeout: 30000 });
+    await upgradeBtn.click();
     await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 
     // Add a $5 tip; keep Monthly as default.
