@@ -35,11 +35,8 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     await page.goto('/premium', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Premium', exact: true, level: 1 })).toBeVisible();
 
-    // "Upgrade to Premium" is rendered in multiple places (hero CTA + plan card).
-    // In CI, billing status can be slow to load; click whichever upgrade CTA appears first.
-    const upgradeBtn = page.locator('[data-action="open-upgrade-modal"]').first();
-    await expect(upgradeBtn).toBeVisible({ timeout: 30000 });
-    await upgradeBtn.click();
+    // Click the upgrade button in the hero CTA slot.
+    await page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' }).click();
     await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 
     // Add a $5 tip; keep Monthly as default.

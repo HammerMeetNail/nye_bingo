@@ -61,55 +61,35 @@ async function createCardFromAuthenticatedCreate(page, { title } = {}) {
 async function createCardFromModal(page, { title, gridSize, header, hasFree = true, year } = {}) {
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
-  const addButton = page.getByRole('button', { name: '+ Card' });
-  if (await addButton.isVisible()) {
-    await addButton.click();
-    await expect(page.locator('#modal-title')).toHaveText('Create New Card');
+  // Wait for dashboard to finish loading (spinner disappears, cards list or empty state renders).
+  // Both the "+ Card" button (when cards exist) and "Create Your First Card" button (empty state)
+  // use data-action="show-create-card-modal".
+  const createButton = page.locator('[data-action="show-create-card-modal"]');
+  await expect(createButton).toBeVisible({ timeout: 15000 });
+  await createButton.click();
+  await expect(page.locator('#modal-title')).toHaveText('Create New Card');
 
-    if (title) {
-      await page.fill('#modal-card-title', title);
-    }
-    if (year) {
-      await page.selectOption('#modal-card-year', String(year));
-    }
-    if (gridSize) {
-      await page.selectOption('#modal-card-grid-size', String(gridSize));
-    }
-    if (header) {
-      await page.fill('#modal-card-header', header);
-    }
-    if (!hasFree) {
-      const freeToggle = page.locator('#modal-card-free-space');
-      if (await freeToggle.isChecked()) {
-        await freeToggle.uncheck();
-      }
-    }
-
-    await page.getByRole('button', { name: 'Create Card' }).click();
-    await expect(page.locator('#item-input')).toBeVisible();
-    return;
-  }
-
-  await page.goto('/create');
-  await expect(page.getByRole('heading', { name: 'Create New Card' })).toBeVisible();
-  if (year) {
-    await page.selectOption('#card-year', String(year));
-  }
   if (title) {
-    await page.fill('#card-title', title);
+    await page.fill('#modal-card-title', title);
   }
-  await page.locator('#create-card-form button[type="submit"]').click();
-  await expect(page.locator('#item-input')).toBeVisible();
+  if (year) {
+    await page.selectOption('#modal-card-year', String(year));
+  }
+  if (gridSize) {
+    await page.selectOption('#modal-card-grid-size', String(gridSize));
+  }
   if (header) {
-    await page.fill('#card-header-input', header);
-    await page.dispatchEvent('#card-header-input', 'change');
+    await page.fill('#modal-card-header', header);
   }
   if (!hasFree) {
-    const freeToggle = page.locator('#card-free-toggle');
+    const freeToggle = page.locator('#modal-card-free-space');
     if (await freeToggle.isChecked()) {
       await freeToggle.uncheck();
     }
   }
+
+  await page.getByRole('button', { name: 'Create Card' }).click();
+  await expect(page.locator('#item-input')).toBeVisible();
 }
 
 async function createFinalizedCardFromModal(page, options) {

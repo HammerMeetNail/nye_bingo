@@ -2838,7 +2838,7 @@ const App = {
           <div class="status-icon">🎯</div>
           <h3>No cards yet</h3>
           <p class="text-muted mb-lg">Create your first bingo card and start tracking your goals!</p>
-          <a href="/create" class="btn btn-primary btn-lg">Create Your First Card</a>
+          <button class="btn btn-primary btn-lg" data-action="show-create-card-modal">Create Your First Card</button>
         </div>
       `;
       return;
