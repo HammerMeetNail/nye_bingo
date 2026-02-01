@@ -207,6 +207,18 @@ jobs:
       OIDC_CLIENT_SECRET: "oidc-secret"
       OIDC_REDIRECT_URI: "http://app:8080/api/auth/google/callback"
       OIDC_BASE_URL: "http://oidc:5555"
+      # Billing E2E: enable billing with mock Stripe
+      BILLING_ENABLED: "true"
+      STRIPE_SECRET_KEY: "sk_test_mock"
+      STRIPE_WEBHOOK_SECRET: "whsec_test"
+      STRIPE_API_BASE_URL: "http://stripe-mock:12111"
+      STRIPE_MOCK_BASE_URL: "http://stripe-mock:12111"
+      STRIPE_PREMIUM_PRICE_MONTHLY: "price_premium_monthly"
+      STRIPE_PREMIUM_PRICE_YEARLY: "price_premium_yearly"
+      STRIPE_PREMIUM_PRICE_LIFETIME: "price_premium_lifetime"
+      STRIPE_TIP_PRICE_5: "price_tip_5"
+      STRIPE_TIP_PRICE_10: "price_tip_10"
+      STRIPE_TIP_PRICE_20: "price_tip_20"
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -214,8 +226,8 @@ jobs:
       - name: Build web assets
         run: ./scripts/build-assets.sh
 
-      - name: Start OIDC mock
-        run: docker compose --profile e2e up -d --build oidc
+      - name: Start OIDC mock and Stripe mock
+        run: docker compose --profile e2e up -d --build oidc stripe-mock
 
       - name: Wait for OIDC mock
         run: |
@@ -228,6 +240,19 @@ jobs:
           done
           echo "OIDC mock did not become healthy in time."
           docker compose logs oidc
+          exit 1
+
+      - name: Wait for Stripe mock
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://localhost:12111/health >/dev/null 2>&1; then
+              echo "Stripe mock is healthy."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Stripe mock did not become healthy in time."
+          docker compose logs stripe-mock
           exit 1
 
       - name: Start stack

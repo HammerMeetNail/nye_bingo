@@ -31,15 +31,23 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     const user = buildUser(testInfo, 'billingsub');
     await register(page, user);
 
+    // Verify we're logged in before proceeding.
+    const meResp = await page.request.get('/api/auth/me');
+    expect(meResp.ok(), 'User should be authenticated after registration').toBeTruthy();
+
     // Start checkout from the Premium page.
     await page.goto('/premium');
     await expect(page.getByRole('heading', { name: 'Premium', exact: true, level: 1 })).toBeVisible();
 
-    // Click the upgrade button in the hero CTA slot.
-    // The CTA slot is populated asynchronously after checking auth and billing status.
-    // Use retry pattern to handle slow CI environments.
-    const upgradeBtn = page.locator('#premium-cta-slot').getByRole('button', { name: 'Upgrade to Premium' });
-    await expect(upgradeBtn).toBeVisible({ timeout: 60000 });
+    // Wait for the CTA slot to be populated (not empty).
+    const ctaSlot = page.locator('#premium-cta-slot');
+    await expect(ctaSlot).not.toBeEmpty({ timeout: 30000 });
+
+    // The CTA slot should contain the "Upgrade to Premium" button for non-premium users.
+    // If billing is disabled, it shows a message instead. If user is premium, it shows "View profile".
+    // We need the upgrade button.
+    const upgradeBtn = ctaSlot.getByRole('button', { name: 'Upgrade to Premium' });
+    await expect(upgradeBtn).toBeVisible({ timeout: 30000 });
     await upgradeBtn.click();
     await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 
@@ -59,9 +67,9 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     expect(prices).toContain(priceTip5);
 
     // Get user_id for webhook metadata.
-    const meResp = await page.request.get('/api/auth/me');
-    expect(meResp.ok()).toBeTruthy();
-    const me = await meResp.json();
+    const meRespForWebhook = await page.request.get('/api/auth/me');
+    expect(meRespForWebhook.ok()).toBeTruthy();
+    const me = await meRespForWebhook.json();
     const userID = me?.user?.id;
     expect(userID).toBeTruthy();
 
