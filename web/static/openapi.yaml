@@ -139,6 +139,74 @@ components:
         created_at:
           type: string
           format: date-time
+    CardTemplate:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        grid_size:
+          type: integer
+          enum: [2, 3, 4, 5]
+        header_text:
+          type: string
+        has_free_space:
+          type: boolean
+        default_visible_to_friends:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CardTemplateItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        template_id:
+          type: string
+          format: uuid
+        sort_order:
+          type: integer
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    TemplateWithItems:
+      type: object
+      properties:
+        template:
+          $ref: '#/components/schemas/CardTemplate'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardTemplateItem'
+    CardConflictResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        conflict:
+          type: object
+          properties:
+            year:
+              type: integer
+            title:
+              type: string
+        suggested_title:
+          type: string
     PublicBingoCard:
       type: object
       properties:
@@ -2158,6 +2226,303 @@ paths:
                   card:
                     $ref: '#/components/schemas/BingoCard'
                   message:
+                    type: string
+  /cards/{id}/rollover:
+    post:
+      summary: Roll over a card to a new year (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year]
+              properties:
+                year:
+                  type: integer
+                carry_over:
+                  type: string
+                  enum: [all, incomplete_only]
+                shuffle_layout:
+                  type: boolean
+                  default: true
+                title:
+                  type: string
+      responses:
+        '201':
+          description: Card rolled over
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+        '409':
+          description: Card conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardConflictResponse'
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /templates:
+    get:
+      summary: List templates
+      responses:
+        '200':
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  templates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CardTemplate'
+    post:
+      summary: Create template (Premium)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                from_card_id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                category:
+                  type: string
+                grid_size:
+                  type: integer
+                  enum: [2, 3, 4, 5]
+                header_text:
+                  type: string
+                has_free_space:
+                  type: boolean
+                default_visible_to_friends:
+                  type: boolean
+                items:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateWithItems'
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /templates/{id}:
+    get:
+      summary: Get template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateWithItems'
+    put:
+      summary: Update template (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                category:
+                  type: string
+                grid_size:
+                  type: integer
+                  enum: [2, 3, 4, 5]
+                header_text:
+                  type: string
+                has_free_space:
+                  type: boolean
+                default_visible_to_friends:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateWithItems'
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+    delete:
+      summary: Delete template (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /templates/{id}/items:
+    put:
+      summary: Replace template items (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TemplateWithItems'
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /templates/{id}/create-card:
+    post:
+      summary: Create card from template (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [year]
+              properties:
+                year:
+                  type: integer
+                title:
+                  type: string
+                category:
+                  type: string
+                shuffle_layout:
+                  type: boolean
+                  default: true
+                visible_to_friends:
+                  type: boolean
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+        '409':
+          description: Card conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardConflictResponse'
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
                     type: string
   /cards/{id}/items/{pos}/complete:
     put:

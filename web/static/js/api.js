@@ -636,6 +636,41 @@ const API = {
     },
   },
 
+  // Template endpoints
+  templates: {
+    async list() {
+      return API.request('GET', '/api/templates');
+    },
+
+    async get(id) {
+      return API.request('GET', `/api/templates/${id}`);
+    },
+
+    async create(payload) {
+      return API.request('POST', '/api/templates', payload);
+    },
+
+    async update(id, payload) {
+      return API.request('PUT', `/api/templates/${id}`, payload);
+    },
+
+    async replaceItems(id, items) {
+      return API.request('PUT', `/api/templates/${id}/items`, { items });
+    },
+
+    async del(id) {
+      return API.request('DELETE', `/api/templates/${id}`);
+    },
+
+    async createCard(id, payload) {
+      return API.request('POST', `/api/templates/${id}/create-card`, payload, { allowConflictResponse: true });
+    },
+
+    async rollover(cardId, payload) {
+      return API.request('POST', `/api/cards/${cardId}/rollover`, payload, { allowConflictResponse: true });
+    },
+  },
+
   // Billing endpoints (session cookie only)
   billing: {
     async getStatus() {
