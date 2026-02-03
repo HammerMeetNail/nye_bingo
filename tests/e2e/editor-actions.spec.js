@@ -20,7 +20,7 @@ test('draft items can be edited and removed', async ({ page }, testInfo) => {
   await page.locator('.bingo-cell').filter({ hasText: 'Original Goal' }).click();
   await expect(page.locator('#modal-title')).toHaveText('Edit Goal');
   await page.fill('textarea[id^="edit-item-content-"]', 'Updated Goal');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expectToast(page, 'Goal updated');
 
   await page.locator('.bingo-cell').filter({ hasText: 'Updated Goal' }).click();

@@ -9003,7 +9003,10 @@ const App = {
     const headerText = t.header_text || 'BINGO';
 
     this.openModal('Edit template', `
-      <form data-action="update-template" data-template-id="${this.escapeHtml(templateId)}">
+      <form data-action="update-template"
+            data-template-id="${this.escapeHtml(templateId)}"
+            data-original-grid-size="${this.escapeHtml(String(gridSize))}"
+            data-original-has-free-space="${t.has_free_space ? 'true' : 'false'}">
         <div class="form-error hidden mb-md" id="template-edit-error" role="alert"></div>
 
         <div class="form-group">
@@ -9340,15 +9343,30 @@ const App = {
       const defaultVisible = !!document.getElementById('template-edit-visible')?.checked;
       const items = this.parseItemsFromTextarea('template-edit-items');
 
-      await API.templates.update(templateId, {
+      const originalGridSize = parseInt(form?.dataset?.originalGridSize || '5', 10);
+      const originalHasFreeSpace = form?.dataset?.originalHasFreeSpace !== 'false';
+      const oldCapacity = this.getCardCapacity({ grid_size: originalGridSize, has_free_space: originalHasFreeSpace });
+      const newCapacity = this.getCardCapacity({ grid_size: gridSize, has_free_space: hasFreeSpace });
+      if (items.length > newCapacity) throw new Error('Too many items for this grid size');
+
+      const updatePayload = {
         name,
         category,
         grid_size: gridSize,
         header_text: headerText,
         has_free_space: hasFreeSpace,
         default_visible_to_friends: defaultVisible,
-      });
-      await API.templates.replaceItems(templateId, items);
+      };
+
+      // `ReplaceItems` validates against the template's current grid config, so
+      // when increasing capacity we must update first.
+      if (items.length > oldCapacity) {
+        await API.templates.update(templateId, updatePayload);
+        await API.templates.replaceItems(templateId, items);
+      } else {
+        await API.templates.replaceItems(templateId, items);
+        await API.templates.update(templateId, updatePayload);
+      }
 
       this.closeModal();
       this.toast('Template updated', 'success');

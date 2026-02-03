@@ -65,4 +65,3 @@ type RolloverParams struct {
 	ShuffleLayout bool
 	Title         *string
 }
-

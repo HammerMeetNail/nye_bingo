@@ -22,7 +22,7 @@ test('reminder emails escape goal content', async ({ page, request }, testInfo) 
   await page.locator('.bingo-cell[data-position="2"]').click();
   await expect(page.locator('#modal-title')).toHaveText('Edit Goal');
   await page.fill('textarea[id^="edit-item-content-"]', xssGoal);
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expectToast(page, 'Goal updated');
 
   await finalizeCard(page);

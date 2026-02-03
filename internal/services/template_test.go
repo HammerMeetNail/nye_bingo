@@ -85,4 +85,3 @@ func TestWithCopySuffix_RespectsTitleLimit(t *testing.T) {
 		t.Fatalf("expected <= 100 chars, got %d", len(got))
 	}
 }
-

@@ -24,7 +24,7 @@ test('AI guide refine updates a goal in the editor', async ({ page }, testInfo) 
   const editTextarea = page.locator('textarea[id^="edit-item-content-"]');
   await expect(editTextarea).toHaveValue(suggestionText);
 
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expectToast(page, 'Goal updated');
   await expect(filledCell).toContainText(suggestionText.slice(0, 12));
 });
@@ -39,7 +39,7 @@ test('empty cell opens add goal modal', async ({ page }, testInfo) => {
   await expect(page.locator('#modal-title')).toContainText('Add Goal');
 
   await page.fill('textarea[id^="edit-item-content-"]', 'Walk the neighborhood loop');
-  await page.getByRole('button', { name: 'Save' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
 
   await expectToast(page, 'Goal added');
   await expect(page.locator('.bingo-cell[data-item-id]').first()).toContainText('Walk');

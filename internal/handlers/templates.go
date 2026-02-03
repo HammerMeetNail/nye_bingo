@@ -453,7 +453,7 @@ func (h *TemplateHandler) RolloverCard(w http.ResponseWriter, r *http.Request) {
 func validateYear(year int) error {
 	currentYear := time.Now().Year()
 	if year < 2020 || year > currentYear+1 {
-		return errors.New("Year must be between 2020 and next year")
+		return errors.New("year must be between 2020 and next year")
 	}
 	return nil
 }
@@ -481,7 +481,7 @@ func decodeStrictJSON(w http.ResponseWriter, r *http.Request, dst interface{}, m
 	}
 	// Ensure there are no trailing tokens.
 	if err := dec.Decode(&struct{}{}); err != io.EOF {
-		return errors.New("Invalid request body")
+		return errors.New("invalid request body")
 	}
 	return nil
 }

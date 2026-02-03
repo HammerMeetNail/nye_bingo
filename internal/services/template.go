@@ -48,10 +48,16 @@ func (e *CardConflictError) Error() string {
 
 type TemplateService struct {
 	db          DB
-	cardService CardServiceInterface
+	cardService cardServiceForTemplates
 }
 
-func NewTemplateService(db DB, cardService CardServiceInterface) *TemplateService {
+type cardServiceForTemplates interface {
+	CheckForConflict(ctx context.Context, userID uuid.UUID, year int, title *string) (*models.BingoCard, error)
+	GetByID(ctx context.Context, cardID uuid.UUID) (*models.BingoCard, error)
+	Import(ctx context.Context, params models.ImportCardParams) (*models.BingoCard, error)
+}
+
+func NewTemplateService(db DB, cardService cardServiceForTemplates) *TemplateService {
 	return &TemplateService{db: db, cardService: cardService}
 }
 
