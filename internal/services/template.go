@@ -288,7 +288,7 @@ func (s *TemplateService) ReplaceItems(ctx context.Context, userID, templateID u
 	}
 
 	// Bump template updated_at (item replacements should affect list ordering).
-	if _, err := tx.Exec(ctx, "UPDATE card_templates SET updated_at = updated_at WHERE id = $1", templateID); err != nil {
+	if _, err := tx.Exec(ctx, "UPDATE card_templates SET updated_at = NOW() WHERE id = $1", templateID); err != nil {
 		return nil, fmt.Errorf("updating template timestamp: %w", err)
 	}
 

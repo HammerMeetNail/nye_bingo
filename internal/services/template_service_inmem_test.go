@@ -353,7 +353,7 @@ func execMem(state *memState, sql string, args ...any) (CommandTag, error) {
 		state.items[templateID] = []models.CardTemplateItem{}
 		return memCommandTag{affected: affected}, nil
 
-	case strings.Contains(sql, "UPDATE card_templates SET updated_at = updated_at"):
+	case strings.Contains(sql, "UPDATE card_templates SET updated_at = NOW()"):
 		templateID := args[0].(uuid.UUID)
 		tpl, ok := state.templates[templateID]
 		if !ok {
