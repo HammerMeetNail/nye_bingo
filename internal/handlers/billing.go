@@ -216,7 +216,12 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]bool{"is_premium": true})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"is_premium": true,
+		"features": billing.FeatureEntitlements{
+			Templates: true,
+		},
+	})
 }
 
 func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {

@@ -21,13 +21,14 @@ const (
 )
 
 type BillingStatus struct {
-	BillingEnabled    bool       `json:"billing_enabled"`
-	IsPremium         bool       `json:"is_premium"`
-	Plan              string     `json:"plan"`
-	Status            string     `json:"status"`
-	Source            string     `json:"source"`
-	CurrentPeriodEnd  *time.Time `json:"current_period_end"`
-	CancelAtPeriodEnd bool       `json:"cancel_at_period_end"`
+	BillingEnabled    bool                `json:"billing_enabled"`
+	IsPremium         bool                `json:"is_premium"`
+	Features          FeatureEntitlements `json:"features"`
+	Plan              string              `json:"plan"`
+	Status            string              `json:"status"`
+	Source            string              `json:"source"`
+	CurrentPeriodEnd  *time.Time          `json:"current_period_end"`
+	CancelAtPeriodEnd bool                `json:"cancel_at_period_end"`
 }
 
 var (

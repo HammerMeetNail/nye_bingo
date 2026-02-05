@@ -112,6 +112,24 @@ func TestTemplateHandler_ListTemplates_RequiresAuth(t *testing.T) {
 	}
 }
 
+func TestTemplateHandler_ListTemplates_RequiresPremium(t *testing.T) {
+	handler := NewTemplateHandler(&mockTemplateService{
+		ListFunc: func(ctx context.Context, userID uuid.UUID) ([]models.CardTemplate, error) {
+			t.Fatalf("service should not be called for non-premium user")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/templates", nil)
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "free"}))
+	rr := httptest.NewRecorder()
+
+	handler.ListTemplates(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rr.Code)
+	}
+}
+
 func TestTemplateHandler_CreateCardFromTemplate_ConflictReturns409(t *testing.T) {
 	templateID := uuid.New()
 	handler := NewTemplateHandler(&mockTemplateService{
@@ -159,6 +177,26 @@ func TestTemplateHandler_GetTemplate_NotFoundReturns404(t *testing.T) {
 	handler.GetTemplate(rr, req)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("expected %d, got %d", http.StatusNotFound, rr.Code)
+	}
+}
+
+func TestTemplateHandler_GetTemplate_RequiresPremium(t *testing.T) {
+	templateID := uuid.New()
+	handler := NewTemplateHandler(&mockTemplateService{
+		GetFunc: func(ctx context.Context, userID, templateID uuid.UUID) (*models.TemplateWithItems, error) {
+			t.Fatalf("service should not be called for non-premium user")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/templates/"+templateID.String(), nil)
+	req.SetPathValue("id", templateID.String())
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "free"}))
+	rr := httptest.NewRecorder()
+
+	handler.GetTemplate(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rr.Code)
 	}
 }
 

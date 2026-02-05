@@ -6,6 +6,16 @@ import (
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 )
 
+type Feature string
+
+const (
+	FeatureTemplates Feature = "templates"
+)
+
+type FeatureEntitlements struct {
+	Templates bool `json:"templates"`
+}
+
 func IsPremium(user *models.User, now time.Time) bool {
 	if user == nil {
 		return false
@@ -17,4 +27,21 @@ func IsPremium(user *models.User, now time.Time) bool {
 		return true
 	}
 	return user.BillingCurrentPeriodEnd.After(now)
+}
+
+func Features(user *models.User, now time.Time) FeatureEntitlements {
+	isPremium := IsPremium(user, now)
+	return FeatureEntitlements{
+		Templates: isPremium,
+	}
+}
+
+func HasFeature(user *models.User, now time.Time, feature Feature) bool {
+	entitlements := Features(user, now)
+	switch feature {
+	case FeatureTemplates:
+		return entitlements.Templates
+	default:
+		return false
+	}
 }

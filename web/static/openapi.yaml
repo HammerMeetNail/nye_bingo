@@ -24,6 +24,11 @@ components:
       in: cookie
       name: session_token
   schemas:
+    FeatureEntitlements:
+      type: object
+      properties:
+        templates:
+          type: boolean
     BillingStatus:
       type: object
       properties:
@@ -31,6 +36,8 @@ components:
           type: boolean
         is_premium:
           type: boolean
+        features:
+          $ref: '#/components/schemas/FeatureEntitlements'
         plan:
           type: string
           enum: [free, premium]
@@ -612,6 +619,8 @@ paths:
                     $ref: '#/components/schemas/User'
                   is_premium:
                     type: boolean
+                  features:
+                    $ref: '#/components/schemas/FeatureEntitlements'
   /auth/{provider}/start:
     get:
       summary: Start OAuth provider login
@@ -2849,6 +2858,8 @@ paths:
                 properties:
                   is_premium:
                     type: boolean
+                  features:
+                    $ref: '#/components/schemas/FeatureEntitlements'
   /ai/generate:
     post:
       summary: Generate AI goals

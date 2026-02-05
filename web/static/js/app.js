@@ -3,6 +3,7 @@
 const App = {
   user: null,
   isPremium: false,
+  entitlements: {},
   billingStatus: null,
   currentCard: null,
   suggestions: [],
@@ -48,6 +49,34 @@ const App = {
   setText(el, text) {
     if (!el) return;
     el.textContent = text ?? '';
+  },
+
+  normalizeEntitlements(entitlements) {
+    const source = entitlements && typeof entitlements === 'object' ? entitlements : {};
+    return {
+      templates: !!source.templates,
+    };
+  },
+
+  applyAuthEntitlements(response) {
+    this.user = response?.user || null;
+    this.isPremium = !!response?.is_premium;
+    this.entitlements = this.normalizeEntitlements(response?.features);
+  },
+
+  applyBillingStatus(status) {
+    this.billingStatus = status || null;
+    this.isPremium = !!status?.is_premium;
+    this.entitlements = this.normalizeEntitlements(status?.features);
+  },
+
+  hasFeature(feature) {
+    const key = String(feature || '').trim();
+    if (!key) return false;
+    if (Object.prototype.hasOwnProperty.call(this.entitlements || {}, key)) {
+      return !!this.entitlements[key];
+    }
+    return this.isPremium;
   },
 
   setRobotsMeta(content) {
@@ -788,8 +817,7 @@ const App = {
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const response = await API.auth.me();
-        this.user = response.user;
-        this.isPremium = !!response.is_premium;
+        this.applyAuthEntitlements(response);
         if (this.user) {
           this.isAnonymousMode = false;
           await this.refreshNotificationCount();
@@ -802,6 +830,7 @@ const App = {
         if (!retryable || attempt === maxAttempts) {
           this.user = null;
           this.isPremium = false;
+          this.entitlements = {};
           this.stopNotificationPolling();
           return;
         }
@@ -818,7 +847,7 @@ const App = {
     if (this.user) {
       nav.innerHTML = `
         <a href="/dashboard" class="nav-link nav-link--primary">My Cards</a>
-        <a href="/templates" class="nav-link">Templates</a>
+        ${this.hasFeature('templates') ? '<a href="/templates" class="nav-link">Templates</a>' : ''}
         <a href="/premium" class="nav-link nav-link--premium" aria-label="Premium">
           <i class="fa-solid fa-star" aria-hidden="true"></i>
           <span>Premium</span>
@@ -830,7 +859,7 @@ const App = {
         </button>
         <div class="nav-menu">
           <a href="/profile" class="nav-link">Hi, ${this.escapeHtml(this.user.username)}</a>
-          <a href="/templates" class="nav-link">Templates</a>
+          ${this.hasFeature('templates') ? '<a href="/templates" class="nav-link">Templates</a>' : ''}
           <a href="/friends" class="nav-link">Friends</a>
           <a href="/notifications" class="nav-link nav-link--notifications">
             <span>Notifications</span>
@@ -2125,7 +2154,7 @@ const App = {
         this.requireAuth(() => this.renderProfile(container));
         break;
       case 'templates':
-        this.requireAuth(() => this.renderTemplates(container));
+        this.requireFeature('templates', () => this.renderTemplates(container));
         break;
       case 'premium':
         this.renderPremium(container, queryParams);
@@ -2156,6 +2185,30 @@ const App = {
   requireAuth(callback) {
     if (!this.user) {
       this.navigate('/login', { skipWarning: true });
+      return;
+    }
+    callback();
+  },
+
+  requirePremium(callback) {
+    if (!this.user) {
+      this.navigate('/login', { skipWarning: true });
+      return;
+    }
+    if (!this.isPremium) {
+      this.navigate('/premium?upgrade=1', { skipWarning: true });
+      return;
+    }
+    callback();
+  },
+
+  requireFeature(feature, callback) {
+    if (!this.user) {
+      this.navigate('/login', { skipWarning: true });
+      return;
+    }
+    if (!this.hasFeature(feature)) {
+      this.navigate('/premium?upgrade=1', { skipWarning: true });
       return;
     }
     callback();
@@ -2369,8 +2422,7 @@ const App = {
 
       try {
         const response = await API.auth.login(email, password);
-        this.user = response.user;
-        this.isPremium = !!response.is_premium;
+        this.applyAuthEntitlements(response);
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2453,8 +2505,7 @@ const App = {
 
       try {
         const response = await API.auth.register(email, password, username, searchable);
-        this.user = response.user;
-        this.isPremium = !!response.is_premium;
+        this.applyAuthEntitlements(response);
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2509,8 +2560,7 @@ const App = {
 
       try {
         const response = await API.auth.providerComplete('google', username, searchable);
-        this.user = response.user;
-        this.isPremium = !!response.is_premium;
+        this.applyAuthEntitlements(response);
         this.setupNavigation();
         await this.refreshNotificationCount();
         this.startNotificationPolling();
@@ -2585,8 +2635,7 @@ const App = {
 
     try {
       const response = await API.auth.verifyMagicLink(token);
-      this.user = response.user;
-      this.isPremium = !!response.is_premium;
+      this.applyAuthEntitlements(response);
       this.setupNavigation();
       this.redirectAfterAuth('/dashboard');
       this.toast('Welcome back!', 'success');
@@ -2696,8 +2745,7 @@ const App = {
 
       try {
         const response = await API.auth.resetPassword(token, password);
-        this.user = response.user;
-        this.isPremium = !!response.is_premium;
+        this.applyAuthEntitlements(response);
         this.setupNavigation();
         this.navigate('/dashboard', { skipWarning: true });
         this.toast('Password reset successfully!', 'success');
@@ -3322,12 +3370,15 @@ const App = {
 
     try {
       if (submitButton) this.setButtonLoading(submitButton, true);
-      await API.account.delete(confirmUsername.trim(), password);
-      this.closeModal();
-      this.user = null;
-      this.notificationSettings = null;
-      this.notificationUnreadCount = 0;
-      this.stopNotificationPolling();
+	      await API.account.delete(confirmUsername.trim(), password);
+	      this.closeModal();
+	      this.user = null;
+	      this.isPremium = false;
+	      this.entitlements = {};
+	      this.billingStatus = null;
+	      this.notificationSettings = null;
+	      this.notificationUnreadCount = 0;
+	      this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
       this.navigate('/', { skipWarning: true });
@@ -5894,13 +5945,13 @@ const App = {
     const searchable = document.getElementById('finalize-searchable').checked;
     const errorEl = document.getElementById('finalize-register-error');
 
-    try {
-      // Register the user
-      const response = await API.auth.register(email, password, username, searchable);
-      this.user = response.user;
-      this.setupNavigation();
-      await this.refreshNotificationCount();
-      this.startNotificationPolling();
+	    try {
+	      // Register the user
+	      const response = await API.auth.register(email, password, username, searchable);
+	      this.applyAuthEntitlements(response);
+	      this.setupNavigation();
+	      await this.refreshNotificationCount();
+	      this.startNotificationPolling();
 
       // Import the anonymous card
       await this.importAnonymousCard();
@@ -5944,13 +5995,13 @@ const App = {
     const password = document.getElementById('finalize-login-password').value;
     const errorEl = document.getElementById('finalize-login-error');
 
-    try {
-      // Login the user
-      const response = await API.auth.login(email, password);
-      this.user = response.user;
-      this.setupNavigation();
-      await this.refreshNotificationCount();
-      this.startNotificationPolling();
+	    try {
+	      // Login the user
+	      const response = await API.auth.login(email, password);
+	      this.applyAuthEntitlements(response);
+	      this.setupNavigation();
+	      await this.refreshNotificationCount();
+	      this.startNotificationPolling();
 
       // Import the anonymous card (with conflict detection)
       await this.importAnonymousCard();
@@ -7139,7 +7190,7 @@ const App = {
     searchableToggle.addEventListener('change', async (e) => {
       try {
         const response = await API.auth.updateSearchable(e.target.checked);
-        this.user = response.user;
+        this.applyAuthEntitlements(response);
         this.toast(e.target.checked ? 'You are now searchable' : 'You are now hidden from search', 'success');
       } catch (error) {
         e.target.checked = !e.target.checked; // Revert on error
@@ -7184,8 +7235,7 @@ const App = {
 
     try {
       const status = await API.billing.getStatus();
-      this.billingStatus = status;
-      this.isPremium = !!status.is_premium;
+      this.applyBillingStatus(status);
       const badgeSlot = document.getElementById('premium-badge-slot');
       if (badgeSlot) {
         badgeSlot.innerHTML = this.isPremium ? '<span class="badge badge-premium">Premium</span>' : '';
@@ -7308,8 +7358,7 @@ const App = {
     while (Date.now() - start < timeoutMs) {
       try {
         const status = await API.billing.getStatus();
-        this.billingStatus = status;
-        this.isPremium = !!status.is_premium;
+        this.applyBillingStatus(status);
 
         if (status.is_premium) {
           this.toast('Premium activated!', 'success');
@@ -7337,8 +7386,7 @@ const App = {
     if (!this.billingStatus) {
       API.billing.getStatus()
         .then((status) => {
-          this.billingStatus = status;
-          this.isPremium = !!status.is_premium;
+          this.applyBillingStatus(status);
           this.openUpgradeModal();
         })
         .catch((error) => {
@@ -7633,8 +7681,7 @@ const App = {
       if (this.currentView === 'premium') {
         try {
           const status = await API.billing.getStatus();
-          this.billingStatus = status;
-          this.isPremium = !!status.is_premium;
+          this.applyBillingStatus(status);
           const statusEl = document.getElementById('premium-billing-status');
           if (statusEl) this.renderBillingStatus(statusEl, status);
         } catch (error) {
@@ -7823,11 +7870,14 @@ const App = {
 
   async confirmedLogout() {
     try {
-      this.closeModal();
-      await API.auth.logout();
-      this.user = null;
-      this.notificationSettings = null;
-      this.notificationUnreadCount = 0;
+	      this.closeModal();
+	      await API.auth.logout();
+	      this.user = null;
+	      this.isPremium = false;
+	      this.entitlements = {};
+	      this.billingStatus = null;
+	      this.notificationSettings = null;
+	      this.notificationUnreadCount = 0;
       this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
@@ -8578,8 +8628,7 @@ const App = {
     let status = null;
     try {
       status = await API.billing.getStatus();
-      this.billingStatus = status;
-      this.isPremium = !!status.is_premium;
+      this.applyBillingStatus(status);
       if (statusEl) this.renderBillingStatus(statusEl, status);
     } catch (error) {
       if (statusEl) {
@@ -8622,8 +8671,7 @@ const App = {
         // Refresh status UI (best-effort).
         try {
           const refreshed = await API.billing.getStatus();
-          this.billingStatus = refreshed;
-          this.isPremium = !!refreshed.is_premium;
+          this.applyBillingStatus(refreshed);
           if (statusEl) this.renderBillingStatus(statusEl, refreshed);
         } catch (error) {
           // Ignore refresh failures; user can refresh page.
@@ -8638,6 +8686,7 @@ const App = {
 
   async renderTemplates(container) {
     this.currentView = 'templates';
+    const canUseTemplates = this.hasFeature('templates');
 
     container.innerHTML = `
       <div class="templates-page">
@@ -8647,7 +8696,7 @@ const App = {
             <p class="text-muted mt-sm">Save reusable templates and create a new year’s card in one click.</p>
           </div>
           <div class="flex gap-sm flex-wrap">
-            ${this.isPremium ? `
+            ${canUseTemplates ? `
               <button class="btn btn-primary" data-action="show-create-template-modal">New template</button>
             ` : `
               <a href="/premium" class="btn btn-primary">Upgrade</a>
@@ -8655,7 +8704,7 @@ const App = {
           </div>
         </div>
 
-        ${this.isPremium ? '' : `
+        ${canUseTemplates ? '' : `
           <div class="card mb-lg">
             <h3 class="mt-0">Premium feature</h3>
             <p class="text-muted mb-md">You can view existing templates, but creating, editing, and using templates requires Premium.</p>
@@ -8683,7 +8732,7 @@ const App = {
           <div class="card text-center p-2xl">
             <h3>No templates yet</h3>
             <p class="text-muted mb-lg">Save a template to reuse it year after year.</p>
-            ${this.isPremium ? `
+            ${canUseTemplates ? `
               <button class="btn btn-primary" data-action="show-create-template-modal">Create your first template</button>
             ` : `
               <a href="/premium" class="btn btn-primary">Upgrade to create templates</a>
@@ -8700,10 +8749,10 @@ const App = {
         const categoryLabel = t.category ? ` • ${this.escapeHtml(t.category)}` : '';
         const updated = t.updated_at ? new Date(t.updated_at).toLocaleDateString() : '';
         const updatedLabel = updated ? ` • Updated ${this.escapeHtml(updated)}` : '';
-        const canEdit = this.isPremium;
-        const useAction = this.isPremium ? 'use-template' : 'open-upgrade-modal';
-        const editAction = this.isPremium ? 'edit-template' : 'open-upgrade-modal';
-        const deleteAction = this.isPremium ? 'delete-template' : 'open-upgrade-modal';
+        const canEdit = canUseTemplates;
+        const useAction = canUseTemplates ? 'use-template' : 'open-upgrade-modal';
+        const editAction = canUseTemplates ? 'edit-template' : 'open-upgrade-modal';
+        const deleteAction = canUseTemplates ? 'delete-template' : 'open-upgrade-modal';
 
         return `
           <div class="card">
@@ -8736,7 +8785,7 @@ const App = {
   },
 
   async showCreateTemplateModal() {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -8879,7 +8928,7 @@ const App = {
   },
 
   async showCreateTemplateFromCardModal(cardId) {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -8930,7 +8979,8 @@ const App = {
         </ol>
       ` : `<p class="text-muted mt-md">No items saved in this template.</p>`;
 
-      const actions = this.isPremium ? `
+      const canUseTemplates = this.hasFeature('templates');
+      const actions = canUseTemplates ? `
         <div class="flex gap-sm flex-wrap mt-lg">
           <button type="button" class="btn btn-primary" data-action="use-template" data-template-id="${this.escapeHtml(templateId)}">Use template</button>
           <button type="button" class="btn btn-secondary" data-action="edit-template" data-template-id="${this.escapeHtml(templateId)}">Edit</button>
@@ -8967,7 +9017,7 @@ const App = {
   },
 
   async showEditTemplateModal(templateId) {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9077,7 +9127,7 @@ const App = {
   },
 
   async deleteTemplate(templateId) {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9094,7 +9144,7 @@ const App = {
   },
 
   async showCreateCardFromTemplateModal(templateId) {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9174,7 +9224,7 @@ const App = {
   },
 
   async showRolloverCardModal(cardId) {
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9237,7 +9287,7 @@ const App = {
 
   async handleCreateTemplate(event, form) {
     event.preventDefault();
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9291,7 +9341,7 @@ const App = {
 
   async handleCreateTemplateFromCard(event, form) {
     event.preventDefault();
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9321,7 +9371,7 @@ const App = {
 
   async handleUpdateTemplate(event, form) {
     event.preventDefault();
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9384,7 +9434,7 @@ const App = {
 
   async handleCreateCardFromTemplate(event, form) {
     event.preventDefault();
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }
@@ -9447,7 +9497,7 @@ const App = {
 
   async handleRolloverCard(event, form) {
     event.preventDefault();
-    if (!this.isPremium) {
+    if (!this.hasFeature('templates')) {
       this.openUpgradeModal();
       return;
     }

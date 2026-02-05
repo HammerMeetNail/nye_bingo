@@ -82,6 +82,10 @@ func (h *TemplateHandler) ListTemplates(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
+		writeError(w, http.StatusForbidden, "Premium required")
+		return
+	}
 
 	templates, err := h.templateService.List(r.Context(), user.ID)
 	if err != nil {
@@ -95,6 +99,10 @@ func (h *TemplateHandler) GetTemplate(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r.Context())
 	if user == nil {
 		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
+		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
 
@@ -121,7 +129,7 @@ func (h *TemplateHandler) CreateTemplate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
@@ -200,7 +208,7 @@ func (h *TemplateHandler) UpdateTemplate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
@@ -255,7 +263,7 @@ func (h *TemplateHandler) ReplaceTemplateItems(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
@@ -294,7 +302,7 @@ func (h *TemplateHandler) DeleteTemplate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
@@ -321,7 +329,7 @@ func (h *TemplateHandler) CreateCardFromTemplate(w http.ResponseWriter, r *http.
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}
@@ -385,7 +393,7 @@ func (h *TemplateHandler) RolloverCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Authentication required")
 		return
 	}
-	if !billing.IsPremium(user, time.Now()) {
+	if !billing.HasFeature(user, time.Now(), billing.FeatureTemplates) {
 		writeError(w, http.StatusForbidden, "Premium required")
 		return
 	}

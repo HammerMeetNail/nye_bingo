@@ -159,6 +159,20 @@ func TestService_Status_Defaults(t *testing.T) {
 	if status.IsPremium {
 		t.Fatal("expected not premium")
 	}
+	if status.Features.Templates {
+		t.Fatal("expected templates feature disabled for free user")
+	}
+}
+
+func TestService_Status_FeaturesForPremium(t *testing.T) {
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+
+	user := &models.User{BillingPlan: "premium", BillingStatus: "active"}
+	status := svc.Status(user, time.Now())
+	if !status.Features.Templates {
+		t.Fatal("expected templates feature enabled for premium user")
+	}
 }
 
 func TestService_CreateSubscriptionCheckoutURL_InvalidInterval(t *testing.T) {

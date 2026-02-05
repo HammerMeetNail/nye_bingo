@@ -50,13 +50,26 @@ type LoginRequest struct {
 }
 
 type AuthResponse struct {
-	User      *models.User `json:"user"`
-	IsPremium *bool        `json:"is_premium,omitempty"`
-	Message   string       `json:"message,omitempty"`
+	User      *models.User                 `json:"user"`
+	IsPremium *bool                        `json:"is_premium,omitempty"`
+	Features  *billing.FeatureEntitlements `json:"features,omitempty"`
+	Message   string                       `json:"message,omitempty"`
 }
 
 type ErrorResponse struct {
 	Error string `json:"error"`
+}
+
+func buildAuthResponse(user *models.User, message string) AuthResponse {
+	now := time.Now()
+	isPremium := billing.IsPremium(user, now)
+	features := billing.Features(user, now)
+	return AuthResponse{
+		User:      user,
+		IsPremium: &isPremium,
+		Features:  &features,
+		Message:   message,
+	}
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -138,8 +151,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setSessionCookie(w, token)
-	isPremium := billing.IsPremium(user, time.Now())
-	writeJSON(w, http.StatusCreated, AuthResponse{User: user, IsPremium: &isPremium})
+	writeJSON(w, http.StatusCreated, buildAuthResponse(user, ""))
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -183,8 +195,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setSessionCookie(w, token)
-	isPremium := billing.IsPremium(user, time.Now())
-	writeJSON(w, http.StatusOK, AuthResponse{User: user, IsPremium: &isPremium})
+	writeJSON(w, http.StatusOK, buildAuthResponse(user, ""))
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -204,8 +215,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isPremium := billing.IsPremium(user, time.Now())
-	writeJSON(w, http.StatusOK, AuthResponse{User: user, IsPremium: &isPremium})
+	writeJSON(w, http.StatusOK, buildAuthResponse(user, ""))
 }
 
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -389,8 +399,7 @@ func (h *AuthHandler) MagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setSessionCookie(w, sessionToken)
-	isPremium := billing.IsPremium(user, time.Now())
-	writeJSON(w, http.StatusOK, AuthResponse{User: user, IsPremium: &isPremium})
+	writeJSON(w, http.StatusOK, buildAuthResponse(user, ""))
 }
 
 // ForgotPassword sends a password reset email
@@ -500,8 +509,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setSessionCookie(w, sessionToken)
-	isPremium := billing.IsPremium(user, time.Now())
-	writeJSON(w, http.StatusOK, AuthResponse{User: user, IsPremium: &isPremium, Message: "Password reset successfully"})
+	writeJSON(w, http.StatusOK, buildAuthResponse(user, "Password reset successfully"))
 }
 
 type UpdateSearchableRequest struct {
@@ -535,8 +543,7 @@ func (h *AuthHandler) UpdateSearchable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedIsPremium := billing.IsPremium(updatedUser, time.Now())
-	writeJSON(w, http.StatusOK, AuthResponse{User: updatedUser, IsPremium: &updatedIsPremium, Message: "Privacy settings updated"})
+	writeJSON(w, http.StatusOK, buildAuthResponse(updatedUser, "Privacy settings updated"))
 }
 
 func (h *AuthHandler) setSessionCookie(w http.ResponseWriter, token string) {

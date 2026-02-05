@@ -157,6 +157,10 @@ func TestBillingHandler_Status_Success(t *testing.T) {
 	if resp["is_premium"] != true {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
 	}
+	features, ok := resp["features"].(map[string]any)
+	if !ok || features["templates"] != true {
+		t.Fatalf("expected features.templates true, got %v", resp["features"])
+	}
 }
 
 func TestBillingHandler_CheckoutSubscription_InvalidJSON(t *testing.T) {
@@ -369,6 +373,10 @@ func TestBillingHandler_Redeem_Success(t *testing.T) {
 	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
 	if resp["is_premium"] != true {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
+	}
+	features, ok := resp["features"].(map[string]any)
+	if !ok || features["templates"] != true {
+		t.Fatalf("expected features.templates true, got %v", resp["features"])
 	}
 }
 
