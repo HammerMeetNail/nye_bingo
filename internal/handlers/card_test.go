@@ -14,6 +14,7 @@ import (
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
 )
 
 func TestCardHandler_Create_Unauthenticated(t *testing.T) {
@@ -998,6 +999,31 @@ func TestCardHandler_EditFinalized_RequiresPremium(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/edit", bytes.NewBufferString(`{}`))
 	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "free"}))
+	rr := httptest.NewRecorder()
+
+	handler.EditFinalized(rr, req)
+	assertErrorResponse(t, rr, http.StatusForbidden, "Premium required")
+}
+
+func TestCardHandler_EditFinalized_GlobalFeatureDisabled(t *testing.T) {
+	prev := billing.GlobalFeatureSwitches()
+	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
+		Templates:         true,
+		EditAfterFinalize: false,
+	})
+	t.Cleanup(func() {
+		billing.SetGlobalFeatureSwitches(prev)
+	})
+
+	handler := NewCardHandler(&mockCardService{
+		EditFinalizedFunc: func(ctx context.Context, userID, cardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+			t.Fatal("service should not be called when edit_after_finalize feature is globally disabled")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/edit", bytes.NewBufferString(`{}`))
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "premium"}))
 	rr := httptest.NewRecorder()
 
 	handler.EditFinalized(rr, req)

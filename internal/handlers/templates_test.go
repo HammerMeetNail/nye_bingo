@@ -14,6 +14,7 @@ import (
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
 )
 
 type mockTemplateService struct {
@@ -122,6 +123,33 @@ func TestTemplateHandler_ListTemplates_RequiresPremium(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/templates", nil)
 	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "free"}))
+	rr := httptest.NewRecorder()
+
+	handler.ListTemplates(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected %d, got %d", http.StatusForbidden, rr.Code)
+	}
+}
+
+func TestTemplateHandler_ListTemplates_GlobalFeatureDisabled(t *testing.T) {
+	prev := billing.GlobalFeatureSwitches()
+	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
+		Templates:         false,
+		EditAfterFinalize: true,
+	})
+	t.Cleanup(func() {
+		billing.SetGlobalFeatureSwitches(prev)
+	})
+
+	handler := NewTemplateHandler(&mockTemplateService{
+		ListFunc: func(ctx context.Context, userID uuid.UUID) ([]models.CardTemplate, error) {
+			t.Fatalf("service should not be called when templates feature is globally disabled")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/templates", nil)
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "premium"}))
 	rr := httptest.NewRecorder()
 
 	handler.ListTemplates(rr, req)

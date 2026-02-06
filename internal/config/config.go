@@ -79,16 +79,18 @@ type OAuthProviderConfig struct {
 }
 
 type BillingConfig struct {
-	Enabled                      bool
-	StripeSecretKey              string
-	StripeWebhookSecret          string
-	StripeAPIBaseURL             string
-	StripePremiumMonthlyPriceID  string
-	StripePremiumYearlyPriceID   string
-	StripePremiumLifetimePriceID string
-	StripeTip5PriceID            string
-	StripeTip10PriceID           string
-	StripeTip20PriceID           string
+	Enabled                         bool
+	FeatureTemplatesEnabled         bool
+	FeatureEditAfterFinalizeEnabled bool
+	StripeSecretKey                 string
+	StripeWebhookSecret             string
+	StripeAPIBaseURL                string
+	StripePremiumMonthlyPriceID     string
+	StripePremiumYearlyPriceID      string
+	StripePremiumLifetimePriceID    string
+	StripeTip5PriceID               string
+	StripeTip10PriceID              string
+	StripeTip20PriceID              string
 }
 
 func (d DatabaseConfig) DSN() string {
@@ -157,16 +159,18 @@ func Load() (*Config, error) {
 			},
 		},
 		Billing: BillingConfig{
-			Enabled:                      getEnvBool("BILLING_ENABLED", false),
-			StripeSecretKey:              getEnv("STRIPE_SECRET_KEY", ""),
-			StripeWebhookSecret:          getEnv("STRIPE_WEBHOOK_SECRET", ""),
-			StripeAPIBaseURL:             getEnv("STRIPE_API_BASE_URL", ""),
-			StripePremiumMonthlyPriceID:  getEnv("STRIPE_PREMIUM_PRICE_MONTHLY", ""),
-			StripePremiumYearlyPriceID:   getEnv("STRIPE_PREMIUM_PRICE_YEARLY", ""),
-			StripePremiumLifetimePriceID: getEnv("STRIPE_PREMIUM_PRICE_LIFETIME", ""),
-			StripeTip5PriceID:            getEnv("STRIPE_TIP_PRICE_5", ""),
-			StripeTip10PriceID:           getEnv("STRIPE_TIP_PRICE_10", ""),
-			StripeTip20PriceID:           getEnv("STRIPE_TIP_PRICE_20", ""),
+			Enabled:                         getEnvBool("BILLING_ENABLED", false),
+			FeatureTemplatesEnabled:         getEnvBool("FEATURE_TEMPLATES_ENABLED", true),
+			FeatureEditAfterFinalizeEnabled: getEnvBool("FEATURE_EDIT_AFTER_FINALIZE_ENABLED", true),
+			StripeSecretKey:                 getEnv("STRIPE_SECRET_KEY", ""),
+			StripeWebhookSecret:             getEnv("STRIPE_WEBHOOK_SECRET", ""),
+			StripeAPIBaseURL:                getEnv("STRIPE_API_BASE_URL", ""),
+			StripePremiumMonthlyPriceID:     getEnv("STRIPE_PREMIUM_PRICE_MONTHLY", ""),
+			StripePremiumYearlyPriceID:      getEnv("STRIPE_PREMIUM_PRICE_YEARLY", ""),
+			StripePremiumLifetimePriceID:    getEnv("STRIPE_PREMIUM_PRICE_LIFETIME", ""),
+			StripeTip5PriceID:               getEnv("STRIPE_TIP_PRICE_5", ""),
+			StripeTip10PriceID:              getEnv("STRIPE_TIP_PRICE_10", ""),
+			StripeTip20PriceID:              getEnv("STRIPE_TIP_PRICE_20", ""),
 		},
 	}
 

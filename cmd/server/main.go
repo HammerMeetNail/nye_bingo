@@ -87,6 +87,11 @@ func run() error {
 	logger.Info("Connected to Redis")
 
 	// Initialize services
+	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
+		Templates:         cfg.Billing.FeatureTemplatesEnabled,
+		EditAfterFinalize: cfg.Billing.FeatureEditAfterFinalizeEnabled,
+	})
+
 	dbAdapter := services.NewPoolAdapter(db.Pool)
 	redisAdapter := services.NewRedisAdapter(redisDB.Client)
 

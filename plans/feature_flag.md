@@ -23,8 +23,30 @@ This document reflects the implementation as of February 6, 2026.
   - `HasFeature(user, now, feature)` is the server-side gate check.
 
 Current mapping:
-- `templates` feature is enabled when `IsPremium(...)` is true.
-- `edit_after_finalize` feature is enabled when `IsPremium(...)` is true.
+- `templates` feature is enabled when:
+  - `IsPremium(...)` is true, and
+  - `FEATURE_TEMPLATES_ENABLED=true`
+- `edit_after_finalize` feature is enabled when:
+  - `IsPremium(...)` is true, and
+  - `FEATURE_EDIT_AFTER_FINALIZE_ENABLED=true`
+
+### Global Feature Switches (Required)
+
+Every premium feature flag must also support a **global runtime switch** so operators can disable a single premium feature without revoking Premium itself.
+
+Required env vars:
+- `FEATURE_TEMPLATES_ENABLED` (default `true`)
+- `FEATURE_EDIT_AFTER_FINALIZE_ENABLED` (default `true`)
+
+Evaluation rule for server gating:
+- `HasFeature(user, now, feature)` must return `true` **only if both are true**:
+  - user entitlement for that feature (`IsPremium(...)` + per-feature mapping)
+  - global feature switch for that feature
+
+Behavioral expectations:
+- A user can still be `is_premium=true` while one or more feature flags are globally disabled.
+- In that state, API `features` should expose the disabled feature(s) as `false` so frontend UX stays consistent.
+- Server handlers must continue to use `HasFeature(...)` as the source of truth.
 
 ### API Exposure
 
@@ -66,15 +88,17 @@ Edit-after-finalize is gated by feature flag, not directly by global premium:
 
 1. Add enum + field in backend entitlement model:
    - `internal/services/billing/entitlements.go`
-2. Map the new feature in `Features(user, now)`.
-3. Gate server endpoints with `HasFeature(...)`.
-4. Return feature state through auth and billing responses (already wired to return `features`).
-5. Use `App.hasFeature('<feature_name>')` in UI/route/action checks.
-6. Add tests for:
+2. Add global env switch in config (default `true`) and wire startup initialization.
+3. Map the new feature in `Features(user, now)` including global switch logic.
+4. Gate server endpoints with `HasFeature(...)`.
+5. Return feature state through auth and billing responses (already wired to return `features`).
+6. Use `App.hasFeature('<feature_name>')` in UI/route/action checks.
+7. Add tests for:
    - Entitlement mapping
    - Handler gate behavior
+   - Global-switch override behavior (`is_premium=true` but server feature disabled)
    - Frontend route/UI gating behavior
-7. Update `web/static/openapi.yaml` with new `features` property schema.
+8. Update `web/static/openapi.yaml` with new `features` property schema.
 
 ## Guardrail Rules
 
@@ -82,6 +106,7 @@ Edit-after-finalize is gated by feature flag, not directly by global premium:
 - Keep free functionality additive-safe (no regressions to existing free workflows).
 - Prefer feature-specific checks over broad `is_premium` checks for premium feature surfaces.
 - Keep feature names stable and explicit across backend and frontend (`templates`, `ai_enhancements`, etc.).
+- Keep global switch env names explicit and stable (`FEATURE_<NAME>_ENABLED`).
 
 ## Testing Checklist
 

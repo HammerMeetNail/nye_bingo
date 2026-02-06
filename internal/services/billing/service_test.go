@@ -181,6 +181,32 @@ func TestService_Status_FeaturesForPremium(t *testing.T) {
 	}
 }
 
+func TestService_Status_GlobalSwitchOverride(t *testing.T) {
+	prev := GlobalFeatureSwitches()
+	SetGlobalFeatureSwitches(FeatureEntitlements{
+		Templates:         false,
+		EditAfterFinalize: false,
+	})
+	t.Cleanup(func() {
+		SetGlobalFeatureSwitches(prev)
+	})
+
+	store := &stubStore{}
+	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
+	user := &models.User{BillingPlan: "premium", BillingStatus: "active"}
+	status := svc.Status(user, time.Now())
+
+	if !status.IsPremium {
+		t.Fatal("expected is_premium true when plan is premium")
+	}
+	if status.Features.Templates {
+		t.Fatal("expected templates disabled by global switch")
+	}
+	if status.Features.EditAfterFinalize {
+		t.Fatal("expected edit_after_finalize disabled by global switch")
+	}
+}
+
 func TestService_CreateSubscriptionCheckoutURL_InvalidInterval(t *testing.T) {
 	store := &stubStore{}
 	svc := NewService(config.BillingConfig{Enabled: true}, "https://example.test", store, stubStripe{})
