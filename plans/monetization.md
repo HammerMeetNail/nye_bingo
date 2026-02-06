@@ -890,7 +890,113 @@ These are intentionally chosen to feel “worth it” without harming free users
 - Requires a dedicated plan before implementation:
   - **Create** `plans/premium_templates.md` (same style: schema, endpoints, UX, tests, rollout).
 
-### 2) Premium AI Boost (Cost‑Bounded) (Premium)
+### 2) Edit After Finalize (Premium)
+
+**Problem:** Today, finalized cards are intentionally immutable. If a user notices a typo or wants to refine a goal after finalizing, they must either “live with it” or use **Clone** as a workaround (which changes layout and doesn’t preserve the idea of “this is the same card, just fixed”).
+
+**Premium value:** A clean, explicit workflow to make changes **after finalize** without degrading free users.
+
+#### Decision: implement as “Create editable copy” (recommended)
+This is the safest interpretation of “edit after finalize”:
+- The original finalized card remains immutable (preserves trust / “history”).
+- Premium users get a 1‑click action that creates a new **draft** card prefilled from the finalized card.
+
+This approach is also easiest for an implementation agent because it can reuse existing card creation + insert logic (see `internal/services/card.go`).
+
+#### User experience (UX)
+- On a finalized card, show a button: **“Edit”** (Premium).
+  - Free users either don’t see it, or see it gated with a Premium modal (preferred for discoverability).
+- Clicking “Edit” opens a modal with:
+  - Title (default: `"<existing title> (Edit)"`)
+  - Optional “Shuffle layout” toggle (default **OFF** for editing; preserves layout)
+  - Optional “Reset completion data” toggle (default **ON**; matches templates/rollover rules)
+    - If “reset” is enabled, the new draft’s items start with:
+      - `is_completed=false`
+      - `completed_at=NULL`
+      - `notes=NULL`
+      - `proof_url=NULL`
+- Submitting creates a new draft and routes to it.
+
+#### Backend: endpoint + behavior (copy/paste oriented)
+Add endpoint:
+- `POST /api/cards/{id}/edit` (Premium; requires write scope; server‑enforced entitlement)
+
+Request body:
+```json
+{
+  "title": "Optional override",
+  "shuffle_layout": false,
+  "reset_progress": true
+}
+```
+
+Response on success (`201`):
+```json
+{ "card": { /* BingoCard */ } }
+```
+
+Conflict response (`409`):
+```json
+{
+  "error":"Card conflict",
+  "conflict":{"year":2026,"title":"My 2026 Goals"},
+  "suggested_title":"My 2026 Goals (Edit)"
+}
+```
+
+Rules:
+1. Require auth (`user != nil`)
+2. Enforce Premium entitlement server-side.
+3. Authorize ownership (user owns source card).
+4. Require the source card to be `is_finalized=true` (otherwise return `400`).
+5. The new card is always created as a **draft** (`is_finalized=false`).
+6. Default behavior should preserve:
+   - `year` (same year as source)
+   - `category` (copy)
+   - `grid_size`, `header_text`, `has_free_space`, and `free_space_position` (copy)
+   - `visible_to_friends` (copy)
+7. Item copy rules:
+   - Always copy the **item content**.
+   - If `shuffle_layout=false` (default), keep the same `position` values.
+   - If `shuffle_layout=true`, choose valid positions excluding FREE (same logic as `plans/premium_templates.md`).
+   - If `reset_progress=true` (default), new items are inserted with defaults (no completion/notes/proof).
+     - Note: the simplest implementation is to insert new `bingo_items` with only `content` + `position`, since defaults already reset progress.
+
+Implementation sketch (reuse existing primitives):
+- Add a new service method on `CardService` (or a small new `PremiumEditService`) that:
+  1) loads the source card (`GetByID`) and checks ownership
+  2) generates a non-conflicting title (suffix strategy)
+  3) uses the existing “import/create in one transaction” pattern to create the new draft + insert items.
+     - You can reuse `CardService.Import` (recommended) because it supports explicit `GridSize`, `HeaderText`, `HasFreeSpace`, `FreeSpacePos`, and item positions.
+
+#### Frontend wiring
+- Add a button on finalized cards: **Edit** (Premium), next to Clone.
+- Add modal:
+  - Title input
+  - Shuffle checkbox (default unchecked)
+  - Reset checkbox (default checked)
+- On submit:
+  - call `POST /api/cards/{id}/edit`
+  - if `409`, show suggested title and prompt user to retry
+  - on success, navigate to `/card/{newId}`
+
+#### Tests (TDD-first, no DB required)
+Add tests that keep the behavior correct and safe:
+1. Premium enforcement:
+   - non-premium user gets `403` from `POST /api/cards/{id}/edit`
+2. Ownership enforcement:
+   - user cannot edit someone else’s card (`403`)
+3. Finalized requirement:
+   - draft card returns `400` (“must be finalized”)
+4. Layout behavior:
+   - shuffle OFF preserves positions
+   - shuffle ON never uses FREE position and stays within range
+5. Progress reset:
+   - verify newly created items have `is_completed=false` and `notes/proof` empty (if your test harness can inspect item fields)
+
+**Note:** Free users still have **Clone** as an escape hatch. Premium “Edit after finalize” is a faster, safer, more explicit flow that preserves layout and provides better conflict handling.
+
+### 3) Premium AI Boost (Cost‑Bounded) (Premium)
 - Premium includes a **simple monthly allowance** of “AI Enhancements” and adds goal-focused tools:
   - Goal Assistant / ideator (strictly tied to a specific bingo goal)
   - Regenerate a goal in the wizard

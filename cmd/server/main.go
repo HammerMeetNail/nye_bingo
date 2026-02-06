@@ -108,6 +108,7 @@ func run() error {
 	billingStore := billing.NewStore(dbAdapter)
 	stripeClient := billing.NewStripeHTTPClientWithAPIBase(cfg.Billing.StripeSecretKey, cfg.Billing.StripeAPIBaseURL)
 	billingService := billing.NewService(cfg.Billing, cfg.Email.BaseURL, billingStore, stripeClient)
+	templateService := services.NewTemplateService(dbAdapter, cardService)
 
 	oauthProviders := map[services.Provider]services.OAuthProvider{}
 	if cfg.OAuth.Google.Enabled {
@@ -146,6 +147,7 @@ func run() error {
 	reminderPublicHandler := handlers.NewReminderPublicHandler(reminderService)
 	aiHandler := handlers.NewAIHandler(aiService)
 	billingHandler := handlers.NewBillingHandler(billingService)
+	templatesHandler := handlers.NewTemplateHandler(templateService)
 	accountHandler := handlers.NewAccountHandler(accountService, authService, cfg.Server.Secure)
 	pageHandler, err := handlers.NewPageHandler("web/templates", handlers.PageOAuthConfig{
 		GoogleEnabled: cfg.OAuth.Google.Enabled,
@@ -361,6 +363,9 @@ func run() error {
 	mux.Handle("PUT /api/cards/{id}/items/{pos}/notes", requireWrite(http.HandlerFunc(cardHandler.UpdateNotes)))
 	mux.Handle("GET /api/share/{token}", http.HandlerFunc(cardHandler.GetSharedCard))
 
+	// Template endpoints
+	registerTemplateRoutes(mux, templatesHandler, requireRead, requireWrite)
+
 	// Suggestion endpoints
 	mux.Handle("GET /api/suggestions", http.HandlerFunc(suggestionHandler.GetAll))
 	mux.Handle("GET /api/suggestions/categories", http.HandlerFunc(suggestionHandler.GetCategories))
@@ -503,6 +508,22 @@ func run() error {
 	<-done
 	logger.Info("Server stopped")
 	return nil
+}
+
+func registerTemplateRoutes(
+	mux *http.ServeMux,
+	templatesHandler *handlers.TemplateHandler,
+	requireRead func(http.Handler) http.Handler,
+	requireWrite func(http.Handler) http.Handler,
+) {
+	mux.Handle("GET /api/templates", requireRead(http.HandlerFunc(templatesHandler.ListTemplates)))
+	mux.Handle("GET /api/templates/{id}", requireRead(http.HandlerFunc(templatesHandler.GetTemplate)))
+	mux.Handle("POST /api/templates", requireWrite(http.HandlerFunc(templatesHandler.CreateTemplate)))
+	mux.Handle("PUT /api/templates/{id}", requireWrite(http.HandlerFunc(templatesHandler.UpdateTemplate)))
+	mux.Handle("PUT /api/templates/{id}/items", requireWrite(http.HandlerFunc(templatesHandler.ReplaceTemplateItems)))
+	mux.Handle("DELETE /api/templates/{id}", requireWrite(http.HandlerFunc(templatesHandler.DeleteTemplate)))
+	mux.Handle("POST /api/templates/{id}/create-card", requireWrite(http.HandlerFunc(templatesHandler.CreateCardFromTemplate)))
+	mux.Handle("POST /api/cards/{id}/rollover", requireWrite(http.HandlerFunc(templatesHandler.RolloverCard)))
 }
 
 func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv func(string) (string, bool)) int64 {

@@ -138,6 +138,19 @@ type NotificationServiceInterface interface {
 	NotifyFriendsBingo(ctx context.Context, actorID, cardID uuid.UUID, bingoCount int) error
 }
 
+// TemplateServiceInterface defines the contract for template operations used by handlers.
+type TemplateServiceInterface interface {
+	List(ctx context.Context, userID uuid.UUID) ([]models.CardTemplate, error)
+	Get(ctx context.Context, userID, templateID uuid.UUID) (*models.TemplateWithItems, error)
+	CreateFromCard(ctx context.Context, userID, cardID uuid.UUID, name string) (*models.TemplateWithItems, error)
+	Create(ctx context.Context, userID uuid.UUID, params models.CreateTemplateParams) (*models.TemplateWithItems, error)
+	Update(ctx context.Context, userID, templateID uuid.UUID, params models.UpdateTemplateParams) (*models.TemplateWithItems, error)
+	ReplaceItems(ctx context.Context, userID, templateID uuid.UUID, items []string) (*models.TemplateWithItems, error)
+	Delete(ctx context.Context, userID, templateID uuid.UUID) error
+	CreateCardFromTemplate(ctx context.Context, userID, templateID uuid.UUID, params models.TemplateCreateCardParams) (*models.BingoCard, error)
+	RolloverCard(ctx context.Context, userID, cardID uuid.UUID, params models.RolloverParams) (*models.BingoCard, error)
+}
+
 // ReminderServiceInterface defines the contract for reminder operations.
 type ReminderServiceInterface interface {
 	GetSettings(ctx context.Context, userID uuid.UUID) (*models.ReminderSettings, error)

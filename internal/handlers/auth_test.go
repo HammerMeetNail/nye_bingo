@@ -650,6 +650,11 @@ func TestAuthHandler_Me_Authenticated(t *testing.T) {
 	} else if response.User.Email != user.Email {
 		t.Errorf("expected email %q, got %q", user.Email, response.User.Email)
 	}
+	if response.Features == nil {
+		t.Error("expected features in response")
+	} else if response.Features.Templates {
+		t.Error("expected templates feature disabled for free user")
+	}
 }
 
 func TestAuthHandler_ChangePassword_Unauthenticated(t *testing.T) {

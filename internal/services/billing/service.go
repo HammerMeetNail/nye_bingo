@@ -66,9 +66,11 @@ func (s *Service) Status(user *models.User, now time.Time) BillingStatus {
 	if source == "" {
 		source = "none"
 	}
+	features := Features(user, now)
 	return BillingStatus{
 		BillingEnabled:    s.enabled,
 		IsPremium:         IsPremium(user, now),
+		Features:          features,
 		Plan:              plan,
 		Status:            status,
 		Source:            source,

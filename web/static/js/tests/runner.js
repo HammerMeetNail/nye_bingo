@@ -348,6 +348,58 @@ describe('Premium navigation + page wiring', () => {
     expect(App.isRoutablePage('premium')).toBe(true);
   });
 
+  test('templates route redirects non-premium users to premium', () => {
+    const { App, window } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = false;
+    App.closeMobileMenu = () => {};
+    App.closeModal = () => {};
+    App.renderPremium = () => {};
+
+    let redirectedTo = '';
+    App.navigate = (path) => { redirectedTo = path; };
+
+    window.location.pathname = '/templates';
+    window.location.search = '';
+    App.route();
+    expect(redirectedTo).toBe('/premium?upgrade=1');
+  });
+
+  test('templates route renders for premium users', () => {
+    const { App, window } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = true;
+    App.closeMobileMenu = () => {};
+    App.closeModal = () => {};
+    App.renderPremium = () => {};
+
+    let rendered = false;
+    App.renderTemplates = () => { rendered = true; };
+
+    window.location.pathname = '/templates';
+    window.location.search = '';
+    App.route();
+    expect(rendered).toBe(true);
+  });
+
+  test('templates route respects per-feature entitlements over premium', () => {
+    const { App, window } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = true;
+    App.entitlements = { templates: false };
+    App.closeMobileMenu = () => {};
+    App.closeModal = () => {};
+    App.renderPremium = () => {};
+
+    let redirectedTo = '';
+    App.navigate = (path) => { redirectedTo = path; };
+
+    window.location.pathname = '/templates';
+    window.location.search = '';
+    App.route();
+    expect(redirectedTo).toBe('/premium?upgrade=1');
+  });
+
   test('navbar renders a Premium link without auto-opening upgrade', () => {
     const { App, document } = loadBrowserApp();
     App.user = { username: 'alice' };
