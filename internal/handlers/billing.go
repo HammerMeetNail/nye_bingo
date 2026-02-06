@@ -216,9 +216,17 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Keep response feature state in sync with the successful redemption even though
+	// the request-context user snapshot is not automatically refreshed from DB.
+	user.BillingPlan = "premium"
+	user.BillingStatus = "active"
+	user.BillingSource = "code"
+	user.BillingCurrentPeriodEnd = nil
+	user.BillingCancelAtPeriodEnd = false
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"is_premium": true,
-		"features":   billing.GlobalFeatureSwitches(),
+		"features":   billing.Features(user, time.Now()),
 	})
 }
 
