@@ -65,3 +65,15 @@ test('cloned cards can change grid size and header', async ({ page }, testInfo) 
   await expect(page.locator('.bingo-header')).toHaveCount(4);
   await expect(page.locator('.bingo-cell--free')).toHaveCount(0);
 });
+
+test('finalized edit action is gated for free users', async ({ page }, testInfo) => {
+  const user = buildUser(testInfo, 'editgate');
+  await register(page, user);
+
+  await createCardFromAuthenticatedCreate(page, { title: 'Source Card' });
+  await fillCardWithSuggestions(page);
+  await finalizeCard(page);
+
+  await page.locator('[data-action="show-edit-finalized-card-modal"]').click();
+  await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
+});

@@ -219,7 +219,8 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"is_premium": true,
 		"features": billing.FeatureEntitlements{
-			Templates: true,
+			Templates:         true,
+			EditAfterFinalize: true,
 		},
 	})
 }

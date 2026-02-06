@@ -162,6 +162,9 @@ func TestService_Status_Defaults(t *testing.T) {
 	if status.Features.Templates {
 		t.Fatal("expected templates feature disabled for free user")
 	}
+	if status.Features.EditAfterFinalize {
+		t.Fatal("expected edit_after_finalize feature disabled for free user")
+	}
 }
 
 func TestService_Status_FeaturesForPremium(t *testing.T) {
@@ -172,6 +175,9 @@ func TestService_Status_FeaturesForPremium(t *testing.T) {
 	status := svc.Status(user, time.Now())
 	if !status.Features.Templates {
 		t.Fatal("expected templates feature enabled for premium user")
+	}
+	if !status.Features.EditAfterFinalize {
+		t.Fatal("expected edit_after_finalize feature enabled for premium user")
 	}
 }
 

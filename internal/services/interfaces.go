@@ -46,6 +46,7 @@ type CardServiceInterface interface {
 	AddItem(ctx context.Context, userID uuid.UUID, params models.AddItemParams) (*models.BingoItem, error)
 	UpdateConfig(ctx context.Context, userID, cardID uuid.UUID, params models.UpdateCardConfigParams) (*models.BingoCard, error)
 	Clone(ctx context.Context, userID, cardID uuid.UUID, params CloneParams) (*CloneResult, error)
+	EditFinalized(ctx context.Context, userID, cardID uuid.UUID, params EditFinalizedCardParams) (*models.BingoCard, error)
 	UpdateItem(ctx context.Context, userID, cardID uuid.UUID, position int, params models.UpdateItemParams) (*models.BingoItem, error)
 	RemoveItem(ctx context.Context, userID, cardID uuid.UUID, position int) error
 	Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*models.BingoCard, error)

@@ -14,6 +14,7 @@ import (
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
+	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
 )
 
 type CardHandler struct {
@@ -487,6 +488,12 @@ type CloneCardRequest struct {
 	HasFreeSpace *bool   `json:"has_free_space,omitempty"`
 }
 
+type EditFinalizedCardRequest struct {
+	Title         *string `json:"title,omitempty"`
+	ShuffleLayout *bool   `json:"shuffle_layout,omitempty"`
+	ResetProgress *bool   `json:"reset_progress,omitempty"`
+}
+
 func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
 	user := GetUserFromContext(r.Context())
 	if user == nil {
@@ -565,6 +572,88 @@ func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		message = "Card cloned (some items were not copied because the new grid is smaller)"
 	}
 	writeJSON(w, http.StatusCreated, CardResponse{Card: result.Card, Message: message})
+}
+
+func (h *CardHandler) EditFinalized(w http.ResponseWriter, r *http.Request) {
+	user := GetUserFromContext(r.Context())
+	if user == nil {
+		writeError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
+	if !billing.HasFeature(user, time.Now(), billing.FeatureEditAfterFinalize) {
+		writeError(w, http.StatusForbidden, "Premium required")
+		return
+	}
+
+	cardID, err := parseCardID(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid card ID")
+		return
+	}
+
+	req := EditFinalizedCardRequest{}
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+	}
+	if req.Title != nil {
+		trimmed := strings.TrimSpace(*req.Title)
+		req.Title = &trimmed
+	}
+
+	params := services.EditFinalizedCardParams{
+		Title:         req.Title,
+		ShuffleLayout: req.ShuffleLayout != nil && *req.ShuffleLayout,
+		ResetProgress: true,
+	}
+	if req.ResetProgress != nil {
+		params.ResetProgress = *req.ResetProgress
+	}
+
+	card, err := h.cardService.EditFinalized(r.Context(), user.ID, cardID, params)
+	if errors.Is(err, services.ErrCardNotFound) {
+		writeError(w, http.StatusNotFound, "Card not found")
+		return
+	}
+	if errors.Is(err, services.ErrNotCardOwner) {
+		writeError(w, http.StatusForbidden, "Access denied")
+		return
+	}
+	if errors.Is(err, services.ErrCardNotFinalized) {
+		writeError(w, http.StatusBadRequest, "Card must be finalized first")
+		return
+	}
+	if errors.Is(err, services.ErrTitleTooLong) {
+		writeError(w, http.StatusBadRequest, "Title must be 100 characters or less")
+		return
+	}
+
+	var conflict *services.CardConflictError
+	if errors.As(err, &conflict) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_ = json.NewEncoder(w).Encode(CardConflictResponse{
+			Error:          "Card conflict",
+			Conflict:       CardConflictInfo{Year: conflict.Year, Title: conflict.Title},
+			SuggestedTitle: conflict.SuggestedTitle,
+		})
+		return
+	}
+
+	if errors.Is(err, services.ErrCardTitleExists) || errors.Is(err, services.ErrCardAlreadyExists) {
+		writeError(w, http.StatusConflict, "You already have a card with this title for this year")
+		return
+	}
+
+	if err != nil {
+		log.Printf("Error creating editable draft from finalized card: %v", err)
+		writeError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, CardResponse{Card: card})
 }
 
 func (h *CardHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {

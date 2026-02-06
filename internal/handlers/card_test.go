@@ -973,6 +973,119 @@ func TestCardHandler_Clone_SuccessAndTruncationMessage(t *testing.T) {
 	}
 }
 
+func TestCardHandler_EditFinalized_RequiresAuth(t *testing.T) {
+	handler := NewCardHandler(&mockCardService{
+		EditFinalizedFunc: func(ctx context.Context, userID, cardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+			t.Fatal("service should not be called without auth")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/edit", bytes.NewBufferString(`{}`))
+	rr := httptest.NewRecorder()
+
+	handler.EditFinalized(rr, req)
+	assertErrorResponse(t, rr, http.StatusUnauthorized, "Authentication required")
+}
+
+func TestCardHandler_EditFinalized_RequiresPremium(t *testing.T) {
+	handler := NewCardHandler(&mockCardService{
+		EditFinalizedFunc: func(ctx context.Context, userID, cardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+			t.Fatal("service should not be called for non-premium user")
+			return nil, nil
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+uuid.New().String()+"/edit", bytes.NewBufferString(`{}`))
+	req = req.WithContext(SetUserInContext(req.Context(), &models.User{ID: uuid.New(), BillingPlan: "free"}))
+	rr := httptest.NewRecorder()
+
+	handler.EditFinalized(rr, req)
+	assertErrorResponse(t, rr, http.StatusForbidden, "Premium required")
+}
+
+func TestCardHandler_EditFinalized_Success(t *testing.T) {
+	user := &models.User{ID: uuid.New(), BillingPlan: "premium"}
+	cardID := uuid.New()
+	newCardID := uuid.New()
+
+	handler := NewCardHandler(&mockCardService{
+		EditFinalizedFunc: func(ctx context.Context, userID, gotCardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+			if userID != user.ID {
+				t.Fatalf("unexpected user id: %s", userID)
+			}
+			if gotCardID != cardID {
+				t.Fatalf("unexpected card id: %s", gotCardID)
+			}
+			if params.Title == nil || *params.Title != "Updated Title" {
+				t.Fatalf("expected trimmed title, got %#v", params.Title)
+			}
+			if !params.ShuffleLayout {
+				t.Fatal("expected shuffle_layout=true")
+			}
+			if !params.ResetProgress {
+				t.Fatal("expected reset_progress to default true")
+			}
+			return &models.BingoCard{ID: newCardID, UserID: userID}, nil
+		},
+	})
+
+	body := `{"title":"  Updated Title  ","shuffle_layout":true}`
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+cardID.String()+"/edit", bytes.NewBufferString(body))
+	req = req.WithContext(SetUserInContext(req.Context(), user))
+	rr := httptest.NewRecorder()
+
+	handler.EditFinalized(rr, req)
+
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp CardResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if resp.Card == nil || resp.Card.ID != newCardID {
+		t.Fatalf("expected card %s, got %#v", newCardID, resp.Card)
+	}
+}
+
+func TestCardHandler_EditFinalized_Conflict(t *testing.T) {
+	user := &models.User{ID: uuid.New(), BillingPlan: "premium"}
+	cardID := uuid.New()
+
+	handler := NewCardHandler(&mockCardService{
+		EditFinalizedFunc: func(ctx context.Context, userID, gotCardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+			return nil, &services.CardConflictError{
+				Year:           2026,
+				Title:          "My 2026 Goals",
+				SuggestedTitle: "My 2026 Goals (Edit)",
+			}
+		},
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/cards/"+cardID.String()+"/edit", bytes.NewBufferString(`{}`))
+	req = req.WithContext(SetUserInContext(req.Context(), user))
+	rr := httptest.NewRecorder()
+
+	handler.EditFinalized(rr, req)
+
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	var resp CardConflictResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+	if resp.Error != "Card conflict" {
+		t.Fatalf("expected conflict error, got %q", resp.Error)
+	}
+	if resp.SuggestedTitle != "My 2026 Goals (Edit)" {
+		t.Fatalf("expected suggested title, got %q", resp.SuggestedTitle)
+	}
+}
+
 func TestCardHandler_UpdateMeta_Success(t *testing.T) {
 	user := &models.User{ID: uuid.New()}
 	cardID := uuid.New()

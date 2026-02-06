@@ -4,7 +4,7 @@
 
 Document the premium feature-entitlement pattern used in this repository so premium features can be shipped independently instead of relying on a single global `is_premium` check.
 
-This document reflects the implementation as of February 5, 2026.
+This document reflects the implementation as of February 6, 2026.
 
 ## Current Model
 
@@ -13,8 +13,10 @@ This document reflects the implementation as of February 5, 2026.
 - File: `internal/services/billing/entitlements.go`
 - `Feature` enum values currently include:
   - `templates`
+  - `edit_after_finalize`
 - `FeatureEntitlements` currently includes:
   - `templates: bool`
+  - `edit_after_finalize: bool`
 - Entitlement API:
   - `IsPremium(user, now)` returns global premium status.
   - `Features(user, now)` returns per-feature flags.
@@ -22,15 +24,16 @@ This document reflects the implementation as of February 5, 2026.
 
 Current mapping:
 - `templates` feature is enabled when `IsPremium(...)` is true.
+- `edit_after_finalize` feature is enabled when `IsPremium(...)` is true.
 
 ### API Exposure
 
 - Billing status payload (`GET /api/billing/status`) includes:
   - `is_premium`
-  - `features` object (`templates` currently)
+  - `features` object (`templates`, `edit_after_finalize`)
 - Auth payloads include:
   - `is_premium`
-  - `features` object (`templates` currently)
+  - `features` object (`templates`, `edit_after_finalize`)
 
 Files:
 - `internal/services/billing/types.go`
@@ -47,6 +50,16 @@ Templates are gated by feature flag, not directly by global premium:
 - Frontend uses feature-aware checks:
   - `App.hasFeature('templates')`
   - `App.requireFeature('templates', ...)`
+  - `web/static/js/app.js`
+
+### Edit After Finalize Gating
+
+Edit-after-finalize is gated by feature flag, not directly by global premium:
+
+- Server handler uses `HasFeature(..., FeatureEditAfterFinalize)`:
+  - `internal/handlers/card.go`
+- Frontend uses feature-aware checks:
+  - `App.hasFeature('edit_after_finalize')`
   - `web/static/js/app.js`
 
 ## Adding a New Premium Feature Flag

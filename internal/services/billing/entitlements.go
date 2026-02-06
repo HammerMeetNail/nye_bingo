@@ -9,11 +9,13 @@ import (
 type Feature string
 
 const (
-	FeatureTemplates Feature = "templates"
+	FeatureTemplates         Feature = "templates"
+	FeatureEditAfterFinalize Feature = "edit_after_finalize"
 )
 
 type FeatureEntitlements struct {
-	Templates bool `json:"templates"`
+	Templates         bool `json:"templates"`
+	EditAfterFinalize bool `json:"edit_after_finalize"`
 }
 
 func IsPremium(user *models.User, now time.Time) bool {
@@ -32,7 +34,8 @@ func IsPremium(user *models.User, now time.Time) bool {
 func Features(user *models.User, now time.Time) FeatureEntitlements {
 	isPremium := IsPremium(user, now)
 	return FeatureEntitlements{
-		Templates: isPremium,
+		Templates:         isPremium,
+		EditAfterFinalize: isPremium,
 	}
 }
 
@@ -41,6 +44,8 @@ func HasFeature(user *models.User, now time.Time, feature Feature) bool {
 	switch feature {
 	case FeatureTemplates:
 		return entitlements.Templates
+	case FeatureEditAfterFinalize:
+		return entitlements.EditAfterFinalize
 	default:
 		return false
 	}

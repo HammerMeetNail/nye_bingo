@@ -45,11 +45,17 @@ func TestFeatures(t *testing.T) {
 	if features.Templates {
 		t.Fatal("expected templates=false for free user")
 	}
+	if features.EditAfterFinalize {
+		t.Fatal("expected edit_after_finalize=false for free user")
+	}
 
 	premium := &models.User{BillingPlan: "premium"}
 	features = Features(premium, now)
 	if !features.Templates {
 		t.Fatal("expected templates=true for premium user")
+	}
+	if !features.EditAfterFinalize {
+		t.Fatal("expected edit_after_finalize=true for premium user")
 	}
 }
 
@@ -59,6 +65,9 @@ func TestHasFeature(t *testing.T) {
 
 	if !HasFeature(user, now, FeatureTemplates) {
 		t.Fatal("expected templates feature for premium user")
+	}
+	if !HasFeature(user, now, FeatureEditAfterFinalize) {
+		t.Fatal("expected edit_after_finalize feature for premium user")
 	}
 	if HasFeature(user, now, Feature("unknown")) {
 		t.Fatal("expected false for unknown feature")

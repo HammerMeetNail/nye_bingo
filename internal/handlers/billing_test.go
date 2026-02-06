@@ -158,8 +158,8 @@ func TestBillingHandler_Status_Success(t *testing.T) {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
 	}
 	features, ok := resp["features"].(map[string]any)
-	if !ok || features["templates"] != true {
-		t.Fatalf("expected features.templates true, got %v", resp["features"])
+	if !ok || features["templates"] != true || features["edit_after_finalize"] != true {
+		t.Fatalf("expected features.templates and features.edit_after_finalize true, got %v", resp["features"])
 	}
 }
 
@@ -375,8 +375,8 @@ func TestBillingHandler_Redeem_Success(t *testing.T) {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
 	}
 	features, ok := resp["features"].(map[string]any)
-	if !ok || features["templates"] != true {
-		t.Fatalf("expected features.templates true, got %v", resp["features"])
+	if !ok || features["templates"] != true || features["edit_after_finalize"] != true {
+		t.Fatalf("expected features.templates and features.edit_after_finalize true, got %v", resp["features"])
 	}
 }
 
