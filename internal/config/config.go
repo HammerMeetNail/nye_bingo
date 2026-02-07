@@ -44,13 +44,15 @@ type RedisConfig struct {
 }
 
 type AIConfig struct {
-	GeminiAPIKey          string
-	Stub                  bool
-	GeminiModel           string
-	GeminiThinkingLevel   string
-	GeminiThinkingBudget  int
-	GeminiTemperature     float64
-	GeminiMaxOutputTokens int
+	GeminiAPIKey                string
+	Stub                        bool
+	GeminiModel                 string
+	GeminiThinkingLevel         string
+	GeminiThinkingBudget        int
+	GeminiTemperature           float64
+	GeminiMaxOutputTokens       int
+	PremiumEnhancementsPerMonth int
+	PremiumEndpointRateLimit    int
 }
 
 type EmailConfig struct {
@@ -82,6 +84,7 @@ type BillingConfig struct {
 	Enabled                         bool
 	FeatureTemplatesEnabled         bool
 	FeatureEditAfterFinalizeEnabled bool
+	FeatureAIEnhancementsEnabled    bool
 	StripeSecretKey                 string
 	StripeWebhookSecret             string
 	StripeAPIBaseURL                string
@@ -139,13 +142,15 @@ func Load() (*Config, error) {
 			SMTPPort:     getEnvInt("SMTP_PORT", 1025),
 		},
 		AI: AIConfig{
-			GeminiAPIKey:          getEnv("GEMINI_API_KEY", ""),
-			GeminiModel:           getEnvNonEmpty("GEMINI_MODEL", "gemini-3-flash-preview"),
-			GeminiThinkingLevel:   getEnvNonEmpty("GEMINI_THINKING_LEVEL", "minimal"),
-			GeminiThinkingBudget:  getEnvInt("GEMINI_THINKING_BUDGET", 0),
-			GeminiTemperature:     getEnvFloat64("GEMINI_TEMPERATURE", 0.8),
-			GeminiMaxOutputTokens: getEnvInt("GEMINI_MAX_OUTPUT_TOKENS", 4096),
-			Stub:                  getEnvBool("AI_STUB", false),
+			GeminiAPIKey:                getEnv("GEMINI_API_KEY", ""),
+			GeminiModel:                 getEnvNonEmpty("GEMINI_MODEL", "gemini-3-flash-preview"),
+			GeminiThinkingLevel:         getEnvNonEmpty("GEMINI_THINKING_LEVEL", "minimal"),
+			GeminiThinkingBudget:        getEnvInt("GEMINI_THINKING_BUDGET", 0),
+			GeminiTemperature:           getEnvFloat64("GEMINI_TEMPERATURE", 0.8),
+			GeminiMaxOutputTokens:       getEnvInt("GEMINI_MAX_OUTPUT_TOKENS", 4096),
+			PremiumEnhancementsPerMonth: getEnvInt("AI_PREMIUM_ENHANCEMENTS_PER_MONTH", 100),
+			PremiumEndpointRateLimit:    getEnvInt("AI_PREMIUM_ENDPOINT_RATE_LIMIT", 60),
+			Stub:                        getEnvBool("AI_STUB", false),
 		},
 		OAuth: OAuthConfig{
 			AllowedProviders: getEnvList("OAUTH_ALLOWED_PROVIDERS", nil),
@@ -162,6 +167,7 @@ func Load() (*Config, error) {
 			Enabled:                         getEnvBool("BILLING_ENABLED", false),
 			FeatureTemplatesEnabled:         getEnvBool("FEATURE_TEMPLATES_ENABLED", true),
 			FeatureEditAfterFinalizeEnabled: getEnvBool("FEATURE_EDIT_AFTER_FINALIZE_ENABLED", true),
+			FeatureAIEnhancementsEnabled:    getEnvBool("FEATURE_AI_ENHANCEMENTS_ENABLED", true),
 			StripeSecretKey:                 getEnv("STRIPE_SECRET_KEY", ""),
 			StripeWebhookSecret:             getEnv("STRIPE_WEBHOOK_SECRET", ""),
 			StripeAPIBaseURL:                getEnv("STRIPE_API_BASE_URL", ""),

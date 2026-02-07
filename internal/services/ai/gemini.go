@@ -21,24 +21,30 @@ import (
 )
 
 const (
-	freeGenerationsBeforeVerification = 5
+	freeGenerationsBeforeVerification  = 5
+	defaultPremiumEnhancementsPerMonth = 100
+	featureGenerate                    = "generate"
+	featureRegenerate                  = "regenerate"
+	featureFillEmpty                   = "fill_empty"
+	featureAssist                      = "assist"
 )
 
 var geminiBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 type Service struct {
-	apiKey          string
-	client          *http.Client
-	db              services.DBConn
-	stub            bool
-	model           string
-	thinkingLevel   string
-	thinkingBudget  int
-	temperature     float64
-	maxOutputTokens int
-	debug           bool
-	debugMaxChars   int
-	environment     string
+	apiKey                      string
+	client                      *http.Client
+	db                          services.DBConn
+	stub                        bool
+	model                       string
+	thinkingLevel               string
+	thinkingBudget              int
+	temperature                 float64
+	maxOutputTokens             int
+	debug                       bool
+	debugMaxChars               int
+	environment                 string
+	premiumEnhancementsPerMonth int
 }
 
 func NewService(cfg *config.Config, db services.DBConn) *Service {
@@ -81,17 +87,18 @@ func NewService(cfg *config.Config, db services.DBConn) *Service {
 		// Some Gemini models (especially previews) can take longer than 30s.
 		// Keep this in sync with the server write timeout and frontend request timeout.
 		// Leave some slack so the server can return a JSON error/response before write deadlines.
-		client:          &http.Client{Timeout: 85 * time.Second},
-		db:              db,
-		stub:            cfg.AI.Stub,
-		model:           model,
-		thinkingLevel:   thinkingLevel,
-		thinkingBudget:  thinkingBudget,
-		temperature:     temperature,
-		maxOutputTokens: maxOutputTokens,
-		debug:           cfg.Server.Debug,
-		debugMaxChars:   debugMaxChars,
-		environment:     cfg.Server.Environment,
+		client:                      &http.Client{Timeout: 85 * time.Second},
+		db:                          db,
+		stub:                        cfg.AI.Stub,
+		model:                       model,
+		thinkingLevel:               thinkingLevel,
+		thinkingBudget:              thinkingBudget,
+		temperature:                 temperature,
+		maxOutputTokens:             maxOutputTokens,
+		debug:                       cfg.Server.Debug,
+		debugMaxChars:               debugMaxChars,
+		environment:                 cfg.Server.Environment,
+		premiumEnhancementsPerMonth: maxInt(cfg.AI.PremiumEnhancementsPerMonth, defaultPremiumEnhancementsPerMonth),
 	}
 }
 
@@ -206,8 +213,10 @@ type geminiThinkingConfig struct {
 }
 
 type geminiSchema struct {
-	Type  string        `json:"type"`
-	Items *geminiSchema `json:"items,omitempty"`
+	Type       string                   `json:"type"`
+	Items      *geminiSchema            `json:"items,omitempty"`
+	Properties map[string]*geminiSchema `json:"properties,omitempty"`
+	Required   []string                 `json:"required,omitempty"`
 }
 
 type geminiSafetySetting struct {
@@ -239,6 +248,10 @@ type geminiUsage struct {
 }
 
 func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt GoalPrompt) ([]string, UsageStats, error) {
+	return s.generateGoalsWithFeature(ctx, userID, prompt, featureGenerate)
+}
+
+func (s *Service) generateGoalsWithFeature(ctx context.Context, userID uuid.UUID, prompt GoalPrompt, feature string) ([]string, UsageStats, error) {
 	start := time.Now()
 
 	count := prompt.Count
@@ -260,7 +273,7 @@ func (s *Service) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt Go
 			Model:    "stub",
 			Duration: time.Since(start),
 		}
-		s.logUsageWithTimeout(userID, stats, "success")
+		s.logUsageWithTimeout(userID, stats, "success", feature)
 		return goals, stats, nil
 	}
 
@@ -396,7 +409,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 		return nil, UsageStats{}, fmt.Errorf("%w: %v", ErrAIProviderUnavailable, err)
 	}
 	defer func() {
@@ -406,7 +419,7 @@ Output exactly %d items as a JSON array of strings.`,
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			return nil, UsageStats{}, fmt.Errorf("%w: status %d", ErrRateLimitExceeded, resp.StatusCode)
@@ -435,7 +448,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	var geminiResp geminiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 		return nil, UsageStats{}, fmt.Errorf("%w: failed to decode response", ErrAIProviderUnavailable)
 	}
 
@@ -449,19 +462,19 @@ Output exactly %d items as a JSON array of strings.`,
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		s.logUsageWithTimeout(userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block", feature)
 		return nil, stats, ErrSafetyViolation // Or generic empty error
 	}
 
 	candidate := geminiResp.Candidates[0]
 	if candidate.FinishReason == "SAFETY" {
-		s.logUsageWithTimeout(userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block", feature)
 		return nil, stats, ErrSafetyViolation
 	}
 
 	// Parse the JSON array from the text
 	if len(candidate.Content.Parts) == 0 {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		return nil, stats, fmt.Errorf("%w: empty content parts", ErrAIProviderUnavailable)
 	}
 
@@ -494,7 +507,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	var goals []string
 	if err := json.Unmarshal([]byte(responseText), &goals); err != nil {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		logging.Error("Gemini returned invalid JSON for goals array", map[string]interface{}{
 			"user_id":          userID.String(),
 			"finish_reason":    candidate.FinishReason,
@@ -511,7 +524,7 @@ Output exactly %d items as a JSON array of strings.`,
 		goals = goals[:count]
 	}
 	if len(goals) != count {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		logging.Error("Gemini returned wrong goal count", map[string]interface{}{
 			"user_id":          userID.String(),
 			"finish_reason":    candidate.FinishReason,
@@ -522,7 +535,7 @@ Output exactly %d items as a JSON array of strings.`,
 		return nil, stats, fmt.Errorf("%w: expected %d goals, got %d", ErrAIProviderUnavailable, count, len(goals))
 	}
 
-	s.logUsageWithTimeout(userID, stats, "success")
+	s.logUsageWithTimeout(userID, stats, "success", feature)
 	return goals, stats, nil
 }
 
@@ -545,14 +558,14 @@ func stripMarkdownCodeBlock(s string) string {
 	return s
 }
 
-func (s *Service) logUsage(ctx context.Context, userID uuid.UUID, stats UsageStats, status string) {
+func (s *Service) logUsage(ctx context.Context, userID uuid.UUID, stats UsageStats, status string, feature string) {
 	if s.db == nil {
 		return
 	}
 	_, err := s.db.Exec(ctx, `
-        INSERT INTO ai_generation_logs (user_id, model, tokens_input, tokens_output, duration_ms, status)
-        VALUES ($1, $2, $3, $4, $5, $6)
-    `, userID, stats.Model, stats.TokensInput, stats.TokensOutput, stats.Duration.Milliseconds(), status)
+        INSERT INTO ai_generation_logs (user_id, model, tokens_input, tokens_output, duration_ms, status, feature)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, userID, stats.Model, stats.TokensInput, stats.TokensOutput, stats.Duration.Milliseconds(), status, normalizeFeature(feature))
 
 	if err != nil {
 		logging.Error("Failed to log AI usage", map[string]interface{}{
@@ -562,13 +575,13 @@ func (s *Service) logUsage(ctx context.Context, userID uuid.UUID, stats UsageSta
 	}
 }
 
-func (s *Service) logUsageWithTimeout(userID uuid.UUID, stats UsageStats, status string) {
+func (s *Service) logUsageWithTimeout(userID uuid.UUID, stats UsageStats, status string, feature string) {
 	if s.db == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	s.logUsage(ctx, userID, stats, status)
+	s.logUsage(ctx, userID, stats, status, feature)
 }
 
 // sanitizeInput cleans user input to prevent basic prompt injection and enforce limits.
@@ -604,6 +617,21 @@ func rotateGoals(goals []string, offset int) []string {
 	out = append(out, goals[n:]...)
 	out = append(out, goals[:n]...)
 	return out
+}
+
+func normalizeFeature(feature string) string {
+	feature = strings.TrimSpace(feature)
+	if feature == "" {
+		return featureGenerate
+	}
+	return feature
+}
+
+func maxInt(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func stubGoals(prompt GoalPrompt) []string {

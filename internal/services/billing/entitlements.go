@@ -12,11 +12,13 @@ type Feature string
 const (
 	FeatureTemplates         Feature = "templates"
 	FeatureEditAfterFinalize Feature = "edit_after_finalize"
+	FeatureAIEnhancements    Feature = "ai_enhancements"
 )
 
 type FeatureEntitlements struct {
 	Templates         bool `json:"templates"`
 	EditAfterFinalize bool `json:"edit_after_finalize"`
+	AIEnhancements    bool `json:"ai_enhancements"`
 }
 
 var (
@@ -24,6 +26,7 @@ var (
 	globalFeatureSwitches   = FeatureEntitlements{
 		Templates:         true,
 		EditAfterFinalize: true,
+		AIEnhancements:    true,
 	}
 )
 
@@ -58,6 +61,7 @@ func Features(user *models.User, now time.Time) FeatureEntitlements {
 	return FeatureEntitlements{
 		Templates:         isPremium && switches.Templates,
 		EditAfterFinalize: isPremium && switches.EditAfterFinalize,
+		AIEnhancements:    isPremium && switches.AIEnhancements,
 	}
 }
 
@@ -68,6 +72,8 @@ func HasFeature(user *models.User, now time.Time, feature Feature) bool {
 		return entitlements.Templates
 	case FeatureEditAfterFinalize:
 		return entitlements.EditAfterFinalize
+	case FeatureAIEnhancements:
+		return entitlements.AIEnhancements
 	default:
 		return false
 	}

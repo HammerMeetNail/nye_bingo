@@ -5,6 +5,7 @@ const App = {
   isPremium: false,
   entitlements: {},
   billingStatus: null,
+  premiumAIStatus: null,
   currentCard: null,
   suggestions: [],
   usedSuggestions: new Set(),
@@ -56,6 +57,7 @@ const App = {
     return {
       templates: !!source.templates,
       edit_after_finalize: !!source.edit_after_finalize,
+      ai_enhancements: !!source.ai_enhancements,
     };
   },
 
@@ -63,12 +65,18 @@ const App = {
     this.user = response?.user || null;
     this.isPremium = !!response?.is_premium;
     this.entitlements = this.normalizeEntitlements(response?.features);
+    if (!this.entitlements.ai_enhancements) {
+      this.premiumAIStatus = null;
+    }
   },
 
   applyBillingStatus(status) {
     this.billingStatus = status || null;
     this.isPremium = !!status?.is_premium;
     this.entitlements = this.normalizeEntitlements(status?.features);
+    if (!this.entitlements.ai_enhancements) {
+      this.premiumAIStatus = null;
+    }
   },
 
   hasFeature(feature) {
@@ -361,6 +369,19 @@ const App = {
       case 'ai-refine': {
         const position = parseInt(target.dataset.position, 10);
         if (!Number.isNaN(position)) this.handleAIRefine(position);
+        break;
+      }
+      case 'ai-premium-assist': {
+        const position = parseInt(target.dataset.position, 10);
+        if (!Number.isNaN(position)) this.handleAIPremiumAssist(position);
+        break;
+      }
+      case 'ai-fill-empty-premium':
+        this.fillEmptyWithAI();
+        break;
+      case 'ai-regenerate-goal': {
+        const index = parseInt(target.dataset.index, 10);
+        if (!Number.isNaN(index)) AIWizard.regenerateGoal(index, target);
         break;
       }
       case 'remove-item': {
@@ -829,6 +850,7 @@ const App = {
           this.isAnonymousMode = false;
           await this.refreshNotificationCount();
           this.startNotificationPolling();
+          await this.refreshPremiumAIStatus();
         }
         return;
       } catch (error) {
@@ -838,6 +860,7 @@ const App = {
           this.user = null;
           this.isPremium = false;
           this.entitlements = {};
+          this.premiumAIStatus = null;
           this.stopNotificationPolling();
           return;
         }
@@ -3906,6 +3929,11 @@ const App = {
                   <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.currentCard.id}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
                     🧙 AI
                   </button>
+                  ${this.hasFeature('ai_enhancements') ? `
+                    <button class="btn btn-secondary btn-sm" id="ai-fill-empty-btn" data-action="ai-fill-empty-premium" title="Fill empty squares with Premium AI" ${itemCount >= capacity ? 'disabled' : ''}>
+                      ✨ AI Fill
+                    </button>
+                  ` : ''}
                 `}
                 <button class="btn btn-secondary btn-sm" id="fill-empty-btn" data-action="fill-empty-spaces" ${itemCount >= capacity ? 'disabled' : ''}>
                   ✨ Fill
@@ -4805,6 +4833,27 @@ const App = {
     const modalTitle = isEmpty ? 'Add Goal' : 'Edit Goal';
     const aiButtonLabel = isEmpty ? '🧙 Suggest with AI' : '🧙 Refine with AI';
     const aiHintPlaceholder = isEmpty ? 'Theme or constraint (optional)' : 'What should change? (optional)';
+    const canUsePremiumAI = !isEmpty && !this.isAnonymousMode && this.hasFeature('ai_enhancements');
+    const premiumMeter = this.formatPremiumAIStatusLine(this.premiumAIStatus);
+    const premiumSection = canUsePremiumAI ? `
+        <div class="form-group ai-guide-section">
+          <label class="form-label">Goal Assistant (Premium)</label>
+          ${premiumMeter ? `<small class="text-muted">${this.escapeHtml(premiumMeter)}</small>` : ''}
+          <select id="ai-premium-mode" class="form-input form-input--sm mt-sm">
+            <option value="breakdown">Break it down</option>
+            <option value="next_step">Next step</option>
+            <option value="obstacles">Obstacles</option>
+            <option value="schedule">Schedule</option>
+            <option value="ideas">Ideas</option>
+            <option value="motivation">Motivation</option>
+          </select>
+          <textarea id="ai-premium-notes" class="form-input form-input--sm mt-sm" rows="2" maxlength="500" placeholder="Constraints / notes (optional)"></textarea>
+          <button type="button" class="btn btn-secondary btn-sm" id="ai-premium-generate" data-action="ai-premium-assist" data-position="${position}">
+            ✨ Ask Goal Assistant
+          </button>
+          <div id="ai-premium-results" class="ai-guide-results"></div>
+        </div>
+    ` : '';
 
     const aiSection = `
         <div class="form-group ai-guide-section">
@@ -4828,6 +4877,7 @@ const App = {
           <label class="form-label" for="edit-item-content-${position}">Goal</label>
           <textarea id="edit-item-content-${position}" class="form-input" rows="4" maxlength="500" autofocus>${this.escapeHtml(content)}</textarea>
         </div>
+        ${premiumSection}
         ${aiSection}
         <div class="flex gap-md mt-lg">
           <button type="button" class="btn btn-secondary flex-1" data-action="close-modal">
@@ -4942,6 +4992,62 @@ const App = {
     }
   },
 
+  async handleAIPremiumAssist(position) {
+    if (this.isAnonymousMode || !this.user) {
+      this.showAIAuthModal();
+      return;
+    }
+    if (!this.hasFeature('ai_enhancements')) {
+      this.navigate('/premium?upgrade=1', { skipWarning: true });
+      return;
+    }
+    if (!this.currentCard?.id) {
+      this.toast('No active card found', 'error');
+      return;
+    }
+
+    const mode = (document.getElementById('ai-premium-mode')?.value || 'breakdown').trim();
+    const notes = (document.getElementById('ai-premium-notes')?.value || '').trim();
+    if (notes.length > 500) {
+      this.toast('Notes must be 500 characters or less', 'error');
+      return;
+    }
+
+    const resultsEl = document.getElementById('ai-premium-results');
+    const button = document.getElementById('ai-premium-generate');
+    const originalLabel = button ? button.textContent.trim() : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Thinking...';
+    }
+    if (resultsEl) {
+      resultsEl.textContent = 'Generating guidance...';
+    }
+
+    try {
+      const response = await API.ai.assistGoal(this.currentCard.id, position, mode, notes);
+      if (resultsEl) {
+        resultsEl.textContent = response?.reply || '';
+      }
+      this.applyPremiumAIUsageUpdate(response);
+    } catch (error) {
+      if (error?.status === 403 && /premium required/i.test(error?.message || '')) {
+        this.navigate('/premium?upgrade=1', { skipWarning: true });
+        return;
+      }
+      if (resultsEl && error?.data?.resets_at) {
+        const reset = new Date(error.data.resets_at);
+        resultsEl.textContent = `No AI Enhancements left this month. Resets ${reset.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}.`;
+      }
+      this.toast(error.message, 'error');
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || '✨ Ask Goal Assistant';
+      }
+    }
+  },
+
   updateUsedSuggestionsForContentChange(position, oldContent, newContent) {
     const oldKey = (oldContent || '').toLowerCase();
     const newKey = (newContent || '').toLowerCase();
@@ -5025,6 +5131,8 @@ const App = {
       if (fillBtn) fillBtn.disabled = isFull;
       const aiBtn = document.getElementById('ai-btn');
       if (aiBtn) aiBtn.disabled = isFull;
+      const aiFillBtn = document.getElementById('ai-fill-empty-btn');
+      if (aiFillBtn) aiFillBtn.disabled = isFull;
       const clearBtn = document.getElementById('clear-btn');
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const shuffleBtn = document.getElementById('shuffle-btn');
@@ -5199,6 +5307,8 @@ const App = {
         input.disabled = true;
         document.getElementById('add-btn').disabled = true;
         document.getElementById('fill-empty-btn').disabled = true;
+        const aiFillBtn = document.getElementById('ai-fill-empty-btn');
+        if (aiFillBtn) aiFillBtn.disabled = true;
         const finalizeBtn = document.getElementById('finalize-btn');
         if (finalizeBtn) finalizeBtn.disabled = false;
       }
@@ -5206,6 +5316,8 @@ const App = {
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
       if (aiBtn) aiBtn.disabled = itemCount >= capacity;
+      const aiFillBtn = document.getElementById('ai-fill-empty-btn');
+      if (aiFillBtn) aiFillBtn.disabled = itemCount >= capacity;
       const shuffleBtn = document.getElementById('shuffle-btn');
       if (shuffleBtn) shuffleBtn.disabled = false;
 
@@ -5339,6 +5451,8 @@ const App = {
     if (clearBtn) clearBtn.disabled = itemCount === 0;
     const aiBtn = document.getElementById('ai-btn');
     if (aiBtn) aiBtn.disabled = isFull;
+    const aiFillBtn = document.getElementById('ai-fill-empty-btn');
+    if (aiFillBtn) aiFillBtn.disabled = isFull;
     const shuffleBtn = document.getElementById('shuffle-btn');
     if (shuffleBtn) shuffleBtn.disabled = itemCount === 0;
     const finalizeBtn = document.getElementById('finalize-btn');
@@ -5348,6 +5462,101 @@ const App = {
     this.refreshSuggestionsList();
 
     this.toast(`Added ${added} item${added !== 1 ? 's' : ''} to your card`, 'success');
+  },
+
+  async fillEmptyWithAI() {
+    if (this.isAnonymousMode || !this.user) {
+      this.showAIAuthModal();
+      return;
+    }
+    if (!this.hasFeature('ai_enhancements')) {
+      this.navigate('/premium?upgrade=1', { skipWarning: true });
+      return;
+    }
+    if (!this.currentCard?.id) {
+      this.toast('No active card found', 'error');
+      return;
+    }
+    if (this.currentCard.is_finalized) {
+      this.toast('Card must be a draft', 'error');
+      return;
+    }
+
+    const currentItemCount = this.currentCard.items ? this.currentCard.items.length : 0;
+    const capacity = this.getCardCapacity(this.currentCard);
+    if (currentItemCount >= capacity) {
+      this.toast('Card is already full', 'info');
+      return;
+    }
+
+    const button = document.getElementById('ai-fill-empty-btn');
+    const originalLabel = button ? button.textContent.trim() : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Filling...';
+    }
+
+    try {
+      const response = await API.ai.fillEmpty(this.currentCard.id, 'mix', '', 'medium', 'free', '');
+      if (response?.card) {
+        this.currentCard = response.card;
+      } else {
+        const refreshed = await API.cards.get(this.currentCard.id);
+        this.currentCard = refreshed.card;
+      }
+
+      this.usedSuggestions = new Set(
+        (this.currentCard.items || [])
+          .map(item => (item.content || '').toLowerCase())
+          .filter(Boolean)
+      );
+
+      const grid = document.getElementById('bingo-grid');
+      if (grid) grid.innerHTML = this.renderGrid();
+
+      const itemCount = this.currentCard.items ? this.currentCard.items.length : 0;
+      const isFull = itemCount >= capacity;
+      const progressEl = document.querySelector('progress.progress-bar');
+      if (progressEl) {
+        progressEl.max = capacity;
+        progressEl.value = itemCount;
+      }
+      const progressText = document.querySelector('.progress-text');
+      if (progressText) {
+        progressText.textContent = `${itemCount}/${capacity} items added`;
+      }
+
+      const input = document.getElementById('item-input');
+      if (input) input.disabled = isFull;
+      const addBtn = document.getElementById('add-btn');
+      if (addBtn) addBtn.disabled = isFull;
+      const fillBtn = document.getElementById('fill-empty-btn');
+      if (fillBtn) fillBtn.disabled = isFull;
+      const aiBtn = document.getElementById('ai-btn');
+      if (aiBtn) aiBtn.disabled = isFull;
+      const clearBtn = document.getElementById('clear-btn');
+      if (clearBtn) clearBtn.disabled = itemCount === 0;
+      const shuffleBtn = document.getElementById('shuffle-btn');
+      if (shuffleBtn) shuffleBtn.disabled = itemCount === 0;
+      const finalizeBtn = document.getElementById('finalize-btn');
+      if (finalizeBtn) finalizeBtn.disabled = itemCount < capacity;
+
+      this.refreshSuggestionsList();
+      this.applyPremiumAIUsageUpdate(response);
+      this.toast('Filled empty squares with AI', 'success');
+    } catch (error) {
+      if (error?.status === 403 && /premium required/i.test(error?.message || '')) {
+        this.navigate('/premium?upgrade=1', { skipWarning: true });
+        return;
+      }
+      this.toast(error.message, 'error');
+    } finally {
+      if (button) {
+        const itemCount = this.currentCard?.items ? this.currentCard.items.length : 0;
+        button.disabled = itemCount >= capacity;
+        button.textContent = originalLabel || '✨ AI Fill';
+      }
+    }
   },
 
   async removeItem(position) {
@@ -5397,6 +5606,8 @@ const App = {
       if (clearBtn) clearBtn.disabled = itemCount === 0;
       const aiBtn = document.getElementById('ai-btn');
       if (aiBtn) aiBtn.disabled = itemCount >= capacity;
+      const aiFillBtn = document.getElementById('ai-fill-empty-btn');
+      if (aiFillBtn) aiFillBtn.disabled = itemCount >= capacity;
       const finalizeBtn = document.getElementById('finalize-btn');
       if (finalizeBtn) finalizeBtn.disabled = itemCount < capacity;
       if (itemCount === 0) {
@@ -7204,6 +7415,7 @@ const App = {
             <div id="billing-status" class="billing-status">
               <div class="text-center"><div class="spinner spinner--small"></div></div>
             </div>
+            <p id="ai-enhancements-status" class="text-muted text-sm mt-md"></p>
           </div>
 
           <div class="card profile-section">
@@ -7360,11 +7572,73 @@ const App = {
         badgeSlot.innerHTML = this.isPremium ? '<span class="badge badge-premium">Premium</span>' : '';
       }
       this.renderBillingStatus(statusEl, status);
+      await this.refreshPremiumAIStatus();
     } catch (error) {
       statusEl.innerHTML = '<p class="text-muted" id="billing-error"></p>';
       const errorEl = document.getElementById('billing-error');
       if (errorEl) errorEl.textContent = error.message;
     }
+  },
+
+  formatPremiumAIStatusLine(status) {
+    if (!status || typeof status.remaining !== 'number' || typeof status.limit !== 'number') {
+      return '';
+    }
+    const resetsAt = status.resets_at ? new Date(status.resets_at) : null;
+    const resetText = resetsAt
+      ? resetsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : '';
+    const suffix = resetText ? ` (resets ${resetText})` : '';
+    return `AI Enhancements remaining: ${status.remaining} / ${status.limit}${suffix}`;
+  },
+
+  renderPremiumAIStatus() {
+    const ids = ['ai-enhancements-status', 'premium-ai-status'];
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (!this.user || !this.hasFeature('ai_enhancements')) {
+        el.textContent = '';
+        return;
+      }
+      if (!this.premiumAIStatus) {
+        el.textContent = '';
+        return;
+      }
+      el.textContent = this.formatPremiumAIStatusLine(this.premiumAIStatus);
+    });
+  },
+
+  async refreshPremiumAIStatus() {
+    if (!this.user || !this.hasFeature('ai_enhancements')) {
+      this.premiumAIStatus = null;
+      this.renderPremiumAIStatus();
+      return null;
+    }
+    try {
+      const status = await API.ai.getPremiumStatus();
+      this.premiumAIStatus = status;
+      this.renderPremiumAIStatus();
+      return status;
+    } catch (error) {
+      this.premiumAIStatus = null;
+      this.renderPremiumAIStatus();
+      return null;
+    }
+  },
+
+  applyPremiumAIUsageUpdate(payload) {
+    if (!payload || typeof payload.enhancements_remaining !== 'number') return;
+    if (!this.premiumAIStatus || typeof this.premiumAIStatus.limit !== 'number') {
+      this.refreshPremiumAIStatus();
+      return;
+    }
+    this.premiumAIStatus.remaining = payload.enhancements_remaining;
+    this.premiumAIStatus.used = Math.max(0, this.premiumAIStatus.limit - payload.enhancements_remaining);
+    if (payload.resets_at) {
+      this.premiumAIStatus.resets_at = payload.resets_at;
+    }
+    this.renderPremiumAIStatus();
   },
 
   renderBillingStatus(container, status) {
@@ -7540,7 +7814,7 @@ const App = {
         <ul class="upgrade-list">
           <li>Premium badge (visible to friends)</li>
           <li>Templates + 1‑click New Year rollover</li>
-          <li>AI Enhancements: 100/month <span class="text-muted">(coming soon)</span></li>
+          <li>AI Enhancements: 100/month</li>
         </ul>
 
         <h4 class="mt-lg">Premium plan</h4>
@@ -8675,8 +8949,8 @@ const App = {
             <p class="text-muted">Show a Premium badge on your profile and to friends.</p>
           </div>
           <div class="card premium-feature">
-            <h3>Support the project</h3>
-            <p class="text-muted">Your subscription helps pay for hosting and ongoing improvements.</p>
+            <h3>AI Enhancements</h3>
+            <p class="text-muted">Get 100 premium AI actions per month for assist/regenerate/fill features.</p>
           </div>
           <div class="card premium-feature">
             <h3>Templates + rollover</h3>
@@ -8689,6 +8963,7 @@ const App = {
           <div id="premium-billing-status" class="billing-status">
             <div class="text-center"><div class="spinner spinner--small"></div></div>
           </div>
+          <p id="premium-ai-status" class="text-muted text-sm mt-md"></p>
           <p class="text-muted text-sm mt-md">
             After checkout, you'll return to your Profile while we activate Premium (webhook-driven; may take a moment).
           </p>
@@ -8749,12 +9024,14 @@ const App = {
       status = await API.billing.getStatus();
       this.applyBillingStatus(status);
       if (statusEl) this.renderBillingStatus(statusEl, status);
+      await this.refreshPremiumAIStatus();
     } catch (error) {
       if (statusEl) {
         statusEl.innerHTML = '<p class="text-muted" id="premium-billing-error"></p>';
         const errorEl = document.getElementById('premium-billing-error');
         if (errorEl) errorEl.textContent = error.message;
       }
+      this.renderPremiumAIStatus();
     }
 
     if (ctaSlot) {

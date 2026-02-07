@@ -9,12 +9,19 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 )
 
 type AIService interface {
 	GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
 	GenerateGuideGoals(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error)
+	AssistCardGoal(ctx context.Context, userID, cardID uuid.UUID, position int, mode, notes string) (string, ai.UsageStats, error)
+	RegenerateGoal(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt, existingGoals []string, replaceIndex int) (string, ai.UsageStats, error)
+	FillEmptyOnCard(ctx context.Context, userID, cardID uuid.UUID, prompt ai.GoalPrompt) (*models.BingoCard, ai.UsageStats, error)
+	GetPremiumEnhancementsStatus(ctx context.Context, userID uuid.UUID, now time.Time) (limit int, used int, remaining int, resetsAt time.Time, err error)
+	ReservePremiumEnhancement(ctx context.Context, userID uuid.UUID, now time.Time) (remaining int, resetsAt time.Time, err error)
+	RefundPremiumEnhancement(ctx context.Context, userID uuid.UUID, now time.Time) error
 	ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error)
 	RefundUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (bool, error)
 }

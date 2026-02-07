@@ -73,6 +73,38 @@ func TestResolveAIRateLimit_DevelopmentDefault(t *testing.T) {
 	}
 }
 
+func TestResolveAIPremiumRateLimit_EnvOverride(t *testing.T) {
+	cfg := &config.Config{
+		AI: config.AIConfig{PremiumEndpointRateLimit: 60},
+	}
+	logger := logging.New()
+	limit := resolveAIPremiumRateLimit(cfg, logger, func(key string) (string, bool) {
+		if key == "AI_PREMIUM_ENDPOINT_RATE_LIMIT" {
+			return "75", true
+		}
+		return "", false
+	})
+	if limit != 75 {
+		t.Fatalf("expected override limit 75, got %d", limit)
+	}
+}
+
+func TestResolveAIPremiumRateLimit_InvalidEnv(t *testing.T) {
+	cfg := &config.Config{
+		AI: config.AIConfig{PremiumEndpointRateLimit: 60},
+	}
+	logger := logging.New()
+	limit := resolveAIPremiumRateLimit(cfg, logger, func(key string) (string, bool) {
+		if key == "AI_PREMIUM_ENDPOINT_RATE_LIMIT" {
+			return "bad", true
+		}
+		return "", false
+	})
+	if limit != 60 {
+		t.Fatalf("expected default limit 60, got %d", limit)
+	}
+}
+
 func TestResolveRemindersPollInterval_EnvOverride(t *testing.T) {
 	logger := logging.New()
 	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {

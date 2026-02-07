@@ -9,6 +9,13 @@ const AIWizard = {
     desiredCount: null,
   },
 
+  renderPremiumEnhancementsLine() {
+    if (!App.user || !App.hasFeature('ai_enhancements')) return '';
+    const line = App.formatPremiumAIStatusLine(App.premiumAIStatus);
+    if (!line) return '';
+    return `<div class="text-muted mb-md text-sm">${App.escapeHtml(line)}</div>`;
+  },
+
   computeCreateGoalCountFromGridSize(gridSize) {
     const n = Number(gridSize);
     const size = Number.isFinite(n) && n >= 2 && n <= 5 ? n : 5;
@@ -139,6 +146,7 @@ const AIWizard = {
 	          Free AI generations left before verification is required: <strong>${remaining}</strong>
 	        </div>
 	      ` : ''}
+	      ${this.renderPremiumEnhancementsLine()}
 	      <form id="ai-wizard-form" data-action="ai-generate">
         <div class="form-group">
             <label class="form-label">What area of life is this for?</label>
@@ -336,6 +344,7 @@ const AIWizard = {
 	      <div class="ai-goal-item">
 	        <span class="text-muted ai-goal-index">${index + 1}.</span>
 	        <input type="text" class="form-input form-input--sm ai-goal-input" value="${App.escapeHtml(goal)}" data-index="${index}">
+	        ${App.hasFeature('ai_enhancements') ? `<button type="button" class="btn btn-secondary btn-sm" data-action="ai-regenerate-goal" data-index="${index}">Regenerate</button>` : ''}
 	      </div>
 	    `).join('');
 
@@ -345,6 +354,7 @@ const AIWizard = {
 
 	    return `
 	      <p class="text-muted">Review and edit your generated goals.</p>
+	      ${this.renderPremiumEnhancementsLine()}
 	      
 	      <div class="ai-results-list">
 	        ${goalsList}
@@ -356,6 +366,59 @@ const AIWizard = {
 	      </div>
 	    `;
 	  },
+
+  async regenerateGoal(index, triggerEl = null) {
+    if (this._busy) return;
+    if (!App.user) {
+      App.toast('Please log in to use AI features.', 'error');
+      return;
+    }
+    if (!App.hasFeature('ai_enhancements')) {
+      App.navigate('/premium?upgrade=1', { skipWarning: true });
+      return;
+    }
+    if (index < 0 || index >= this.state.results.length) {
+      return;
+    }
+
+    const button = triggerEl || document.querySelector(`[data-action="ai-regenerate-goal"][data-index="${index}"]`);
+    const originalLabel = button ? button.textContent.trim() : '';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Regenerating...';
+    }
+
+    this._busy = true;
+    try {
+      const response = await API.ai.regenerate({
+        category: this.state.inputs.category,
+        focus: this.state.inputs.focus || '',
+        difficulty: this.state.inputs.difficulty,
+        budget: this.state.inputs.budget,
+        context: this.state.inputs.context || '',
+        existing_goals: this.state.results,
+        replace_index: index,
+      });
+      if (response?.goal) {
+        this.state.results[index] = response.goal;
+        const input = document.querySelector(`.ai-goal-input[data-index="${index}"]`);
+        if (input) input.value = response.goal;
+      }
+      App.applyPremiumAIUsageUpdate(response);
+    } catch (error) {
+      if (error?.status === 403 && /premium required/i.test(error?.message || '')) {
+        App.navigate('/premium?upgrade=1', { skipWarning: true });
+        return;
+      }
+      App.toast(error.message, 'error');
+    } finally {
+      this._busy = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalLabel || 'Regenerate';
+      }
+    }
+  },
 
   getDesiredCountSync() {
     if (this.state.mode !== 'append') return 24;

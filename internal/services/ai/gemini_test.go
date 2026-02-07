@@ -471,7 +471,7 @@ func TestConsumeUnverifiedFreeGeneration_Success(t *testing.T) {
 
 func TestLogUsage_NoDB(t *testing.T) {
 	svc := &Service{}
-	svc.logUsage(context.Background(), uuid.New(), UsageStats{}, "success")
+	svc.logUsage(context.Background(), uuid.New(), UsageStats{}, "success", featureGenerate)
 }
 
 func TestLogUsage_WritesToDB(t *testing.T) {
@@ -483,7 +483,7 @@ func TestLogUsage_WritesToDB(t *testing.T) {
 		},
 	}
 	svc := &Service{db: db}
-	svc.logUsage(context.Background(), uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success")
+	svc.logUsage(context.Background(), uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success", featureGenerate)
 	if !called {
 		t.Fatal("expected log usage insert")
 	}
@@ -491,7 +491,7 @@ func TestLogUsage_WritesToDB(t *testing.T) {
 
 func TestLogUsageWithTimeout_NoDB(t *testing.T) {
 	svc := &Service{}
-	svc.logUsageWithTimeout(uuid.New(), UsageStats{}, "success")
+	svc.logUsageWithTimeout(uuid.New(), UsageStats{}, "success", featureGenerate)
 }
 
 func TestLogUsageWithTimeout_WritesToDB(t *testing.T) {
@@ -503,7 +503,7 @@ func TestLogUsageWithTimeout_WritesToDB(t *testing.T) {
 		},
 	}
 	svc := &Service{db: db}
-	svc.logUsageWithTimeout(uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success")
+	svc.logUsageWithTimeout(uuid.New(), UsageStats{Model: "m", TokensInput: 1, TokensOutput: 2, Duration: time.Second}, "success", featureGenerate)
 	if !called {
 		t.Fatal("expected log usage insert")
 	}
