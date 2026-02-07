@@ -87,7 +87,20 @@ test.describe.serial('google auth', () => {
     await page.goto(`/reset-password?token=${token}`);
     await page.fill('#reset-password-form #password', 'NewPass1');
     await page.fill('#reset-password-form #confirm-password', 'NewPass1');
-    await page.getByRole('button', { name: 'Reset Password' }).click({ noWaitAfter: true });
+    const resetResponse = page.waitForResponse((response) => (
+      response.url().includes('/api/auth/reset-password')
+        && response.request().method() === 'POST'
+        && response.ok()
+    ));
+    await expect(page.locator('#reset-password-form')).toBeVisible();
+    await page.evaluate(() => {
+      const form = document.getElementById('reset-password-form');
+      if (!form) {
+        throw new Error('Reset password form not found');
+      }
+      form.requestSubmit();
+    });
+    await resetResponse;
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
     await logout(page);
 

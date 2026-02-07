@@ -6,6 +6,9 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   expectToast,
+  sendFriendRequest,
+  respondToFriendRequest,
+  waitForFriendInList,
 } = require('./helpers');
 
 test('private cards are hidden from friends', async ({ browser }, testInfo) => {
@@ -23,21 +26,12 @@ test('private cards are hidden from friends', async ({ browser }, testInfo) => {
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/friends');
-  await pageB.fill('#friend-search', userA.username);
-  await pageB.click('#search-btn');
-  const results = pageB.locator('#search-results');
-  await expect(results).toContainText(userA.username);
-  await results.getByRole('button', { name: 'Add Friend' }).click();
+  await sendFriendRequest(pageB, userA.username);
 
-  await pageA.goto('/friends');
-  await expect(pageA.locator('#friend-requests')).toBeVisible();
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await respondToFriendRequest(pageA, userB.username, 'accept');
   await expectToast(pageA, 'Friend request accepted');
 
-  await pageB.reload();
-  await pageB.goto('/friends');
-  const friendRow = pageB.locator('#friends-list .friend-item').filter({ hasText: userA.username });
+  const friendRow = await waitForFriendInList(pageB, userA.username, { timeout: 20000 });
   await friendRow.getByRole('link', { name: 'View Card' }).click();
   await expect(pageB.locator('.finalized-card-view')).toBeVisible();
 

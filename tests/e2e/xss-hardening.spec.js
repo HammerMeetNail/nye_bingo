@@ -3,6 +3,9 @@ const {
   buildUser,
   register,
   expectToast,
+  sendFriendRequest,
+  respondToFriendRequest,
+  waitForFriendInList,
 } = require('./helpers');
 
 function stubClipboard(page) {
@@ -43,36 +46,23 @@ test('xss usernames render safely and friend actions still work', async ({ brows
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/friends');
-  await pageB.fill('#friend-search', userA.username);
-  await pageB.click('#search-btn');
-  const results = pageB.locator('#search-results');
-  await expect(results).toContainText(userA.username);
-  await results.getByRole('button', { name: 'Add Friend' }).click();
+  await sendFriendRequest(pageB, userA.username);
 
-  await pageA.goto('/friends');
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await respondToFriendRequest(pageA, userB.username, 'accept');
   await expectToast(pageA, 'Friend request accepted');
 
-  await pageB.reload();
-  const friendRow = pageB.locator('#friends-list .friend-item').filter({ hasText: userA.username });
+  const friendRow = await waitForFriendInList(pageB, userA.username, { timeout: 20000 });
   await expect(friendRow).toContainText(userA.username);
   pageB.once('dialog', (dialog) => dialog.accept());
   await friendRow.getByRole('button', { name: 'Remove' }).click();
   await expectToast(pageB, 'Friend removed');
   await expect(pageB.locator('#friends-list')).toContainText('No friends yet');
 
-  await pageB.fill('#friend-search', userA.username);
-  await pageB.click('#search-btn');
-  await expect(results).toContainText(userA.username);
-  await results.getByRole('button', { name: 'Add Friend' }).click();
-
-  await pageA.reload();
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await sendFriendRequest(pageB, userA.username);
+  await respondToFriendRequest(pageA, userB.username, 'accept');
   await expectToast(pageA, 'Friend request accepted');
 
-  await pageB.reload();
-  const friendRowAgain = pageB.locator('#friends-list .friend-item').filter({ hasText: userA.username });
+  const friendRowAgain = await waitForFriendInList(pageB, userA.username, { timeout: 20000 });
   await expect(friendRowAgain).toContainText(userA.username);
   pageB.once('dialog', (dialog) => dialog.accept());
   await friendRowAgain.getByRole('button', { name: 'Block' }).click();

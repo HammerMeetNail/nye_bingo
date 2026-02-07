@@ -159,8 +159,133 @@ async function ensureSelectedCount(page, expected) {
   throw new Error(`Unable to reach ${expected} selected cards (got "${finalText}")`);
 }
 
-async function sendFriendRequest(page, username) {
+async function gotoFriends(page) {
   await page.goto('/friends');
+  await expect(page.locator('#friend-search')).toBeVisible();
+}
+
+function normalizeName(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function waitForFriendsState(page, predicate, {
+  timeout = 30000,
+  pollInterval = 500,
+  description = 'friends state',
+} = {}) {
+  const startedAt = Date.now();
+  let lastStatus = null;
+  let lastError = null;
+
+  while (Date.now() - startedAt < timeout) {
+    try {
+      const response = await page.request.get('/api/friends');
+      lastStatus = response.status();
+      // Clear stale transport errors once we receive any HTTP response.
+      lastError = null;
+      if (response.ok()) {
+        const data = await response.json();
+        const matched = predicate(data);
+        if (matched) {
+          return matched;
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await page.waitForTimeout(pollInterval);
+  }
+
+  if (lastError) {
+    throw new Error(`Timed out waiting for ${description}: ${lastError.message}`);
+  }
+  if (lastStatus !== null) {
+    throw new Error(`Timed out waiting for ${description} (last /api/friends status: ${lastStatus})`);
+  }
+  throw new Error(`Timed out waiting for ${description}`);
+}
+
+async function waitForSentRequest(page, username, options = {}) {
+  const target = normalizeName(username);
+  return waitForFriendsState(page, (snapshot) => {
+    const sent = Array.isArray(snapshot && snapshot.sent) ? snapshot.sent : [];
+    return sent.find((request) => normalizeName(request.friend_username) === target) || null;
+  }, {
+    ...options,
+    description: `sent friend request for "${username}"`,
+  });
+}
+
+async function waitForFriendRequest(page, username, options = {}) {
+  const target = normalizeName(username);
+  return waitForFriendsState(page, (snapshot) => {
+    const requests = Array.isArray(snapshot && snapshot.requests) ? snapshot.requests : [];
+    return requests.find((request) => normalizeName(request.requester_username) === target) || null;
+  }, {
+    ...options,
+    description: `incoming friend request from "${username}"`,
+  });
+}
+
+async function respondToFriendRequest(page, username, action, options = {}) {
+  const normalizedAction = String(action || '').trim().toLowerCase();
+  if (normalizedAction !== 'accept' && normalizedAction !== 'reject') {
+    throw new Error(`Unsupported friend request action: ${action}`);
+  }
+
+  const request = await waitForFriendRequest(page, username, options);
+  await gotoFriends(page);
+  const buttonAction = normalizedAction === 'accept' ? 'accept-request' : 'reject-request';
+  const actionButton = page.locator(
+    `[data-action="${buttonAction}"][data-request-id="${request.id}"]`,
+  ).first();
+  await expect(actionButton).toBeVisible({ timeout: 15000 });
+  const requestResponse = page.waitForResponse((response) => (
+    response.url().includes(`/api/friends/requests/${request.id}/${normalizedAction}`)
+      && response.request().method() === 'PUT'
+      && response.ok()
+  ));
+  await actionButton.click();
+  await requestResponse;
+}
+
+async function cancelSentFriendRequest(page, username, options = {}) {
+  const request = await waitForSentRequest(page, username, options);
+  await gotoFriends(page);
+  const cancelButton = page.locator(
+    `[data-action="cancel-request"][data-request-id="${request.id}"]`,
+  ).first();
+  await expect(cancelButton).toBeVisible({ timeout: 15000 });
+  const requestResponse = page.waitForResponse((response) => (
+    response.url().includes(`/api/friends/requests/${request.id}/cancel`)
+      && response.request().method() === 'DELETE'
+      && response.ok()
+  ));
+  await cancelButton.click();
+  await requestResponse;
+}
+
+async function waitForFriendInList(page, username, options = {}) {
+  const target = normalizeName(username);
+  const friend = await waitForFriendsState(page, (snapshot) => {
+    const friends = Array.isArray(snapshot && snapshot.friends) ? snapshot.friends : [];
+    return friends.find((entry) => normalizeName(entry.friend_username) === target) || null;
+  }, {
+    ...options,
+    description: `friend "${username}" in friends list`,
+  });
+
+  await gotoFriends(page);
+  const row = page.locator('#friends-list .friend-item').filter({
+    has: page.locator(`[data-friendship-id="${friend.id}"]`),
+  }).first();
+  await expect(row).toBeVisible({ timeout: 15000 });
+  return row;
+}
+
+async function sendFriendRequest(page, username) {
+  await gotoFriends(page);
   await page.fill('#friend-search', username);
   await page.click('#search-btn');
   const results = page.locator('#search-results');
@@ -173,6 +298,7 @@ async function sendFriendRequest(page, username) {
   await results.getByRole('button', { name: 'Add Friend' }).click();
   await requestResponse;
   await expectToast(page, 'Friend request sent!');
+  await waitForSentRequest(page, username);
 }
 
 async function clearMailpit(request) {
@@ -380,6 +506,11 @@ module.exports = {
   logout,
   expectToast,
   ensureSelectedCount,
+  waitForSentRequest,
+  waitForFriendRequest,
+  respondToFriendRequest,
+  cancelSentFriendRequest,
+  waitForFriendInList,
   sendFriendRequest,
   clearMailpit,
   setOIDCNextUser,
