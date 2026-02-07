@@ -181,6 +181,8 @@ async function waitForFriendsState(page, predicate, {
     try {
       const response = await page.request.get('/api/friends');
       lastStatus = response.status();
+      // Clear stale transport errors once we receive any HTTP response.
+      lastError = null;
       if (response.ok()) {
         const data = await response.json();
         const matched = predicate(data);

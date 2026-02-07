@@ -92,8 +92,13 @@ test.describe.serial('google auth', () => {
         && response.request().method() === 'POST'
         && response.ok()
     ));
+    await expect(page.locator('#reset-password-form')).toBeVisible();
     await page.evaluate(() => {
-      document.getElementById('reset-password-form')?.requestSubmit();
+      const form = document.getElementById('reset-password-form');
+      if (!form) {
+        throw new Error('Reset password form not found');
+      }
+      form.requestSubmit();
     });
     await resetResponse;
     await expect(page.getByRole('heading', { name: 'My Bingo Cards' })).toBeVisible();
