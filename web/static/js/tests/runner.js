@@ -400,6 +400,75 @@ describe('Premium navigation + page wiring', () => {
     expect(redirectedTo).toBe('/premium?upgrade=1');
   });
 
+  test('free users are upsold when opening finalized Edit flow', () => {
+    const { App } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = false;
+    App.entitlements = {};
+    App.currentCard = {
+      id: 'card-1',
+      year: 2026,
+      title: 'My Card',
+      is_finalized: true,
+    };
+
+    let upgradeCalls = 0;
+    let modalCalls = 0;
+    App.openUpgradeModal = () => { upgradeCalls += 1; };
+    App.openModal = () => { modalCalls += 1; };
+
+    App.showEditFinalizedCardModal();
+    expect(upgradeCalls).toBe(1);
+    expect(modalCalls).toBe(0);
+  });
+
+  test('premium users can open finalized Edit modal', () => {
+    const { App } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = true;
+    App.entitlements = { edit_after_finalize: true };
+    App.currentCard = {
+      id: 'card-1',
+      year: 2026,
+      title: 'My Card',
+      is_finalized: true,
+    };
+
+    let modalTitle = '';
+    let modalHTML = '';
+    App.openModal = (title, html) => {
+      modalTitle = title;
+      modalHTML = String(html || '');
+    };
+
+    App.showEditFinalizedCardModal();
+    expect(modalTitle).toBe('Edit Finalized Card');
+    expect(modalHTML.includes('data-action="edit-finalized-card"')).toBe(true);
+    expect(modalHTML.includes('id="edit-finalized-card-reset"')).toBe(true);
+  });
+
+  test('finalized Edit flow respects per-feature entitlements over premium', () => {
+    const { App } = loadBrowserApp();
+    App.user = { username: 'alice' };
+    App.isPremium = true;
+    App.entitlements = { edit_after_finalize: false };
+    App.currentCard = {
+      id: 'card-1',
+      year: 2026,
+      title: 'My Card',
+      is_finalized: true,
+    };
+
+    let upgradeCalls = 0;
+    let modalCalls = 0;
+    App.openUpgradeModal = () => { upgradeCalls += 1; };
+    App.openModal = () => { modalCalls += 1; };
+
+    App.showEditFinalizedCardModal();
+    expect(upgradeCalls).toBe(1);
+    expect(modalCalls).toBe(0);
+  });
+
   test('navbar renders a Premium link without auto-opening upgrade', () => {
     const { App, document } = loadBrowserApp();
     App.user = { username: 'alice' };

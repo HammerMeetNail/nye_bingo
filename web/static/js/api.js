@@ -352,6 +352,10 @@ const API = {
       return API.request('POST', `/api/cards/${cardId}/clone`, params);
     },
 
+    async editFinalized(cardId, params = {}) {
+      return API.request('POST', `/api/cards/${cardId}/edit`, params, { allowConflictResponse: true });
+    },
+
     async updateVisibility(cardId, visibleToFriends) {
       return API.request('PUT', `/api/cards/${cardId}/visibility`, {
         visible_to_friends: visibleToFriends,

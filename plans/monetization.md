@@ -19,7 +19,10 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
 - Config: `internal/config/config.go` (+ tests) and `.env.example` (Stripe env vars; production startup validation when `BILLING_ENABLED=true`).
 - CSRF: explicit exemption for `POST /api/billing/webhook` in `internal/middleware/csrf.go` (+ tests).
 - Billing service: `internal/services/billing/*` including:
-  - server-side premium check: `billing.IsPremium(user, now)`
+  - entitlement model + premium checks:
+    - tier signal: `billing.IsPremium(user, now)`
+    - feature gates: `billing.HasFeature(user, now, feature)`
+    - currently shipped feature flags include `templates` and `edit_after_finalize`
   - webhook signature verification (HMAC) + idempotency via `stripe_webhook_events`
   - premium code redemption (hashed codes, one-time, transactional)
 - Stripe integration: implemented via a small Stripe **HTTP API client** (`internal/services/billing/stripe_client.go`) rather than `stripe-go` (no SDK dependency).
@@ -34,12 +37,14 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
   - `POST /api/billing/portal`
   - `POST /api/billing/redeem` (rate-limited `10/hour` per-user; fail-closed)
   - `POST /api/billing/webhook` (CSRF-exempt; signature-verified)
+  - `POST /api/cards/{id}/edit` (premium-gated finalized-card edit draft flow; server-side entitlement enforced)
 - Frontend: `web/static/js/api.js`, `web/static/js/app.js`, `web/static/css/styles.css`:
   - Navbar shows a visible **Premium** entry point (star + label) that links to `/premium`
   - `/premium` page:
     - upgrade CTA + post-checkout polling (`?billing=success`)
     - "Have a code?" redeem flow lives in a modal; logged-out users can enter a code and are prompted to sign in/create an account before the code is redeemed
   - Upgrade modal supports selecting Premium option + optional tip, then a single Checkout redirect
+  - Finalized cards include an **Edit** (Premium) action that opens a modal and creates an editable draft via `/api/cards/{id}/edit`
   - Billing UI messaging is source-aware (renew vs active-until vs expires vs no-expiration)
   - Premium badge shown for account holder and friends (friends list + friend card view)
 - Auth responses include `is_premium` (for the current session user): `internal/handlers/auth.go`.
@@ -52,7 +57,7 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
 
 **Not implemented yet (planned for later / still TODO):**
 - Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.
-- “Premium features” themselves (templates / premium AI) remain separate plans.
+- Remaining premium roadmap features (for example, premium AI in `plans/premium_ai.md`).
 
 ## Decisions (Owner Inputs)
 

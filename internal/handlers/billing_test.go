@@ -158,8 +158,8 @@ func TestBillingHandler_Status_Success(t *testing.T) {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
 	}
 	features, ok := resp["features"].(map[string]any)
-	if !ok || features["templates"] != true {
-		t.Fatalf("expected features.templates true, got %v", resp["features"])
+	if !ok || features["templates"] != true || features["edit_after_finalize"] != true {
+		t.Fatalf("expected features.templates and features.edit_after_finalize true, got %v", resp["features"])
 	}
 }
 
@@ -360,6 +360,15 @@ func TestBillingHandler_Redeem_InvalidCode(t *testing.T) {
 }
 
 func TestBillingHandler_Redeem_Success(t *testing.T) {
+	prev := billing.GlobalFeatureSwitches()
+	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
+		Templates:         true,
+		EditAfterFinalize: true,
+	})
+	t.Cleanup(func() {
+		billing.SetGlobalFeatureSwitches(prev)
+	})
+
 	store := &handlerStore{}
 	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
 
@@ -375,8 +384,35 @@ func TestBillingHandler_Redeem_Success(t *testing.T) {
 		t.Fatalf("expected is_premium true, got %v", resp["is_premium"])
 	}
 	features, ok := resp["features"].(map[string]any)
-	if !ok || features["templates"] != true {
-		t.Fatalf("expected features.templates true, got %v", resp["features"])
+	if !ok || features["templates"] != true || features["edit_after_finalize"] != true {
+		t.Fatalf("expected features.templates and features.edit_after_finalize true, got %v", resp["features"])
+	}
+}
+
+func TestBillingHandler_Redeem_RespectsGlobalFeatureSwitches(t *testing.T) {
+	prev := billing.GlobalFeatureSwitches()
+	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
+		Templates:         false,
+		EditAfterFinalize: true,
+	})
+	t.Cleanup(func() {
+		billing.SetGlobalFeatureSwitches(prev)
+	})
+
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	code := "YOBP" + strings.Repeat("A", 24)
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/redeem", map[string]string{"code": code})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Redeem(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusOK)
+	resp := testutil.ParseJSONResponse(t, rr.Body.Bytes())
+	features, ok := resp["features"].(map[string]any)
+	if !ok || features["templates"] != false || features["edit_after_finalize"] != true {
+		t.Fatalf("expected features to reflect global switches, got %v", resp["features"])
 	}
 }
 

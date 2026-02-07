@@ -29,6 +29,8 @@ components:
       properties:
         templates:
           type: boolean
+        edit_after_finalize:
+          type: boolean
     BillingStatus:
       type: object
       properties:
@@ -2236,6 +2238,64 @@ paths:
                     $ref: '#/components/schemas/BingoCard'
                   message:
                     type: string
+  /cards/{id}/edit:
+    post:
+      summary: Create an editable draft from a finalized card (Premium)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                shuffle_layout:
+                  type: boolean
+                  default: false
+                reset_progress:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Editable draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+        '400':
+          description: Invalid request (for example, source card is not finalized)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '409':
+          description: Card conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardConflictResponse'
   /cards/{id}/rollover:
     post:
       summary: Roll over a card to a new year (Premium)

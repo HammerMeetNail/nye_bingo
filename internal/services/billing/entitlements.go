@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"sync"
 	"time"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -9,11 +10,33 @@ import (
 type Feature string
 
 const (
-	FeatureTemplates Feature = "templates"
+	FeatureTemplates         Feature = "templates"
+	FeatureEditAfterFinalize Feature = "edit_after_finalize"
 )
 
 type FeatureEntitlements struct {
-	Templates bool `json:"templates"`
+	Templates         bool `json:"templates"`
+	EditAfterFinalize bool `json:"edit_after_finalize"`
+}
+
+var (
+	globalFeatureSwitchesMu sync.RWMutex
+	globalFeatureSwitches   = FeatureEntitlements{
+		Templates:         true,
+		EditAfterFinalize: true,
+	}
+)
+
+func SetGlobalFeatureSwitches(switches FeatureEntitlements) {
+	globalFeatureSwitchesMu.Lock()
+	defer globalFeatureSwitchesMu.Unlock()
+	globalFeatureSwitches = switches
+}
+
+func GlobalFeatureSwitches() FeatureEntitlements {
+	globalFeatureSwitchesMu.RLock()
+	defer globalFeatureSwitchesMu.RUnlock()
+	return globalFeatureSwitches
 }
 
 func IsPremium(user *models.User, now time.Time) bool {
@@ -31,8 +54,10 @@ func IsPremium(user *models.User, now time.Time) bool {
 
 func Features(user *models.User, now time.Time) FeatureEntitlements {
 	isPremium := IsPremium(user, now)
+	switches := GlobalFeatureSwitches()
 	return FeatureEntitlements{
-		Templates: isPremium,
+		Templates:         isPremium && switches.Templates,
+		EditAfterFinalize: isPremium && switches.EditAfterFinalize,
 	}
 }
 
@@ -41,6 +66,8 @@ func HasFeature(user *models.User, now time.Time, feature Feature) bool {
 	switch feature {
 	case FeatureTemplates:
 		return entitlements.Templates
+	case FeatureEditAfterFinalize:
+		return entitlements.EditAfterFinalize
 	default:
 		return false
 	}

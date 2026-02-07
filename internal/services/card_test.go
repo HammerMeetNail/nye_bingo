@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -3459,6 +3460,354 @@ func TestCardService_Clone_TruncatesItems(t *testing.T) {
 	}
 }
 
+func TestCardService_EditFinalized_NotOwner(t *testing.T) {
+	sourceOwnerID := uuid.New()
+	requestUserID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 12
+
+	db := newCardDB(sourceCardID, sourceOwnerID, 5, true, &free, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), requestUserID, sourceCardID, EditFinalizedCardParams{ResetProgress: true})
+	if !errors.Is(err, ErrNotCardOwner) {
+		t.Fatalf("expected ErrNotCardOwner, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_RequiresFinalizedSource(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 12
+
+	db := newCardDB(sourceCardID, userID, 5, true, &free, false, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ResetProgress: true})
+	if !errors.Is(err, ErrCardNotFinalized) {
+		t.Fatalf("expected ErrCardNotFinalized, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_TitleTooLongByRuneCount(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 12
+
+	db := newCardDB(sourceCardID, userID, 5, true, &free, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+
+	svc := NewCardService(db)
+	tooLong := strings.Repeat("界", 101)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		Title:         &tooLong,
+		ResetProgress: true,
+	})
+	if !errors.Is(err, ErrTitleTooLong) {
+		t.Fatalf("expected ErrTitleTooLong, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_ConflictReturnsSuggestedTitle(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	existingCardID := uuid.New()
+	free := 12
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				return rowFromValues(cardRowValues(sourceCardID, userID, 5, true, &free, true)...)
+			}
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				title, _ := args[2].(string)
+				if title == "2024 Bingo Card (Edit)" {
+					row := cardRowValues(existingCardID, userID, 5, true, &free, false)
+					row[4] = &title
+					return rowFromValues(row...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return pgx.ErrNoRows
+				}}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				return &fakeRows{rows: [][]any{
+					{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+				}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ResetProgress: true})
+	var conflict *CardConflictError
+	if !errors.As(err, &conflict) {
+		t.Fatalf("expected CardConflictError, got %v", err)
+	}
+	if conflict.SuggestedTitle != "2024 Bingo Card (Edit 2)" {
+		t.Fatalf("expected suggested title to increment, got %q", conflict.SuggestedTitle)
+	}
+}
+
+func TestCardService_EditFinalized_SuccessPreservesLayoutAndResetsProgress(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	newCardID := uuid.New()
+	free := 4
+	newTitle := "2024 Bingo Card (Edit)"
+	sourceCreated := time.Now()
+	newCreated := sourceCreated.Add(1 * time.Minute)
+	note1 := "n1"
+	proof1 := "p1"
+	note3 := "n3"
+
+	sourceItems := [][]any{
+		{uuid.New(), sourceCardID, 0, "A", true, &sourceCreated, &note1, &proof1, sourceCreated},
+		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, sourceCreated},
+		{uuid.New(), sourceCardID, 2, "C", true, &sourceCreated, &note3, nil, sourceCreated},
+	}
+	newItems := [][]any{
+		{uuid.New(), newCardID, 0, "A", false, nil, nil, nil, newCreated},
+		{uuid.New(), newCardID, 1, "B", false, nil, nil, nil, newCreated},
+		{uuid.New(), newCardID, 2, "C", false, nil, nil, nil, newCreated},
+	}
+
+	insertedPositions := []int{}
+	insertArgCounts := []int{}
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				if len(args) > 0 && args[0] == sourceCardID {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, true)...)
+				}
+				if len(args) > 0 && args[0] == newCardID {
+					row := cardRowValues(newCardID, userID, 3, true, &free, false)
+					row[4] = &newTitle
+					return rowFromValues(row...)
+				}
+			}
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				if len(args) > 0 && args[0] == sourceCardID {
+					return &fakeRows{rows: sourceItems}, nil
+				}
+				if len(args) > 0 && args[0] == newCardID {
+					return &fakeRows{rows: newItems}, nil
+				}
+			}
+			return &fakeRows{}, nil
+		},
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return &fakeTx{
+				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+					row := cardRowValues(newCardID, userID, 3, true, &free, false)
+					row[4] = &newTitle
+					return rowFromValues(row...)
+				},
+				ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+					if strings.Contains(sql, "INSERT INTO bingo_items") {
+						insertArgCounts = append(insertArgCounts, len(args))
+						pos, ok := args[1].(int)
+						if !ok {
+							t.Fatalf("expected position int, got %T", args[1])
+						}
+						insertedPositions = append(insertedPositions, pos)
+					}
+					return fakeCommandTag{rowsAffected: 1}, nil
+				},
+				CommitFunc: func(ctx context.Context) error { return nil },
+			}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	card, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		ResetProgress: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if card == nil || card.ID != newCardID {
+		t.Fatalf("expected new card %s, got %#v", newCardID, card)
+	}
+	if len(insertedPositions) != 3 {
+		t.Fatalf("expected 3 inserted items, got %d", len(insertedPositions))
+	}
+	for _, n := range insertArgCounts {
+		if n != 3 {
+			t.Fatalf("expected reset insert to use 3 args, got %d", n)
+		}
+	}
+	expected := []int{0, 1, 2}
+	for i, pos := range expected {
+		if insertedPositions[i] != pos {
+			t.Fatalf("expected preserved position %d at index %d, got %d", pos, i, insertedPositions[i])
+		}
+	}
+}
+
+func TestCardService_EditFinalized_ShuffleAndKeepProgress(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	newCardID := uuid.New()
+	free := 4
+	newTitle := "2024 Bingo Card (Edit)"
+	now := time.Now()
+	noteA := "note-a"
+	proofA := "proof-a"
+
+	sourceItems := [][]any{
+		{uuid.New(), sourceCardID, 0, "A", true, &now, &noteA, &proofA, now},
+		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, now},
+		{uuid.New(), sourceCardID, 2, "C", true, &now, nil, nil, now},
+	}
+	newItems := [][]any{
+		{uuid.New(), newCardID, 0, "A", true, &now, &noteA, &proofA, now},
+		{uuid.New(), newCardID, 1, "B", false, nil, nil, nil, now},
+		{uuid.New(), newCardID, 2, "C", true, &now, nil, nil, now},
+	}
+
+	type insertedRow struct {
+		position    int
+		content     string
+		isCompleted bool
+		notes       *string
+		argCount    int
+	}
+	inserted := []insertedRow{}
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				if len(args) > 0 && args[0] == sourceCardID {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, true)...)
+				}
+				if len(args) > 0 && args[0] == newCardID {
+					row := cardRowValues(newCardID, userID, 3, true, &free, false)
+					row[4] = &newTitle
+					return rowFromValues(row...)
+				}
+			}
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				if len(args) > 0 && args[0] == sourceCardID {
+					return &fakeRows{rows: sourceItems}, nil
+				}
+				if len(args) > 0 && args[0] == newCardID {
+					return &fakeRows{rows: newItems}, nil
+				}
+			}
+			return &fakeRows{}, nil
+		},
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return &fakeTx{
+				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+					row := cardRowValues(newCardID, userID, 3, true, &free, false)
+					row[4] = &newTitle
+					return rowFromValues(row...)
+				},
+				ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+					if strings.Contains(sql, "INSERT INTO bingo_items") {
+						pos, ok := args[1].(int)
+						if !ok {
+							t.Fatalf("expected position int, got %T", args[1])
+						}
+						content, _ := args[2].(string)
+						completed, _ := args[3].(bool)
+						var notes *string
+						if args[5] != nil {
+							n, ok := args[5].(*string)
+							if ok {
+								notes = n
+							}
+						}
+						inserted = append(inserted, insertedRow{
+							position:    pos,
+							content:     content,
+							isCompleted: completed,
+							notes:       notes,
+							argCount:    len(args),
+						})
+					}
+					return fakeCommandTag{rowsAffected: 1}, nil
+				},
+				CommitFunc: func(ctx context.Context) error { return nil },
+			}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		ShuffleLayout: true,
+		ResetProgress: false,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(inserted) != 3 {
+		t.Fatalf("expected 3 inserted items, got %d", len(inserted))
+	}
+
+	seen := map[int]bool{}
+	for _, row := range inserted {
+		if row.argCount != 7 {
+			t.Fatalf("expected keep-progress insert to use 7 args, got %d", row.argCount)
+		}
+		if row.position < 0 || row.position >= 9 {
+			t.Fatalf("position out of range: %d", row.position)
+		}
+		if row.position == free {
+			t.Fatalf("shuffle should never use free-space position %d", free)
+		}
+		if seen[row.position] {
+			t.Fatalf("duplicate shuffled position: %d", row.position)
+		}
+		seen[row.position] = true
+	}
+
+	foundA := false
+	for _, row := range inserted {
+		if row.content == "A" {
+			foundA = true
+			if !row.isCompleted {
+				t.Fatalf("expected completion state to be preserved for A")
+			}
+			if row.notes == nil || *row.notes != noteA {
+				t.Fatalf("expected notes to be preserved for A")
+			}
+		}
+	}
+	if !foundA {
+		t.Fatalf("expected copied row for content A")
+	}
+}
+
 func TestCountBingos_MiddleColumnWithFreeSpace(t *testing.T) {
 	svc := &CardService{}
 
@@ -3563,6 +3912,21 @@ func TestMapBingoCardsUniqueViolationToCardExistsError_Fallback(t *testing.T) {
 	}
 	if got := mapBingoCardsUniqueViolationToCardExistsError(&pgconn.PgError{Code: "99999"}, &title); got != nil {
 		t.Fatalf("expected nil for non-unique error, got %v", got)
+	}
+}
+
+func TestWithEditSuffix_UTF8SafeTruncation(t *testing.T) {
+	base := strings.Repeat("🙂", 120)
+	got := withEditSuffix(base, 1)
+
+	if !utf8.ValidString(got) {
+		t.Fatalf("expected valid UTF-8 string, got invalid bytes")
+	}
+	if !strings.HasSuffix(got, " (Edit)") {
+		t.Fatalf("expected edit suffix, got %q", got)
+	}
+	if n := utf8.RuneCountInString(got); n != 100 {
+		t.Fatalf("expected 100 runes, got %d", n)
 	}
 }
 

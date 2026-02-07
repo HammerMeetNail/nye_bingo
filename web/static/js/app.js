@@ -55,6 +55,7 @@ const App = {
     const source = entitlements && typeof entitlements === 'object' ? entitlements : {};
     return {
       templates: !!source.templates,
+      edit_after_finalize: !!source.edit_after_finalize,
     };
   },
 
@@ -322,6 +323,9 @@ const App = {
       case 'show-clone-card-modal':
         this.showCloneCardModal();
         break;
+      case 'show-edit-finalized-card-modal':
+        this.showEditFinalizedCardModal();
+        break;
       case 'open-share-modal':
         this.showShareCardModal();
         break;
@@ -487,6 +491,9 @@ const App = {
       }
       case 'clone-card':
         this.handleCloneCard(event);
+        break;
+      case 'edit-finalized-card':
+        this.handleEditFinalizedCard(event);
         break;
       case 'finalize-register':
         this.handleFinalizeRegister(event);
@@ -4124,6 +4131,7 @@ const App = {
       actionsHtml = `
         <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
+        <button class="btn btn-ghost btn-sm" data-action="show-edit-finalized-card-modal" title="Edit finalized card (Premium)">📝</button>
         <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.currentCard.id}" title="Save as template">⭐</button>
         <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.currentCard.id}" title="New Year rollover">📅</button>
         <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
@@ -5606,6 +5614,117 @@ const App = {
       if (response.message) this.toast(response.message, 'success');
     } catch (error) {
       this.toast(error.message, 'error');
+    }
+  },
+
+  showEditFinalizedCardModal() {
+    if (!this.currentCard || this.isAnonymousMode || !this.currentCard.is_finalized) return;
+    if (!this.hasFeature('edit_after_finalize')) {
+      this.openUpgradeModal();
+      return;
+    }
+
+    const displayName = this.getCardDisplayName(this.currentCard);
+    const defaultTitle = `${displayName} (Edit)`;
+
+    this.openModal('Edit Finalized Card', `
+      <form data-action="edit-finalized-card">
+        <div class="form-group">
+          <label for="edit-finalized-card-title">
+            Title <span class="text-muted fw-normal">(optional)</span>
+          </label>
+          <input type="text" id="edit-finalized-card-title" class="form-input" maxlength="100">
+          <small class="text-muted">Defaults to "${this.escapeHtml(defaultTitle)}".</small>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit-finalized-card-shuffle">
+            <span>Shuffle layout</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit-finalized-card-reset" checked>
+            <span>Reset completion progress</span>
+          </label>
+          <small class="text-muted">Recommended for a fresh draft.</small>
+        </div>
+
+        <div class="form-error hidden" id="edit-finalized-card-error" role="alert"></div>
+
+        <div class="flex gap-sm mt-lg">
+          <button type="button" class="btn btn-ghost flex-1" data-action="close-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary flex-1">Create Edit Draft</button>
+        </div>
+      </form>
+    `);
+
+    const titleEl = document.getElementById('edit-finalized-card-title');
+    if (titleEl) titleEl.value = defaultTitle;
+  },
+
+  async handleEditFinalizedCard(event) {
+    event.preventDefault();
+    if (!this.currentCard || this.isAnonymousMode || !this.currentCard.is_finalized) return;
+
+    const titleEl = document.getElementById('edit-finalized-card-title');
+    const shuffleEl = document.getElementById('edit-finalized-card-shuffle');
+    const resetEl = document.getElementById('edit-finalized-card-reset');
+    const errorEl = document.getElementById('edit-finalized-card-error');
+
+    if (errorEl) {
+      errorEl.classList.add('hidden');
+      errorEl.textContent = '';
+    }
+
+    const title = titleEl?.value?.trim() || null;
+    const shuffleLayout = !!shuffleEl?.checked;
+    const resetProgress = resetEl?.checked !== false;
+
+    try {
+      const response = await API.cards.editFinalized(this.currentCard.id, {
+        title,
+        shuffle_layout: shuffleLayout,
+        reset_progress: resetProgress,
+      });
+
+      if (response?.card) {
+        this.closeModal();
+        this.currentCard = response.card;
+        this.navigate(`/card/${response.card.id}`);
+        this.toast('Editable draft created', 'success');
+        return;
+      }
+
+      if (response?.error === 'Card conflict') {
+        if (titleEl && response.suggested_title) {
+          titleEl.value = response.suggested_title;
+        }
+        if (errorEl) {
+          errorEl.textContent = response.suggested_title
+            ? `A card with that title already exists. Suggested: ${response.suggested_title}`
+            : 'A card with that title already exists for this year.';
+          errorEl.classList.remove('hidden');
+        }
+        return;
+      }
+
+      throw new Error(response?.error || 'Unable to create editable draft.');
+    } catch (error) {
+      if (error?.status === 403 && /premium required/i.test(error?.message || '')) {
+        this.closeModal();
+        this.openUpgradeModal();
+        return;
+      }
+
+      if (errorEl) {
+        errorEl.textContent = error?.message || 'Unable to create editable draft.';
+        errorEl.classList.remove('hidden');
+      } else {
+        this.toast(error?.message || 'Unable to create editable draft.', 'error');
+      }
     }
   },
 
@@ -8281,8 +8400,8 @@ const App = {
             <div class="faq-item">
               <h3>Can I edit my card after finalizing it?</h3>
               <p>
-                No, once a card is finalized, the layout is locked. This is intentional&mdash;it prevents moving items
-                around to get easier Bingos! You can still add notes and mark items as complete.
+                Finalized cards stay locked to preserve fairness, but Premium users can create an editable draft copy
+                with the new "Edit" action. Free users can still use "Clone" to make a new draft card.
               </p>
             </div>
 

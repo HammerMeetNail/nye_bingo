@@ -204,6 +204,7 @@ type mockCardService struct {
 	AddItemFunc              func(ctx context.Context, userID uuid.UUID, params models.AddItemParams) (*models.BingoItem, error)
 	UpdateConfigFunc         func(ctx context.Context, userID, cardID uuid.UUID, params models.UpdateCardConfigParams) (*models.BingoCard, error)
 	CloneFunc                func(ctx context.Context, userID, cardID uuid.UUID, params services.CloneParams) (*services.CloneResult, error)
+	EditFinalizedFunc        func(ctx context.Context, userID, cardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error)
 	UpdateItemFunc           func(ctx context.Context, userID, cardID uuid.UUID, position int, params models.UpdateItemParams) (*models.BingoItem, error)
 	RemoveItemFunc           func(ctx context.Context, userID, cardID uuid.UUID, position int) error
 	ShuffleFunc              func(ctx context.Context, userID, cardID uuid.UUID) (*models.BingoCard, error)
@@ -278,6 +279,13 @@ func (m *mockCardService) UpdateConfig(ctx context.Context, userID, cardID uuid.
 func (m *mockCardService) Clone(ctx context.Context, userID, cardID uuid.UUID, params services.CloneParams) (*services.CloneResult, error) {
 	if m.CloneFunc != nil {
 		return m.CloneFunc(ctx, userID, cardID, params)
+	}
+	return nil, nil
+}
+
+func (m *mockCardService) EditFinalized(ctx context.Context, userID, cardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
+	if m.EditFinalizedFunc != nil {
+		return m.EditFinalizedFunc(ctx, userID, cardID, params)
 	}
 	return nil, nil
 }

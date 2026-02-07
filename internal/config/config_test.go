@@ -14,6 +14,7 @@ func TestLoad_Defaults(t *testing.T) {
 		"AI_STUB", "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_THINKING_LEVEL", "GEMINI_THINKING_BUDGET", "GEMINI_TEMPERATURE", "GEMINI_MAX_OUTPUT_TOKENS",
 		"OAUTH_ALLOWED_PROVIDERS", "GOOGLE_OAUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REDIRECT_URL", "GOOGLE_OIDC_ISSUER_URL", "GOOGLE_OIDC_SCOPES",
 		"BILLING_ENABLED", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
+		"FEATURE_TEMPLATES_ENABLED", "FEATURE_EDIT_AFTER_FINALIZE_ENABLED",
 		"STRIPE_API_BASE_URL",
 		"STRIPE_PREMIUM_PRICE_MONTHLY", "STRIPE_PREMIUM_PRICE_YEARLY", "STRIPE_PREMIUM_PRICE_LIFETIME",
 		"STRIPE_TIP_PRICE_5", "STRIPE_TIP_PRICE_10", "STRIPE_TIP_PRICE_20",
@@ -121,6 +122,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Billing.Enabled != false {
 		t.Error("expected Billing.Enabled to be false")
 	}
+	if cfg.Billing.FeatureTemplatesEnabled != true {
+		t.Error("expected Billing.FeatureTemplatesEnabled to be true")
+	}
+	if cfg.Billing.FeatureEditAfterFinalizeEnabled != true {
+		t.Error("expected Billing.FeatureEditAfterFinalizeEnabled to be true")
+	}
 	if cfg.Billing.StripeSecretKey != "" {
 		t.Errorf("expected Billing.StripeSecretKey to be empty, got %q", cfg.Billing.StripeSecretKey)
 	}
@@ -152,6 +159,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	os.Setenv("GOOGLE_OIDC_ISSUER_URL", "https://issuer.example.com")
 	os.Setenv("GOOGLE_OIDC_SCOPES", "openid,email")
 	os.Setenv("BILLING_ENABLED", "true")
+	os.Setenv("FEATURE_TEMPLATES_ENABLED", "false")
+	os.Setenv("FEATURE_EDIT_AFTER_FINALIZE_ENABLED", "false")
 	os.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	os.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
 	os.Setenv("STRIPE_PREMIUM_PRICE_MONTHLY", "price_month")
@@ -187,6 +196,8 @@ func TestLoad_CustomValues(t *testing.T) {
 		os.Unsetenv("GOOGLE_OIDC_ISSUER_URL")
 		os.Unsetenv("GOOGLE_OIDC_SCOPES")
 		os.Unsetenv("BILLING_ENABLED")
+		os.Unsetenv("FEATURE_TEMPLATES_ENABLED")
+		os.Unsetenv("FEATURE_EDIT_AFTER_FINALIZE_ENABLED")
 		os.Unsetenv("STRIPE_SECRET_KEY")
 		os.Unsetenv("STRIPE_WEBHOOK_SECRET")
 		os.Unsetenv("STRIPE_PREMIUM_PRICE_MONTHLY")
@@ -283,6 +294,12 @@ func TestLoad_CustomValues(t *testing.T) {
 
 	if cfg.Billing.Enabled != true {
 		t.Error("expected Billing.Enabled to be true")
+	}
+	if cfg.Billing.FeatureTemplatesEnabled != false {
+		t.Error("expected Billing.FeatureTemplatesEnabled to be false")
+	}
+	if cfg.Billing.FeatureEditAfterFinalizeEnabled != false {
+		t.Error("expected Billing.FeatureEditAfterFinalizeEnabled to be false")
 	}
 	if cfg.Billing.StripeSecretKey != "sk_test_123" {
 		t.Errorf("expected Billing.StripeSecretKey to be sk_test_123, got %q", cfg.Billing.StripeSecretKey)
