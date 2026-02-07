@@ -105,6 +105,19 @@ func TestResolveAIPremiumRateLimit_InvalidEnv(t *testing.T) {
 	}
 }
 
+func TestResolveAIPremiumRateLimit_DefaultFallback(t *testing.T) {
+	cfg := &config.Config{
+		AI: config.AIConfig{PremiumEndpointRateLimit: 0},
+	}
+	logger := logging.New()
+	limit := resolveAIPremiumRateLimit(cfg, logger, func(key string) (string, bool) {
+		return "", false
+	})
+	if limit != 60 {
+		t.Fatalf("expected fallback limit 60, got %d", limit)
+	}
+}
+
 func TestResolveRemindersPollInterval_EnvOverride(t *testing.T) {
 	logger := logging.New()
 	interval := resolveRemindersPollInterval(logger, func(key string) (string, bool) {

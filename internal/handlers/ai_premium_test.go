@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
+	"github.com/HammerMeetNail/yearofbingo/internal/services"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
 )
@@ -305,5 +307,104 @@ func TestAIFillEmptyPremium_RefundsOnFailure(t *testing.T) {
 	}
 	if !reserveAt.Equal(refundAt) {
 		t.Fatalf("expected refund time %s to match reserve time %s", refundAt, reserveAt)
+	}
+}
+
+func TestConsumePremiumAllowanceOrWriteError_UnverifiedReserveExhaustedRefundsFree(t *testing.T) {
+	withAIEnhancementsEnabled(t, true)
+	reset := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	mockService := &MockAIService{
+		ConsumeFunc: func(_ context.Context, _ uuid.UUID) (int, error) {
+			return 4, nil
+		},
+		ReservePremiumFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (int, time.Time, error) {
+			return 0, reset, ai.ErrPremiumEnhancementsExhausted
+		},
+		RefundFunc: func(_ context.Context, _ uuid.UUID) (bool, error) {
+			return true, nil
+		},
+	}
+	handler := NewAIHandler(mockService)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/assist", nil)
+	w := httptest.NewRecorder()
+
+	freeConsumed, premiumReserved, _, _, _, ok := handler.consumePremiumAllowanceOrWriteError(w, req, uuid.New(), false)
+	if ok {
+		t.Fatalf("expected allowance consumption to fail when premium quota is exhausted")
+	}
+	if freeConsumed || premiumReserved {
+		t.Fatalf("expected no successful consumption flags on failure")
+	}
+	if mockService.ConsumeCalls != 1 {
+		t.Fatalf("expected one free consume call, got %d", mockService.ConsumeCalls)
+	}
+	if mockService.RefundCalls != 1 {
+		t.Fatalf("expected one free refund call, got %d", mockService.RefundCalls)
+	}
+	if w.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 response, got %d", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if body["error"] != "Premium AI enhancements limit reached for this month" {
+		t.Fatalf("unexpected error body: %#v", body)
+	}
+	if _, ok := body["resets_at"]; !ok {
+		t.Fatalf("expected resets_at in response body: %#v", body)
+	}
+}
+
+func TestWritePremiumAIError_Mappings(t *testing.T) {
+	handler := NewAIHandler(&MockAIService{})
+	resetsAt := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantError  string
+		wantResets bool
+	}{
+		{name: "invalid input", err: ai.ErrInvalidInput, wantStatus: http.StatusBadRequest, wantError: "Invalid AI request."},
+		{name: "invalid position", err: services.ErrInvalidPosition, wantStatus: http.StatusBadRequest, wantError: "Invalid position"},
+		{name: "card finalized", err: services.ErrCardFinalized, wantStatus: http.StatusBadRequest, wantError: "Card must be a draft"},
+		{name: "card full", err: services.ErrCardFull, wantStatus: http.StatusBadRequest, wantError: "Card has no empty positions"},
+		{name: "card not found", err: services.ErrCardNotFound, wantStatus: http.StatusNotFound, wantError: "Card not found"},
+		{name: "item not found", err: services.ErrItemNotFound, wantStatus: http.StatusNotFound, wantError: "Goal not found"},
+		{name: "safety", err: ai.ErrSafetyViolation, wantStatus: http.StatusBadRequest, wantError: "We couldn't generate safe goals for that topic. Please try rephrasing."},
+		{name: "provider rate limit", err: ai.ErrRateLimitExceeded, wantStatus: http.StatusTooManyRequests, wantError: "AI provider rate limit exceeded."},
+		{name: "premium exhausted", err: ai.ErrPremiumEnhancementsExhausted, wantStatus: http.StatusTooManyRequests, wantError: "Premium AI enhancements limit reached for this month", wantResets: true},
+		{name: "not configured", err: ai.ErrAINotConfigured, wantStatus: http.StatusServiceUnavailable, wantError: "AI is not configured on this server. Please try again later."},
+		{name: "provider unavailable", err: ai.ErrAIProviderUnavailable, wantStatus: http.StatusServiceUnavailable, wantError: "The AI service is currently down. Please try again later."},
+		{name: "tracking unavailable", err: ai.ErrAIUsageTrackingUnavailable, wantStatus: http.StatusServiceUnavailable, wantError: "AI usage tracking is temporarily unavailable. Please try again later."},
+		{name: "unexpected", err: errors.New("boom"), wantStatus: http.StatusInternalServerError, wantError: "An unexpected error occurred."},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			handler.writePremiumAIError(w, tt.err, resetsAt)
+			if w.Code != tt.wantStatus {
+				t.Fatalf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+
+			var body map[string]any
+			if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+				t.Fatalf("failed to decode JSON body: %v", err)
+			}
+			if body["error"] != tt.wantError {
+				t.Fatalf("expected error %q, got %#v", tt.wantError, body["error"])
+			}
+			if tt.wantResets {
+				if _, ok := body["resets_at"]; !ok {
+					t.Fatalf("expected resets_at in response body: %#v", body)
+				}
+			}
+		})
 	}
 }

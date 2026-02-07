@@ -28,7 +28,9 @@ func (f fakeRow) Scan(dest ...any) error {
 
 type fakeDB struct {
 	execFunc     func(ctx context.Context, sql string, args ...any) (services.CommandTag, error)
+	queryFunc    func(ctx context.Context, sql string, args ...any) (services.Rows, error)
 	queryRowFunc func(ctx context.Context, sql string, args ...any) services.Row
+	beginFunc    func(ctx context.Context) (services.Tx, error)
 }
 
 func (f *fakeDB) Exec(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
@@ -39,6 +41,9 @@ func (f *fakeDB) Exec(ctx context.Context, sql string, args ...any) (services.Co
 }
 
 func (f *fakeDB) Query(ctx context.Context, sql string, args ...any) (services.Rows, error) {
+	if f.queryFunc != nil {
+		return f.queryFunc(ctx, sql, args...)
+	}
 	return nil, nil
 }
 
@@ -47,6 +52,13 @@ func (f *fakeDB) QueryRow(ctx context.Context, sql string, args ...any) services
 		return f.queryRowFunc(ctx, sql, args...)
 	}
 	return fakeRow{scanFunc: func(dest ...any) error { return nil }}
+}
+
+func (f *fakeDB) Begin(ctx context.Context) (services.Tx, error) {
+	if f.beginFunc != nil {
+		return f.beginFunc(ctx)
+	}
+	return nil, errors.New("begin not implemented")
 }
 
 func TestGenerateGoals(t *testing.T) {
@@ -466,6 +478,62 @@ func TestConsumeUnverifiedFreeGeneration_Success(t *testing.T) {
 	}
 	if remaining != 2 {
 		t.Fatalf("expected 2 remaining, got %d", remaining)
+	}
+}
+
+func TestRefundUnverifiedFreeGeneration_NoDB(t *testing.T) {
+	svc := &Service{}
+	_, err := svc.RefundUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if !errors.Is(err, ErrAIUsageTrackingUnavailable) {
+		t.Fatalf("expected ErrAIUsageTrackingUnavailable, got %v", err)
+	}
+}
+
+func TestRefundUnverifiedFreeGeneration_DBError(t *testing.T) {
+	db := &fakeDB{
+		execFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return nil, errors.New("boom")
+		},
+	}
+	svc := &Service{db: db}
+
+	_, err := svc.RefundUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if !errors.Is(err, ErrAIUsageTrackingUnavailable) {
+		t.Fatalf("expected ErrAIUsageTrackingUnavailable, got %v", err)
+	}
+}
+
+func TestRefundUnverifiedFreeGeneration_NoRowUpdated(t *testing.T) {
+	db := &fakeDB{
+		execFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rows: 0}, nil
+		},
+	}
+	svc := &Service{db: db}
+
+	refunded, err := svc.RefundUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected refund error: %v", err)
+	}
+	if refunded {
+		t.Fatalf("expected refunded=false when no row updated")
+	}
+}
+
+func TestRefundUnverifiedFreeGeneration_Success(t *testing.T) {
+	db := &fakeDB{
+		execFunc: func(ctx context.Context, sql string, args ...any) (services.CommandTag, error) {
+			return fakeCommandTag{rows: 1}, nil
+		},
+	}
+	svc := &Service{db: db}
+
+	refunded, err := svc.RefundUnverifiedFreeGeneration(context.Background(), uuid.New())
+	if err != nil {
+		t.Fatalf("unexpected refund error: %v", err)
+	}
+	if !refunded {
+		t.Fatalf("expected refunded=true when row is updated")
 	}
 }
 

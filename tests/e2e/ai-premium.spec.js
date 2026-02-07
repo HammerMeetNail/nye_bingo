@@ -55,7 +55,7 @@ test('premium AI assist, regenerate, and fill-empty consume monthly enhancements
   const limit = status.limit;
   let remaining = status.remaining;
   expect(limit).toBeGreaterThan(0);
-  expect(remaining).toBeGreaterThan(3);
+  expect(remaining).toBeGreaterThanOrEqual(3);
 
   await page.goto('/premium');
   await expect(page.locator('#premium-ai-status')).toContainText(`AI Enhancements remaining: ${remaining} / ${limit}`);

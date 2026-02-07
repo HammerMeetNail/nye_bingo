@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/ai"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
@@ -70,9 +71,9 @@ type FillEmptyRequest struct {
 }
 
 type FillEmptyResponse struct {
-	Card                  any       `json:"card"`
-	EnhancementsRemaining int       `json:"enhancements_remaining"`
-	ResetsAt              time.Time `json:"resets_at"`
+	Card                  *models.BingoCard `json:"card"`
+	EnhancementsRemaining int               `json:"enhancements_remaining"`
+	ResetsAt              time.Time         `json:"resets_at"`
 }
 
 func (h *AIHandler) PremiumStatus(w http.ResponseWriter, r *http.Request) {
