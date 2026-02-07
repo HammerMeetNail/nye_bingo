@@ -15,13 +15,14 @@ test('viewing notifications marks them read', async ({ browser }, testInfo) => {
 
   await sendFriendRequest(pageA, userB.username);
 
-  await pageB.goto('/notifications');
   const notification = pageB.locator('.notification-item', { hasText: 'friend request' });
-  await expect(notification).toBeVisible();
+  await expect(async () => {
+    await pageB.goto('/notifications');
+    await expect(notification).toBeVisible();
+  }).toPass({ timeout: 15000 });
   await expect(notification).not.toHaveClass(/notification-item--unread/);
   await expect(pageB.locator('#notification-badge')).toHaveClass(/nav-badge--hidden/);
 
   await contextA.close();
   await contextB.close();
 });
-

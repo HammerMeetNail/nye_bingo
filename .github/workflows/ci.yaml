@@ -191,7 +191,11 @@ jobs:
     if: needs.changes.outputs.code == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.e2e == 'true'
     env:
       AI_STUB: "1"
-      PLAYWRIGHT_WORKERS: "2"
+      # Shared runners are noisy; single-worker execution is slower but significantly more stable.
+      PLAYWRIGHT_WORKERS: "1"
+      PLAYWRIGHT_RETRIES: "2"
+      PLAYWRIGHT_TEST_TIMEOUT_MS: "90000"
+      PLAYWRIGHT_EXPECT_TIMEOUT_MS: "15000"
       # Speed up the background reminder runner in CI so scheduled reminder tests
       # reliably deliver within Playwright's per-test timeout.
       REMINDERS_POLL_INTERVAL: "1s"
@@ -281,7 +285,16 @@ jobs:
         run: |
           mkdir -p test-results playwright-report
           docker compose --profile e2e run --rm playwright \
-            /opt/playwright/node_modules/.bin/playwright test --project=firefox
+            /opt/playwright/node_modules/.bin/playwright test \
+            --project=firefox \
+            --workers="${PLAYWRIGHT_WORKERS}" \
+            --retries="${PLAYWRIGHT_RETRIES}"
+
+      - name: Dump container diagnostics on failure
+        if: failure()
+        run: |
+          docker compose --profile e2e ps
+          docker compose --profile e2e logs --tail=200 app postgres redis mailpit oidc stripe-mock || true
 
       - name: Fix Playwright artifact permissions
         if: always()

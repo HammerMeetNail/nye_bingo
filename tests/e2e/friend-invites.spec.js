@@ -3,6 +3,9 @@ const {
   buildUser,
   register,
   expectToast,
+  sendFriendRequest,
+  respondToFriendRequest,
+  waitForFriendInList,
 } = require('./helpers');
 
 test('invite links connect friends', async ({ browser }, testInfo) => {
@@ -47,19 +50,12 @@ test('blocking removes friendships and hides search results', async ({ browser }
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/friends');
-  await pageB.fill('#friend-search', userA.username);
-  await pageB.click('#search-btn');
-  const results = pageB.locator('#search-results');
-  await expect(results).toContainText(userA.username);
-  await results.getByRole('button', { name: 'Add Friend' }).click();
+  await sendFriendRequest(pageB, userA.username);
 
-  await pageA.goto('/friends');
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await respondToFriendRequest(pageA, userB.username, 'accept');
   await expectToast(pageA, 'Friend request accepted');
 
-  await pageA.reload();
-  const friendRow = pageA.locator('#friends-list .friend-item').filter({ hasText: userB.username });
+  const friendRow = await waitForFriendInList(pageA, userB.username, { timeout: 20000 });
   pageA.once('dialog', (dialog) => dialog.accept());
   await friendRow.getByRole('button', { name: 'Block' }).click();
   await expectToast(pageA, 'User blocked');

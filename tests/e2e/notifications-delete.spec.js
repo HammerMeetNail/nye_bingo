@@ -1,5 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { buildUser, register, createFinalizedCardFromModal, sendFriendRequest } = require('./helpers');
+const {
+  buildUser,
+  register,
+  createFinalizedCardFromModal,
+  sendFriendRequest,
+  respondToFriendRequest,
+} = require('./helpers');
 
 test('notifications can be deleted individually or all at once', async ({ browser }, testInfo) => {
   const userA = buildUser(testInfo, 'ndela');
@@ -14,14 +20,14 @@ test('notifications can be deleted individually or all at once', async ({ browse
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageA, userB.username);
-
-  await pageB.goto('/friends');
-  await pageB.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await respondToFriendRequest(pageB, userA.username, 'accept');
 
   await createFinalizedCardFromModal(pageA, { title: 'Delete Me' });
 
-  await pageB.goto('/notifications');
-  await expect(pageB.locator('.notification-item')).toHaveCount(2);
+  await expect(async () => {
+    await pageB.goto('/notifications');
+    await expect(pageB.locator('.notification-item')).toHaveCount(2);
+  }).toPass({ timeout: 15000 });
 
   const deleteButtons = pageB.getByRole('button', { name: 'Delete notification' });
   await deleteButtons.first().click();
@@ -35,4 +41,3 @@ test('notifications can be deleted individually or all at once', async ({ browse
   await contextA.close();
   await contextB.close();
 });
-

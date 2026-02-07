@@ -1,5 +1,10 @@
 const { test, expect } = require('@playwright/test');
-const { buildUser, register, sendFriendRequest } = require('./helpers');
+const {
+  buildUser,
+  register,
+  sendFriendRequest,
+  respondToFriendRequest,
+} = require('./helpers');
 
 test('friend acceptance notifications are delivered', async ({ browser }, testInfo) => {
   const userA = buildUser(testInfo, 'nacca');
@@ -14,14 +19,14 @@ test('friend acceptance notifications are delivered', async ({ browser }, testIn
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageB, userA.username);
+  await respondToFriendRequest(pageA, userB.username, 'accept');
 
-  await pageA.goto('/friends');
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
-
-  await pageB.goto('/notifications');
-  await expect(pageB.locator('.notification-message')).toContainText('accepted your friend request');
+  const acceptedMessage = pageB.locator('.notification-message');
+  await expect(async () => {
+    await pageB.goto('/notifications');
+    await expect(acceptedMessage).toContainText('accepted your friend request');
+  }).toPass({ timeout: 15000 });
 
   await contextA.close();
   await contextB.close();
 });
-

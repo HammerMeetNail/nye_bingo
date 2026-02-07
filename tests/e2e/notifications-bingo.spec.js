@@ -6,7 +6,7 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   sendFriendRequest,
-  expectToast,
+  respondToFriendRequest,
 } = require('./helpers');
 
 test('bingo notifications only fire once per card', async ({ browser }, testInfo) => {
@@ -22,9 +22,7 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageB, userA.username);
-  await pageA.goto('/friends');
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
-  await expectToast(pageA, 'Friend request accepted');
+  await respondToFriendRequest(pageA, userB.username, 'accept');
 
   await createCardFromModal(pageA, { title: 'Quick Bingo', gridSize: 2, hasFree: false });
   await fillCardWithSuggestions(pageA);
@@ -56,4 +54,3 @@ test('bingo notifications only fire once per card', async ({ browser }, testInfo
   await contextA.close();
   await contextB.close();
 });
-

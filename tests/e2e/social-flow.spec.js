@@ -6,7 +6,9 @@ const {
   fillCardWithSuggestions,
   finalizeCard,
   completeFirstItem,
-  expectToast,
+  sendFriendRequest,
+  respondToFriendRequest,
+  waitForFriendInList,
 } = require('./helpers');
 
 test('users can connect and react to friend cards', async ({ browser }, testInfo) => {
@@ -26,32 +28,12 @@ test('users can connect and react to friend cards', async ({ browser }, testInfo
   const pageB = await contextB.newPage();
   await register(pageB, userB, { searchable: true });
 
-  await pageB.goto('/friends');
-  await pageB.fill('#friend-search', userA.username);
-  await pageB.click('#search-btn');
-  const results = pageB.locator('#search-results');
-  await expect(results).toContainText(userA.username);
-  const requestResponse = pageB.waitForResponse((response) => (
-    response.url().includes('/api/friends/requests')
-      && response.request().method() === 'POST'
-      && response.ok()
-  ));
-  await results.getByRole('button', { name: 'Add Friend' }).click();
-  await requestResponse;
-  await expectToast(pageB, 'Friend request sent!');
-  await pageB.reload();
-  await pageB.goto('/friends');
-  await expect(pageB.locator('#sent-requests')).toContainText(userA.username);
+  await sendFriendRequest(pageB, userA.username);
 
-  await pageA.goto('/friends');
-  await expect(pageA.locator('#friend-requests')).toBeVisible();
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
+  await respondToFriendRequest(pageA, userB.username, 'accept');
   await expect(pageA.locator('#friends-list')).toContainText(userB.username);
 
-  await pageB.reload();
-  await pageB.goto('/friends');
-  await expect(pageB.locator('#friends-list')).toContainText(userA.username, { timeout: 15000 });
-  const friendRow = pageB.locator('#friends-list .friend-item').filter({ hasText: userA.username });
+  const friendRow = await waitForFriendInList(pageB, userA.username, { timeout: 20000 });
   await friendRow.getByRole('link', { name: 'View Card' }).click();
   await expect(pageB.locator('.finalized-card-view')).toBeVisible();
 

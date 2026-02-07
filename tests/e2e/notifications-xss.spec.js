@@ -15,12 +15,14 @@ test('notification rendering escapes usernames', async ({ browser }, testInfo) =
 
   await sendFriendRequest(pageA, userB.username);
 
-  await pageB.goto('/notifications');
   const message = pageB.locator('.notification-message').first();
+  await expect(async () => {
+    await pageB.goto('/notifications');
+    await expect(message).toBeVisible();
+  }).toPass({ timeout: 15000 });
   await expect(message).toContainText('<img src=x onerror=alert(1)>');
   await expect(message.locator('img')).toHaveCount(0);
 
   await contextA.close();
   await contextB.close();
 });
-

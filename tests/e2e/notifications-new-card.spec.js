@@ -1,5 +1,11 @@
 const { test, expect } = require('@playwright/test');
-const { buildUser, register, createFinalizedCardFromModal, sendFriendRequest, expectToast } = require('./helpers');
+const {
+  buildUser,
+  register,
+  createFinalizedCardFromModal,
+  sendFriendRequest,
+  respondToFriendRequest,
+} = require('./helpers');
 
 test('new card notifications link to friend cards', async ({ browser }, testInfo) => {
   const userA = buildUser(testInfo, 'ncarda');
@@ -14,9 +20,7 @@ test('new card notifications link to friend cards', async ({ browser }, testInfo
   await register(pageB, userB, { searchable: true });
 
   await sendFriendRequest(pageB, userA.username);
-  await pageA.goto('/friends');
-  await pageA.locator('#requests-list .friend-item').getByRole('button', { name: 'Accept' }).click();
-  await expectToast(pageA, 'Friend request accepted');
+  await respondToFriendRequest(pageA, userB.username, 'accept');
 
   await createFinalizedCardFromModal(pageA, { title: 'New Friends Card' });
 
@@ -32,4 +36,3 @@ test('new card notifications link to friend cards', async ({ browser }, testInfo
   await contextA.close();
   await contextB.close();
 });
-

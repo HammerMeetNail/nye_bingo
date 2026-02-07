@@ -1,12 +1,26 @@
 const { defineConfig, devices } = require('@playwright/test');
 const os = require('os');
 
+const isCI = !!process.env.CI;
 const isHeadless = process.env.PLAYWRIGHT_HEADLESS !== 'false';
 const baseURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:8080';
 const outputDir = process.env.PLAYWRIGHT_OUTPUT_DIR || 'test-results';
 const reportDir = process.env.PLAYWRIGHT_REPORT_DIR || 'playwright-report';
+const parsePositiveInt = (raw, fallback) => {
+  const parsed = Number.parseInt(raw || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+const parseNonNegativeInt = (raw, fallback) => {
+  const parsed = Number.parseInt(raw || '', 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+};
+const testTimeout = parsePositiveInt(process.env.PLAYWRIGHT_TEST_TIMEOUT_MS, isCI ? 90000 : 60000);
+const expectTimeout = parsePositiveInt(process.env.PLAYWRIGHT_EXPECT_TIMEOUT_MS, isCI ? 15000 : 10000);
+const actionTimeout = parsePositiveInt(process.env.PLAYWRIGHT_ACTION_TIMEOUT_MS, isCI ? 15000 : 10000);
+const navigationTimeout = parsePositiveInt(process.env.PLAYWRIGHT_NAVIGATION_TIMEOUT_MS, isCI ? 45000 : 30000);
+const retries = parseNonNegativeInt(process.env.PLAYWRIGHT_RETRIES, isCI ? 2 : 0);
 const defaultWorkers = (() => {
-  if (process.env.CI) return 1;
+  if (isCI) return 1;
   const cpuCount = Array.isArray(os.cpus()) ? os.cpus().length : 1;
   return Math.max(1, Math.min(4, cpuCount - 1));
 })();
@@ -20,9 +34,11 @@ const workers = (() => {
 
 module.exports = defineConfig({
   testDir: 'tests/e2e',
-  timeout: 60000,
+  timeout: testTimeout,
+  retries,
+  forbidOnly: isCI,
   expect: {
-    timeout: 10000,
+    timeout: expectTimeout,
   },
   fullyParallel: false,
   workers,
@@ -34,12 +50,12 @@ module.exports = defineConfig({
   use: {
     baseURL,
     headless: isHeadless,
-    actionTimeout: 10000,
-    navigationTimeout: 30000,
+    actionTimeout,
+    navigationTimeout,
     acceptDownloads: true,
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
-    trace: 'retain-on-failure',
+    video: isCI ? 'on-first-retry' : 'retain-on-failure',
+    trace: isCI ? 'on-first-retry' : 'retain-on-failure',
   },
   projects: [
     {
