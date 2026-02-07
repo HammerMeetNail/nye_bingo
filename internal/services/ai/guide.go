@@ -25,6 +25,10 @@ type GuidePrompt struct {
 }
 
 func (s *Service) GenerateGuideGoals(ctx context.Context, userID uuid.UUID, prompt GuidePrompt) ([]string, UsageStats, error) {
+	return s.generateGuideGoalsWithFeature(ctx, userID, prompt, featureGenerate)
+}
+
+func (s *Service) generateGuideGoalsWithFeature(ctx context.Context, userID uuid.UUID, prompt GuidePrompt, feature string) ([]string, UsageStats, error) {
 	start := time.Now()
 
 	mode := strings.ToLower(strings.TrimSpace(prompt.Mode))
@@ -60,7 +64,7 @@ func (s *Service) GenerateGuideGoals(ctx context.Context, userID uuid.UUID, prom
 			Model:    "stub",
 			Duration: time.Since(start),
 		}
-		s.logUsageWithTimeout(userID, stats, "success")
+		s.logUsageWithTimeout(userID, stats, "success", feature)
 		return goals, stats, nil
 	}
 
@@ -211,7 +215,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	resp, err := s.client.Do(req)
 	if err != nil {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 		return nil, UsageStats{}, fmt.Errorf("%w: %v", ErrAIProviderUnavailable, err)
 	}
 	defer func() {
@@ -220,7 +224,7 @@ Output exactly %d items as a JSON array of strings.`,
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 
 		if resp.StatusCode == http.StatusTooManyRequests {
 			return nil, UsageStats{}, fmt.Errorf("%w: status %d", ErrRateLimitExceeded, resp.StatusCode)
@@ -248,7 +252,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	var geminiResp geminiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&geminiResp); err != nil {
-		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error")
+		s.logUsageWithTimeout(userID, UsageStats{Model: s.model, Duration: time.Since(start)}, "error", feature)
 		return nil, UsageStats{}, fmt.Errorf("%w: failed to decode response", ErrAIProviderUnavailable)
 	}
 
@@ -261,18 +265,18 @@ Output exactly %d items as a JSON array of strings.`,
 	}
 
 	if len(geminiResp.Candidates) == 0 {
-		s.logUsageWithTimeout(userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block", feature)
 		return nil, stats, ErrSafetyViolation
 	}
 
 	candidate := geminiResp.Candidates[0]
 	if candidate.FinishReason == "SAFETY" {
-		s.logUsageWithTimeout(userID, stats, "safety_block")
+		s.logUsageWithTimeout(userID, stats, "safety_block", feature)
 		return nil, stats, ErrSafetyViolation
 	}
 
 	if len(candidate.Content.Parts) == 0 {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		return nil, stats, fmt.Errorf("%w: empty content parts", ErrAIProviderUnavailable)
 	}
 
@@ -304,7 +308,7 @@ Output exactly %d items as a JSON array of strings.`,
 
 	var goals []string
 	if err := json.Unmarshal([]byte(responseText), &goals); err != nil {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		logging.Error("Gemini returned invalid JSON for guide goals array", map[string]interface{}{
 			"user_id":          userID.String(),
 			"finish_reason":    candidate.FinishReason,
@@ -324,7 +328,7 @@ Output exactly %d items as a JSON array of strings.`,
 		goals = goals[:count]
 	}
 	if len(goals) != count {
-		s.logUsageWithTimeout(userID, stats, "error")
+		s.logUsageWithTimeout(userID, stats, "error", feature)
 		logging.Error("Gemini returned wrong guide goal count", map[string]interface{}{
 			"user_id":          userID.String(),
 			"finish_reason":    candidate.FinishReason,
@@ -335,7 +339,7 @@ Output exactly %d items as a JSON array of strings.`,
 		return nil, stats, fmt.Errorf("%w: expected %d goals, got %d", ErrAIProviderUnavailable, count, len(goals))
 	}
 
-	s.logUsageWithTimeout(userID, stats, "success")
+	s.logUsageWithTimeout(userID, stats, "success", feature)
 	return goals, stats, nil
 }
 

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -18,14 +19,26 @@ import (
 
 // MockAIService implements AIService interface
 type MockAIService struct {
-	GenerateGoalsFunc  func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
-	GenerateGuideFunc  func(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error)
-	ConsumeFunc        func(ctx context.Context, userID uuid.UUID) (int, error)
-	RefundFunc         func(ctx context.Context, userID uuid.UUID) (bool, error)
-	GenerateCalls      int
-	GenerateGuideCalls int
-	ConsumeCalls       int
-	RefundCalls        int
+	GenerateGoalsFunc     func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error)
+	GenerateGuideFunc     func(ctx context.Context, userID uuid.UUID, prompt ai.GuidePrompt) ([]string, ai.UsageStats, error)
+	AssistCardGoalFunc    func(ctx context.Context, userID, cardID uuid.UUID, position int, mode, notes string) (string, ai.UsageStats, error)
+	RegenerateGoalFunc    func(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt, existingGoals []string, replaceIndex int) (string, ai.UsageStats, error)
+	FillEmptyOnCardFunc   func(ctx context.Context, userID, cardID uuid.UUID, prompt ai.GoalPrompt) (*models.BingoCard, ai.UsageStats, error)
+	GetPremiumStatusFunc  func(ctx context.Context, userID uuid.UUID, now time.Time) (limit int, used int, remaining int, resetsAt time.Time, err error)
+	ReservePremiumFunc    func(ctx context.Context, userID uuid.UUID, now time.Time) (remaining int, resetsAt time.Time, err error)
+	RefundPremiumFunc     func(ctx context.Context, userID uuid.UUID, now time.Time) error
+	ConsumeFunc           func(ctx context.Context, userID uuid.UUID) (int, error)
+	RefundFunc            func(ctx context.Context, userID uuid.UUID) (bool, error)
+	GenerateCalls         int
+	GenerateGuideCalls    int
+	AssistCalls           int
+	RegenerateCalls       int
+	FillEmptyCalls        int
+	GetPremiumStatusCalls int
+	ReservePremiumCalls   int
+	RefundPremiumCalls    int
+	ConsumeCalls          int
+	RefundCalls           int
 }
 
 func (m *MockAIService) GenerateGoals(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt) ([]string, ai.UsageStats, error) {
@@ -42,6 +55,54 @@ func (m *MockAIService) GenerateGuideGoals(ctx context.Context, userID uuid.UUID
 		return nil, ai.UsageStats{}, errors.New("GenerateGuideFunc not set")
 	}
 	return m.GenerateGuideFunc(ctx, userID, prompt)
+}
+
+func (m *MockAIService) AssistCardGoal(ctx context.Context, userID, cardID uuid.UUID, position int, mode, notes string) (string, ai.UsageStats, error) {
+	m.AssistCalls++
+	if m.AssistCardGoalFunc == nil {
+		return "", ai.UsageStats{}, errors.New("AssistCardGoalFunc not set")
+	}
+	return m.AssistCardGoalFunc(ctx, userID, cardID, position, mode, notes)
+}
+
+func (m *MockAIService) RegenerateGoal(ctx context.Context, userID uuid.UUID, prompt ai.GoalPrompt, existingGoals []string, replaceIndex int) (string, ai.UsageStats, error) {
+	m.RegenerateCalls++
+	if m.RegenerateGoalFunc == nil {
+		return "", ai.UsageStats{}, errors.New("RegenerateGoalFunc not set")
+	}
+	return m.RegenerateGoalFunc(ctx, userID, prompt, existingGoals, replaceIndex)
+}
+
+func (m *MockAIService) FillEmptyOnCard(ctx context.Context, userID, cardID uuid.UUID, prompt ai.GoalPrompt) (*models.BingoCard, ai.UsageStats, error) {
+	m.FillEmptyCalls++
+	if m.FillEmptyOnCardFunc == nil {
+		return nil, ai.UsageStats{}, errors.New("FillEmptyOnCardFunc not set")
+	}
+	return m.FillEmptyOnCardFunc(ctx, userID, cardID, prompt)
+}
+
+func (m *MockAIService) GetPremiumEnhancementsStatus(ctx context.Context, userID uuid.UUID, now time.Time) (limit int, used int, remaining int, resetsAt time.Time, err error) {
+	m.GetPremiumStatusCalls++
+	if m.GetPremiumStatusFunc == nil {
+		return 100, 0, 100, now, nil
+	}
+	return m.GetPremiumStatusFunc(ctx, userID, now)
+}
+
+func (m *MockAIService) ReservePremiumEnhancement(ctx context.Context, userID uuid.UUID, now time.Time) (remaining int, resetsAt time.Time, err error) {
+	m.ReservePremiumCalls++
+	if m.ReservePremiumFunc == nil {
+		return 99, now, nil
+	}
+	return m.ReservePremiumFunc(ctx, userID, now)
+}
+
+func (m *MockAIService) RefundPremiumEnhancement(ctx context.Context, userID uuid.UUID, now time.Time) error {
+	m.RefundPremiumCalls++
+	if m.RefundPremiumFunc == nil {
+		return nil
+	}
+	return m.RefundPremiumFunc(ctx, userID, now)
 }
 
 func (m *MockAIService) ConsumeUnverifiedFreeGeneration(ctx context.Context, userID uuid.UUID) (int, error) {

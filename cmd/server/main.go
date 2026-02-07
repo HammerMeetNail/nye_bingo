@@ -90,6 +90,7 @@ func run() error {
 	billing.SetGlobalFeatureSwitches(billing.FeatureEntitlements{
 		Templates:         cfg.Billing.FeatureTemplatesEnabled,
 		EditAfterFinalize: cfg.Billing.FeatureEditAfterFinalizeEnabled,
+		AIEnhancements:    cfg.Billing.FeatureAIEnhancementsEnabled,
 	})
 
 	dbAdapter := services.NewPoolAdapter(db.Pool)
@@ -239,8 +240,16 @@ func run() error {
 
 	// AI Rate Limit configuration
 	aiRateLimit := resolveAIRateLimit(cfg, logger, os.LookupEnv)
+	aiPremiumRateLimit := resolveAIPremiumRateLimit(cfg, logger, os.LookupEnv)
 
 	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {
+		user := handlers.GetUserFromContext(r.Context())
+		if user != nil {
+			return user.ID.String()
+		}
+		return ""
+	}, false)
+	aiPremiumRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiPremiumRateLimit, 1*time.Hour, "ratelimit:ai-premium:", func(r *http.Request) string {
 		user := handlers.GetUserFromContext(r.Context())
 		if user != nil {
 			return user.ID.String()
@@ -425,6 +434,10 @@ func run() error {
 	// AI endpoint
 	mux.Handle("POST /api/ai/generate", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Generate))))
 	mux.Handle("POST /api/ai/guide", requireSession(aiRateLimiter.Middleware(http.HandlerFunc(aiHandler.Guide))))
+	mux.Handle("GET /api/ai/premium/status", requireSession(http.HandlerFunc(aiHandler.PremiumStatus)))
+	mux.Handle("POST /api/ai/assist", requireSession(aiPremiumRateLimiter.Middleware(http.HandlerFunc(aiHandler.Assist))))
+	mux.Handle("POST /api/ai/regenerate", requireSession(aiPremiumRateLimiter.Middleware(http.HandlerFunc(aiHandler.Regenerate))))
+	mux.Handle("POST /api/ai/fill-empty", requireSession(aiPremiumRateLimiter.Middleware(http.HandlerFunc(aiHandler.FillEmpty))))
 
 	// Billing endpoints (session cookie only)
 	mux.Handle("GET /api/billing/status", requireSession(requireRead(http.HandlerFunc(billingHandler.Status))))
@@ -550,6 +563,25 @@ func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv fu
 		}
 	}
 	return aiRateLimit
+}
+
+func resolveAIPremiumRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv func(string) (string, bool)) int64 {
+	limit := int64(cfg.AI.PremiumEndpointRateLimit)
+	if limit <= 0 {
+		limit = 60
+	}
+	if v, ok := lookupEnv("AI_PREMIUM_ENDPOINT_RATE_LIMIT"); ok && v != "" {
+		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
+			limit = parsed
+			logger.Info("Using premium AI endpoint rate limit from env", map[string]interface{}{"limit": limit})
+		} else {
+			logger.Warn("Invalid AI_PREMIUM_ENDPOINT_RATE_LIMIT; using default", map[string]interface{}{
+				"value": v,
+				"limit": limit,
+			})
+		}
+	}
+	return limit
 }
 
 // authRateLimits holds rate limit values for auth endpoints.

@@ -12,9 +12,10 @@ func TestLoad_Defaults(t *testing.T) {
 		"DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD", "DB_NAME", "DB_SSLMODE",
 		"REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD", "REDIS_DB",
 		"AI_STUB", "GEMINI_API_KEY", "GEMINI_MODEL", "GEMINI_THINKING_LEVEL", "GEMINI_THINKING_BUDGET", "GEMINI_TEMPERATURE", "GEMINI_MAX_OUTPUT_TOKENS",
+		"AI_PREMIUM_ENHANCEMENTS_PER_MONTH", "AI_PREMIUM_ENDPOINT_RATE_LIMIT",
 		"OAUTH_ALLOWED_PROVIDERS", "GOOGLE_OAUTH_ENABLED", "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET", "GOOGLE_OAUTH_REDIRECT_URL", "GOOGLE_OIDC_ISSUER_URL", "GOOGLE_OIDC_SCOPES",
 		"BILLING_ENABLED", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET",
-		"FEATURE_TEMPLATES_ENABLED", "FEATURE_EDIT_AFTER_FINALIZE_ENABLED",
+		"FEATURE_TEMPLATES_ENABLED", "FEATURE_EDIT_AFTER_FINALIZE_ENABLED", "FEATURE_AI_ENHANCEMENTS_ENABLED",
 		"STRIPE_API_BASE_URL",
 		"STRIPE_PREMIUM_PRICE_MONTHLY", "STRIPE_PREMIUM_PRICE_YEARLY", "STRIPE_PREMIUM_PRICE_LIFETIME",
 		"STRIPE_TIP_PRICE_5", "STRIPE_TIP_PRICE_10", "STRIPE_TIP_PRICE_20",
@@ -101,6 +102,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.AI.GeminiMaxOutputTokens != 4096 {
 		t.Errorf("expected AI.GeminiMaxOutputTokens to be 4096, got %d", cfg.AI.GeminiMaxOutputTokens)
 	}
+	if cfg.AI.PremiumEnhancementsPerMonth != 100 {
+		t.Errorf("expected AI.PremiumEnhancementsPerMonth to be 100, got %d", cfg.AI.PremiumEnhancementsPerMonth)
+	}
+	if cfg.AI.PremiumEndpointRateLimit != 60 {
+		t.Errorf("expected AI.PremiumEndpointRateLimit to be 60, got %d", cfg.AI.PremiumEndpointRateLimit)
+	}
 	if cfg.AI.Stub != false {
 		t.Error("expected AI.Stub to be false")
 	}
@@ -128,6 +135,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.Billing.FeatureEditAfterFinalizeEnabled != true {
 		t.Error("expected Billing.FeatureEditAfterFinalizeEnabled to be true")
 	}
+	if cfg.Billing.FeatureAIEnhancementsEnabled != true {
+		t.Error("expected Billing.FeatureAIEnhancementsEnabled to be true")
+	}
 	if cfg.Billing.StripeSecretKey != "" {
 		t.Errorf("expected Billing.StripeSecretKey to be empty, got %q", cfg.Billing.StripeSecretKey)
 	}
@@ -151,6 +161,8 @@ func TestLoad_CustomValues(t *testing.T) {
 	os.Setenv("REDIS_PORT", "6380")
 	os.Setenv("REDIS_PASSWORD", "redispass")
 	os.Setenv("REDIS_DB", "1")
+	os.Setenv("AI_PREMIUM_ENHANCEMENTS_PER_MONTH", "250")
+	os.Setenv("AI_PREMIUM_ENDPOINT_RATE_LIMIT", "75")
 	os.Setenv("OAUTH_ALLOWED_PROVIDERS", "google,apple")
 	os.Setenv("GOOGLE_OAUTH_ENABLED", "true")
 	os.Setenv("GOOGLE_OAUTH_CLIENT_ID", "client-id")
@@ -161,6 +173,7 @@ func TestLoad_CustomValues(t *testing.T) {
 	os.Setenv("BILLING_ENABLED", "true")
 	os.Setenv("FEATURE_TEMPLATES_ENABLED", "false")
 	os.Setenv("FEATURE_EDIT_AFTER_FINALIZE_ENABLED", "false")
+	os.Setenv("FEATURE_AI_ENHANCEMENTS_ENABLED", "false")
 	os.Setenv("STRIPE_SECRET_KEY", "sk_test_123")
 	os.Setenv("STRIPE_WEBHOOK_SECRET", "whsec_123")
 	os.Setenv("STRIPE_PREMIUM_PRICE_MONTHLY", "price_month")
@@ -188,6 +201,8 @@ func TestLoad_CustomValues(t *testing.T) {
 		os.Unsetenv("REDIS_PORT")
 		os.Unsetenv("REDIS_PASSWORD")
 		os.Unsetenv("REDIS_DB")
+		os.Unsetenv("AI_PREMIUM_ENHANCEMENTS_PER_MONTH")
+		os.Unsetenv("AI_PREMIUM_ENDPOINT_RATE_LIMIT")
 		os.Unsetenv("OAUTH_ALLOWED_PROVIDERS")
 		os.Unsetenv("GOOGLE_OAUTH_ENABLED")
 		os.Unsetenv("GOOGLE_OAUTH_CLIENT_ID")
@@ -198,6 +213,7 @@ func TestLoad_CustomValues(t *testing.T) {
 		os.Unsetenv("BILLING_ENABLED")
 		os.Unsetenv("FEATURE_TEMPLATES_ENABLED")
 		os.Unsetenv("FEATURE_EDIT_AFTER_FINALIZE_ENABLED")
+		os.Unsetenv("FEATURE_AI_ENHANCEMENTS_ENABLED")
 		os.Unsetenv("STRIPE_SECRET_KEY")
 		os.Unsetenv("STRIPE_WEBHOOK_SECRET")
 		os.Unsetenv("STRIPE_PREMIUM_PRICE_MONTHLY")
@@ -266,6 +282,12 @@ func TestLoad_CustomValues(t *testing.T) {
 	if cfg.Redis.DB != 1 {
 		t.Errorf("expected Redis.DB to be 1, got %d", cfg.Redis.DB)
 	}
+	if cfg.AI.PremiumEnhancementsPerMonth != 250 {
+		t.Errorf("expected AI.PremiumEnhancementsPerMonth to be 250, got %d", cfg.AI.PremiumEnhancementsPerMonth)
+	}
+	if cfg.AI.PremiumEndpointRateLimit != 75 {
+		t.Errorf("expected AI.PremiumEndpointRateLimit to be 75, got %d", cfg.AI.PremiumEndpointRateLimit)
+	}
 
 	if len(cfg.OAuth.AllowedProviders) != 2 {
 		t.Fatalf("expected OAuth.AllowedProviders length 2, got %d", len(cfg.OAuth.AllowedProviders))
@@ -300,6 +322,9 @@ func TestLoad_CustomValues(t *testing.T) {
 	}
 	if cfg.Billing.FeatureEditAfterFinalizeEnabled != false {
 		t.Error("expected Billing.FeatureEditAfterFinalizeEnabled to be false")
+	}
+	if cfg.Billing.FeatureAIEnhancementsEnabled != false {
+		t.Error("expected Billing.FeatureAIEnhancementsEnabled to be false")
 	}
 	if cfg.Billing.StripeSecretKey != "sk_test_123" {
 		t.Errorf("expected Billing.StripeSecretKey to be sk_test_123, got %q", cfg.Billing.StripeSecretKey)

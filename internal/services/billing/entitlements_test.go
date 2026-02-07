@@ -51,6 +51,7 @@ func TestFeatures(t *testing.T) {
 	withFeatureSwitches(t, FeatureEntitlements{
 		Templates:         true,
 		EditAfterFinalize: true,
+		AIEnhancements:    true,
 	})
 
 	free := &models.User{BillingPlan: "free"}
@@ -61,6 +62,9 @@ func TestFeatures(t *testing.T) {
 	if features.EditAfterFinalize {
 		t.Fatal("expected edit_after_finalize=false for free user")
 	}
+	if features.AIEnhancements {
+		t.Fatal("expected ai_enhancements=false for free user")
+	}
 
 	premium := &models.User{BillingPlan: "premium"}
 	features = Features(premium, now)
@@ -70,6 +74,9 @@ func TestFeatures(t *testing.T) {
 	if !features.EditAfterFinalize {
 		t.Fatal("expected edit_after_finalize=true for premium user")
 	}
+	if !features.AIEnhancements {
+		t.Fatal("expected ai_enhancements=true for premium user")
+	}
 }
 
 func TestHasFeature(t *testing.T) {
@@ -77,6 +84,7 @@ func TestHasFeature(t *testing.T) {
 	withFeatureSwitches(t, FeatureEntitlements{
 		Templates:         true,
 		EditAfterFinalize: true,
+		AIEnhancements:    true,
 	})
 	user := &models.User{BillingPlan: "premium"}
 
@@ -85,6 +93,9 @@ func TestHasFeature(t *testing.T) {
 	}
 	if !HasFeature(user, now, FeatureEditAfterFinalize) {
 		t.Fatal("expected edit_after_finalize feature for premium user")
+	}
+	if !HasFeature(user, now, FeatureAIEnhancements) {
+		t.Fatal("expected ai_enhancements feature for premium user")
 	}
 	if HasFeature(user, now, Feature("unknown")) {
 		t.Fatal("expected false for unknown feature")
@@ -98,6 +109,7 @@ func TestHasFeature_GlobalSwitchOverridesPremium(t *testing.T) {
 	withFeatureSwitches(t, FeatureEntitlements{
 		Templates:         false,
 		EditAfterFinalize: true,
+		AIEnhancements:    true,
 	})
 	if HasFeature(user, now, FeatureTemplates) {
 		t.Fatal("expected templates feature disabled by global switch")
@@ -105,15 +117,22 @@ func TestHasFeature_GlobalSwitchOverridesPremium(t *testing.T) {
 	if !HasFeature(user, now, FeatureEditAfterFinalize) {
 		t.Fatal("expected edit_after_finalize feature enabled")
 	}
+	if !HasFeature(user, now, FeatureAIEnhancements) {
+		t.Fatal("expected ai_enhancements feature enabled")
+	}
 
 	withFeatureSwitches(t, FeatureEntitlements{
 		Templates:         true,
 		EditAfterFinalize: false,
+		AIEnhancements:    false,
 	})
 	if !HasFeature(user, now, FeatureTemplates) {
 		t.Fatal("expected templates feature enabled")
 	}
 	if HasFeature(user, now, FeatureEditAfterFinalize) {
 		t.Fatal("expected edit_after_finalize feature disabled by global switch")
+	}
+	if HasFeature(user, now, FeatureAIEnhancements) {
+		t.Fatal("expected ai_enhancements feature disabled by global switch")
 	}
 }

@@ -31,6 +31,8 @@ components:
           type: boolean
         edit_after_finalize:
           type: boolean
+        ai_enhancements:
+          type: boolean
     BillingStatus:
       type: object
       properties:
@@ -3016,6 +3018,348 @@ paths:
                 properties:
                   error:
                     type: string
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /ai/premium/status:
+    get:
+      summary: Get Premium AI enhancement status
+      description: Requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Premium AI allowance status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  limit:
+                    type: integer
+                  used:
+                    type: integer
+                  remaining:
+                    type: integer
+                  resets_at:
+                    type: string
+                    format: date-time
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Premium required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /ai/assist:
+    post:
+      summary: Goal Assistant (Premium)
+      description: Requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - card_id
+                - position
+                - mode
+              properties:
+                card_id:
+                  type: string
+                  format: uuid
+                position:
+                  type: integer
+                mode:
+                  type: string
+                  enum: [breakdown, next_step, obstacles, schedule, ideas, motivation]
+                notes:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Assistant reply
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reply:
+                    type: string
+                  enhancements_remaining:
+                    type: integer
+                  resets_at:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Premium required or email verification required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
+        '429':
+          description: Premium allowance exhausted or provider rate-limited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  resets_at:
+                    type: string
+                    format: date-time
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /ai/regenerate:
+    post:
+      summary: Regenerate one goal (Premium)
+      description: Requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - category
+                - difficulty
+                - budget
+                - existing_goals
+                - replace_index
+              properties:
+                category:
+                  type: string
+                  enum: [hobbies, health, career, social, travel, mix]
+                focus:
+                  type: string
+                  maxLength: 100
+                difficulty:
+                  type: string
+                  enum: [easy, medium, hard]
+                budget:
+                  type: string
+                  enum: [free, low, medium, high]
+                context:
+                  type: string
+                  maxLength: 500
+                existing_goals:
+                  type: array
+                  minItems: 1
+                  maxItems: 24
+                  items:
+                    type: string
+                replace_index:
+                  type: integer
+      responses:
+        '200':
+          description: Regenerated goal
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  goal:
+                    type: string
+                  enhancements_remaining:
+                    type: integer
+                  resets_at:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Premium required or email verification required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
+        '429':
+          description: Premium allowance exhausted or provider rate-limited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  resets_at:
+                    type: string
+                    format: date-time
+        '503':
+          description: AI provider unavailable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+  /ai/fill-empty:
+    post:
+      summary: Fill empty draft squares with AI (Premium)
+      description: Requires a browser session cookie (API tokens are not allowed).
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - card_id
+                - category
+                - difficulty
+                - budget
+              properties:
+                card_id:
+                  type: string
+                  format: uuid
+                category:
+                  type: string
+                  enum: [hobbies, health, career, social, travel, mix]
+                focus:
+                  type: string
+                  maxLength: 100
+                difficulty:
+                  type: string
+                  enum: [easy, medium, hard]
+                budget:
+                  type: string
+                  enum: [free, low, medium, high]
+                context:
+                  type: string
+                  maxLength: 500
+      responses:
+        '200':
+          description: Card updated with AI-generated goals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  card:
+                    $ref: '#/components/schemas/BingoCard'
+                  enhancements_remaining:
+                    type: integer
+                  resets_at:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+        '403':
+          description: Premium required or email verification required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  free_remaining:
+                    type: integer
+        '429':
+          description: Premium allowance exhausted or provider rate-limited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  resets_at:
+                    type: string
+                    format: date-time
         '503':
           description: AI provider unavailable
           content:

@@ -727,6 +727,30 @@ const API = {
         avoid,
       }, { timeout: 100000 });
     },
+    async getPremiumStatus() {
+      return API.request('GET', '/api/ai/premium/status');
+    },
+    async assistGoal(cardId, position, mode, notes = '') {
+      return API.request('POST', '/api/ai/assist', {
+        card_id: cardId,
+        position,
+        mode,
+        notes,
+      }, { timeout: 100000 });
+    },
+    async regenerate(payload) {
+      return API.request('POST', '/api/ai/regenerate', payload, { timeout: 100000 });
+    },
+    async fillEmpty(cardId, category, focus, difficulty, budget, context) {
+      return API.request('POST', '/api/ai/fill-empty', {
+        card_id: cardId,
+        category,
+        focus,
+        difficulty,
+        budget,
+        context,
+      }, { timeout: 100000 });
+    },
   },
 };
 

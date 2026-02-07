@@ -91,6 +91,6 @@ The following security controls are in place; be aware of them when modifying re
 - Feature flags / Entitlements pattern: `plans/feature_flag.md`
 - Export: `plans/export.md`
 - Account deletion: `plans/delete_account.md`
-- AI (wizard/assist, gating, rate limits): `plans/ai_goals.md` and `plans/ai_guide.md`
+- AI (wizard/guide + premium assist/regenerate/fill, gating, rate limits): `plans/ai_goals.md`, `plans/ai_guide.md`, and `plans/premium_ai.md`
 - Playwright “coverage map”: `plans/playwright.md`
 - XSS hardening notes/checklist: `plans/update_xss.md`
