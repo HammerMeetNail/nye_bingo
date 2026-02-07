@@ -51,6 +51,24 @@ func TestAIPremiumStatus_PremiumRequired(t *testing.T) {
 	}
 }
 
+func TestAIPremiumStatus_FeatureSwitchDisabled(t *testing.T) {
+	withAIEnhancementsEnabled(t, false)
+	mockService := &MockAIService{}
+	handler := NewAIHandler(mockService)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/premium/status", nil)
+	req = req.WithContext(SetUserInContext(req.Context(), premiumUser()))
+	w := httptest.NewRecorder()
+
+	handler.PremiumStatus(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+	if mockService.GetPremiumStatusCalls != 0 {
+		t.Fatalf("expected no premium status service call when feature switch is disabled")
+	}
+}
+
 func TestAIPremiumStatus_Success(t *testing.T) {
 	withAIEnhancementsEnabled(t, true)
 	mockService := &MockAIService{
@@ -159,6 +177,33 @@ func TestAIAssistPremium_RequiresPositionField(t *testing.T) {
 	}
 	if mockService.AssistCalls != 0 {
 		t.Fatalf("assist should not be called when position is missing")
+	}
+}
+
+func TestAIAssistPremium_FeatureSwitchDisabled(t *testing.T) {
+	withAIEnhancementsEnabled(t, false)
+	mockService := &MockAIService{}
+	handler := NewAIHandler(mockService)
+
+	body := map[string]any{
+		"card_id":  uuid.New().String(),
+		"position": 1,
+		"mode":     "next_step",
+	}
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/assist", bytes.NewBuffer(raw))
+	req = req.WithContext(SetUserInContext(req.Context(), premiumUser()))
+	w := httptest.NewRecorder()
+
+	handler.Assist(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", w.Code)
+	}
+	if mockService.ReservePremiumCalls != 0 {
+		t.Fatalf("expected no premium reserve call when feature switch is disabled")
+	}
+	if mockService.AssistCalls != 0 {
+		t.Fatalf("expected no assist service call when feature switch is disabled")
 	}
 }
 

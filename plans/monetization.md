@@ -10,9 +10,9 @@
 - **TDD-first**: new billing logic is covered by unit tests; webhook handling is fully testable and idempotent.
 - **Positive UX**: clear value, easy upgrade/cancel, no dark patterns, no spammy nags.
 
-## Current Status (Implemented Foundation)
+## Current Status (Implemented Foundation + Premium AI Enhancements)
 
-As of **January 31, 2026**, the billing + entitlement **foundation is implemented** behind `BILLING_ENABLED` (default `false`).
+As of **February 7, 2026**, the billing + entitlement foundation is implemented behind `BILLING_ENABLED` (default `false`), and Premium AI Enhancements are implemented behind the `ai_enhancements` entitlement + feature switch.
 
 **Implemented (code-as-built):**
 - DB: `migrations/000021_billing_stripe.up.sql` / `.down.sql` (user billing fields + `stripe_webhook_events` + `premium_codes`).
@@ -22,7 +22,7 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
   - entitlement model + premium checks:
     - tier signal: `billing.IsPremium(user, now)`
     - feature gates: `billing.HasFeature(user, now, feature)`
-    - currently shipped feature flags include `templates` and `edit_after_finalize`
+    - currently shipped feature flags include `templates`, `edit_after_finalize`, and `ai_enhancements`
   - webhook signature verification (HMAC) + idempotency via `stripe_webhook_events`
   - premium code redemption (hashed codes, one-time, transactional)
 - Stripe integration: implemented via a small Stripe **HTTP API client** (`internal/services/billing/stripe_client.go`) rather than `stripe-go` (no SDK dependency).
@@ -47,6 +47,24 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
   - Finalized cards include an **Edit** (Premium) action that opens a modal and creates an editable draft via `/api/cards/{id}/edit`
   - Billing UI messaging is source-aware (renew vs active-until vs expires vs no-expiration)
   - Premium badge shown for account holder and friends (friends list + friend card view)
+- Premium AI Enhancements (implemented):
+  - Backend endpoints:
+    - `GET /api/ai/premium/status`
+    - `POST /api/ai/assist`
+    - `POST /api/ai/regenerate`
+    - `POST /api/ai/fill-empty`
+  - Uses monthly allowance tracking table: `ai_premium_usage_monthly`
+  - Uses feature-level AI logging tags in `ai_generation_logs.feature`
+  - Server-side enforcement:
+    - Premium entitlement check via `billing.HasFeature(..., billing.FeatureAIEnhancements)`
+    - Global feature switch `FEATURE_AI_ENHANCEMENTS_ENABLED`
+    - Dedicated premium AI rate limiter `AI_PREMIUM_ENDPOINT_RATE_LIMIT`
+  - Frontend behavior:
+    - Goal Assistant in goal modal
+    - Wizard per-goal Regenerate
+    - Draft-card AI Fill Empty
+    - Premium AI usage meter on Premium/Profile screens
+  - E2E coverage: `tests/e2e/ai-premium.spec.js`
 - Auth responses include `is_premium` (for the current session user): `internal/handlers/auth.go`.
 - Owner/admin scripts: `scripts/create_premium_codes/`, `scripts/grant_premium/`, `scripts/revoke_premium/`.
   - Convenience make targets added:
@@ -57,7 +75,6 @@ As of **January 31, 2026**, the billing + entitlement **foundation is implemente
 
 **Not implemented yet (planned for later / still TODO):**
 - Additional webhook event handling for invoices (`invoice.payment_*`) and any richer Stripe state sync beyond subscription + checkout completion.
-- Remaining premium roadmap features (for example, premium AI in `plans/premium_ai.md`).
 
 ## Decisions (Owner Inputs)
 

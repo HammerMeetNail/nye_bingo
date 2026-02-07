@@ -14,6 +14,26 @@ This plan is **additive**: existing functionality stays free and unchanged. Prem
 - Billing + entitlements foundation exists (see `plans/monetization.md`).
 - Existing AI endpoint `/api/ai/generate` remains session-only and works as implemented.
 
+## Current Status (Implemented)
+
+As of **February 7, 2026**, this feature set is implemented in code:
+- Migration shipped as `migrations/000023_ai_premium_enhancements.*.sql`.
+- Premium AI endpoints shipped:
+  - `GET /api/ai/premium/status`
+  - `POST /api/ai/assist`
+  - `POST /api/ai/regenerate`
+  - `POST /api/ai/fill-empty`
+- Feature gating + flagging are active:
+  - entitlement gate: `billing.FeatureAIEnhancements` / `billing.HasFeature(...)`
+  - global kill switch: `FEATURE_AI_ENHANCEMENTS_ENABLED`
+- Dedicated premium AI rate limiter is active via `AI_PREMIUM_ENDPOINT_RATE_LIMIT`.
+- Frontend UI shipped for Goal Assistant, per-goal Regenerate, AI Fill Empty, and usage meter.
+- Playwright E2E coverage shipped in `tests/e2e/ai-premium.spec.js`.
+
+Post-implementation handler correctness fixes were also applied:
+- required-field presence checks for `assist.position` and `regenerate.replace_index`
+- rollover-safe premium refund accounting by reusing reservation timestamp/month on refund
+
 ---
 
 ## User-Facing Product Promise (Keep It Simple)
@@ -101,6 +121,8 @@ Add:
 - `AI_PREMIUM_ENHANCEMENTS_PER_MONTH` (default: `100`)
 - `AI_PREMIUM_ENDPOINT_RATE_LIMIT` (optional; default: `60` per hour)  
   Protective anti-abuse limiter for premium endpoints only (not marketed as a product limit).
+- `FEATURE_AI_ENHANCEMENTS_ENABLED` (default: `true`)  
+  Global premium AI feature switch (kill switch without disabling billing globally).
 
 Keep existing:
 - `AI_RATE_LIMIT` (current `/api/ai/generate` limiter)
@@ -109,8 +131,8 @@ Keep existing:
 
 ## Database Plan
 
-### Migration (suggested): `000016_ai_premium_enhancements.*.sql`
-If templates migration is `000015_*`, use `000016_*`. Otherwise choose the next number.
+### Migration (implemented): `000023_ai_premium_enhancements.*.sql`
+This plan originally proposed `000016_*`; the implemented migration number is `000023_*`.
 
 #### 1) Track premium AI enhancements usage per month (UTC)
 ```sql
@@ -152,7 +174,7 @@ This section is intentionally copy/paste oriented for a less-capable implementat
 - Modify `internal/config/config.go` to add env vars:
   - `AI_PREMIUM_ENHANCEMENTS_PER_MONTH`
   - `AI_PREMIUM_ENDPOINT_RATE_LIMIT`
-- Add migration `migrations/000016_ai_premium_enhancements.up.sql` + down migration.
+- Add migration `migrations/000023_ai_premium_enhancements.up.sql` + down migration.
 - Modify `internal/services/ai/errors.go` to add Premium allowance errors.
 - Modify `internal/services/ai/gemini.go` to add new AI methods + logging feature field.
 - Modify `internal/handlers/ai.go` to add new endpoints.
