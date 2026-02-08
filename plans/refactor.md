@@ -397,7 +397,7 @@ Legend:
     - `go test ./internal/services -count=1`
     - `go test ./...`
 
-- [ ] `B6` Add focused tests for extracted card domains (`M`, `Behavioral`)
+- [x] `B6` Add focused tests for extracted card domains (`M`, `Behavioral`)
   - Scope:
     - Add/expand tests per extracted area to reduce future regression risk.
   - Validation:
