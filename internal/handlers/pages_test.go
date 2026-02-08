@@ -37,17 +37,11 @@ func TestPageHandler_IndexAndErrors(t *testing.T) {
 		if !containsAll(body, []string{`property="og:image"`, `/og/default.png`, `name="twitter:card"`}) {
 			t.Fatalf("expected OpenGraph/Twitter meta tags to be present")
 		}
-		if !containsAll(body, []string{`/static/js/app.js`, `/static/js/app-core.js`, `/static/js/app-auth.js`, `/static/js/app-cards.js`}) {
-			t.Fatalf("expected app module script tags to be present")
+		if !containsAll(body, []string{`/static/js/app.js`}) {
+			t.Fatalf("expected app.js script tag to be present")
 		}
-		appIdx := strings.Index(body, `/static/js/app.js`)
-		coreIdx := strings.Index(body, `/static/js/app-core.js`)
-		cardsIdx := strings.Index(body, `/static/js/app-cards.js`)
-		if appIdx < 0 || coreIdx < 0 || cardsIdx < 0 {
-			t.Fatalf("expected app.js and module scripts in body")
-		}
-		if appIdx >= coreIdx || coreIdx >= cardsIdx {
-			t.Fatalf("expected deterministic script order app.js -> app-core.js -> app-cards.js")
+		if containsAny(body, []string{`/static/js/app-core.js`, `/static/js/app-auth.js`, `/static/js/app-cards.js`}) {
+			t.Fatalf("expected split app module scripts to be excluded until app.js extraction is complete")
 		}
 	})
 
@@ -226,4 +220,13 @@ func containsAll(s string, needles []string) bool {
 		}
 	}
 	return true
+}
+
+func containsAny(s string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
 }

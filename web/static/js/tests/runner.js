@@ -509,25 +509,36 @@ describe('Premium navigation + page wiring', () => {
 });
 
 describe('Module boundaries + action dispatch', () => {
+  const moduleFiles = [
+    'app-core.js',
+    'app-actions.js',
+    'app-modals.js',
+    'app-notifications.js',
+    'app-reminders.js',
+    'app-friends.js',
+    'app-billing.js',
+    'app-templates.js',
+    'app-ai.js',
+    'app-auth.js',
+    'app-cards.js',
+  ];
+
   function readAppModule(fileName) {
     const filePath = path.join(__dirname, '..', fileName);
     return fs.readFileSync(filePath, 'utf8');
   }
 
+  function extractAssignedMethodNames(source) {
+    const methods = new Set();
+    const methodPattern = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm;
+    let match;
+    while ((match = methodPattern.exec(source)) !== null) {
+      methods.add(match[1]);
+    }
+    return methods;
+  }
+
   test('module scaffold files use App composition pattern', () => {
-    const moduleFiles = [
-      'app-core.js',
-      'app-actions.js',
-      'app-modals.js',
-      'app-notifications.js',
-      'app-reminders.js',
-      'app-friends.js',
-      'app-billing.js',
-      'app-templates.js',
-      'app-ai.js',
-      'app-auth.js',
-      'app-cards.js',
-    ];
     moduleFiles.forEach((fileName) => {
       const source = readAppModule(fileName);
       expect(source.includes('Object.assign(App, {')).toBe(true);
@@ -549,11 +560,34 @@ describe('Module boundaries + action dispatch', () => {
       'app-auth.js',
       'app-cards.js',
     ];
+    const forbiddenPattern = /\b(?:const|let)\s+App\s*=\s*window\.App\b/;
+    const requiredPattern = /\bvar\s+App\s*=\s*window\.App\b/;
     appFiles.forEach((fileName) => {
       const source = readAppModule(fileName);
-      expect(source.includes('const App = window.App;')).toBe(false);
-      expect(source.includes('var App = window.App;')).toBe(true);
+      expect(forbiddenPattern.test(source)).toBe(false);
+      expect(requiredPattern.test(source)).toBe(true);
     });
+  });
+
+  test('templates must not load overlapping app.js and app-*.js methods together', () => {
+    const appSource = readAppModule('app.js');
+    const appMethods = extractAssignedMethodNames(appSource);
+    const moduleMethods = new Set();
+    moduleFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      extractAssignedMethodNames(source).forEach((methodName) => moduleMethods.add(methodName));
+    });
+
+    const overlap = [...appMethods].filter((methodName) => moduleMethods.has(methodName));
+    const indexTemplatePath = path.join(__dirname, '..', '..', '..', 'templates', 'index.html');
+    const indexTemplate = fs.readFileSync(indexTemplatePath, 'utf8');
+    const loadsModuleRange = indexTemplate.includes('{{range .AppModuleJSPaths}}');
+
+    if (loadsModuleRange && overlap.length > 0) {
+      throw new Error(
+        `index.html loads AppModuleJSPaths while ${overlap.length} App methods overlap app.js and app-*.js`
+      );
+    }
   });
 
   test('domain modules contain representative extracted methods', () => {
