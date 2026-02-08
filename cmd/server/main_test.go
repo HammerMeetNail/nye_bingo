@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -141,5 +142,26 @@ func TestResolveRemindersPollInterval_Invalid(t *testing.T) {
 	})
 	if interval != time.Minute {
 		t.Fatalf("expected 1m, got %s", interval)
+	}
+}
+
+func TestRun_BillingValidationErrorReturnsEarly(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("BILLING_ENABLED", "true")
+	t.Setenv("STRIPE_SECRET_KEY", "")
+	t.Setenv("STRIPE_WEBHOOK_SECRET", "")
+	t.Setenv("STRIPE_PREMIUM_PRICE_MONTHLY", "")
+	t.Setenv("STRIPE_PREMIUM_PRICE_YEARLY", "")
+	t.Setenv("STRIPE_PREMIUM_PRICE_LIFETIME", "")
+	t.Setenv("STRIPE_TIP_PRICE_5", "")
+	t.Setenv("STRIPE_TIP_PRICE_10", "")
+	t.Setenv("STRIPE_TIP_PRICE_20", "")
+
+	err := run()
+	if err == nil {
+		t.Fatal("expected run to fail for missing billing config")
+	}
+	if !strings.Contains(err.Error(), "billing enabled but missing required env vars") {
+		t.Fatalf("expected billing config validation error, got %v", err)
 	}
 }

@@ -50,6 +50,9 @@ func TestManifestLoadMissingFile(t *testing.T) {
 	if got := m.GetAPIJS(); got != "/static/js/api.js" {
 		t.Fatalf("expected fallback path for api.js, got %s", got)
 	}
+	if got := m.GetAppJS(); got != "/static/js/app.js" {
+		t.Fatalf("expected fallback path for app.js, got %s", got)
+	}
 }
 
 func TestManifestLoadInvalidJSON(t *testing.T) {

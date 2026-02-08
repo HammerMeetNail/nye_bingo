@@ -37,6 +37,12 @@ func TestPageHandler_IndexAndErrors(t *testing.T) {
 		if !containsAll(body, []string{`property="og:image"`, `/og/default.png`, `name="twitter:card"`}) {
 			t.Fatalf("expected OpenGraph/Twitter meta tags to be present")
 		}
+		if !containsAll(body, []string{`/static/js/app.js`}) {
+			t.Fatalf("expected app.js script tag to be present")
+		}
+		if containsAny(body, []string{`/static/js/app-core.js`, `/static/js/app-auth.js`, `/static/js/app-cards.js`}) {
+			t.Fatalf("expected split app module scripts to be excluded until app.js extraction is complete")
+		}
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -214,4 +220,13 @@ func containsAll(s string, needles []string) bool {
 		}
 	}
 	return true
+}
+
+func containsAny(s string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
 }

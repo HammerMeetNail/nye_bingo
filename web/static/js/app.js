@@ -1,6 +1,9 @@
 // Year of Bingo - Main Application
 
-const App = {
+window.App = window.App || {};
+var App = window.App;
+
+Object.assign(App, {
   user: null,
   isPremium: false,
   entitlements: {},
@@ -1535,7 +1538,7 @@ const App = {
             <p class="reminder-goal-text">${goalText}</p>
             <p class="reminder-goal-meta">${cardName} - ${this.escapeHtml(nextSend)}</p>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${reminder.id}">Stop</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${this.escapeHtml(reminder.id)}">Stop</button>
         </div>
       `;
     }).join('');
@@ -1833,6 +1836,26 @@ const App = {
 
     if (titleEl) titleEl.textContent = title;
     if (bodyEl) bodyEl.innerHTML = content;
+    if (bodyEl) bodyEl.scrollTop = 0;
+    if (overlay) overlay.scrollTop = 0;
+    this.modalScrollY = window.scrollY || window.pageYOffset || 0;
+    if (overlay) overlay.classList.add('modal-overlay--visible');
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${this.modalScrollY}px`;
+  },
+
+  openModalSafe(title, contentNode) {
+    const overlay = document.getElementById('modal-overlay');
+    const titleEl = document.getElementById('modal-title');
+    const bodyEl = document.getElementById('modal-body');
+
+    if (titleEl) titleEl.textContent = title;
+    if (bodyEl) {
+      bodyEl.replaceChildren();
+      if (contentNode instanceof Node) {
+        bodyEl.appendChild(contentNode);
+      }
+    }
     if (bodyEl) bodyEl.scrollTop = 0;
     if (overlay) overlay.scrollTop = 0;
     this.modalScrollY = window.scrollY || window.pageYOffset || 0;
@@ -3038,14 +3061,14 @@ const App = {
 	    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
 	    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
 	    const isSelected = this.selectedCards.includes(card.id);
-	    const cardLink = card.is_archived ? `/archive-card/${card.id}` : `/card/${card.id}`;
+    const cardLink = card.is_archived ? `/archive-card/${encodeURIComponent(card.id)}` : `/card/${encodeURIComponent(card.id)}`;
 
     return `
       <div class="card dashboard-card-preview">
         <div class="dashboard-card-preview-header">
           <div class="dashboard-card-preview-main">
             <label class="dashboard-checkbox-label" data-stop-propagation="true">
-              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
+              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${this.escapeHtml(card.id)}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
             </label>
             <a href="${cardLink}" class="dashboard-card-preview-link">
               <div class="dashboard-card-preview-title-row">
@@ -3065,7 +3088,7 @@ const App = {
               <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
             </span>
             ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
-            <button class="btn btn-ghost btn-sm dashboard-delete-btn" data-action="delete-card" data-card-id="${card.id}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
+            <button class="btn btn-ghost btn-sm dashboard-delete-btn" data-action="delete-card" data-card-id="${this.escapeHtml(card.id)}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -3426,6 +3449,14 @@ const App = {
   },
 
   // Get display name for a card (title if set, otherwise "YYYY Bingo Card")
+  getCardDisplayNameRaw(card) {
+    if (card.title) {
+      return card.title;
+    }
+    return `${card.year} Bingo Card`;
+  },
+
+  // Get display name for HTML contexts
   getCardDisplayName(card) {
     if (card.title) {
       return this.escapeHtml(card.title);
@@ -3456,7 +3487,7 @@ const App = {
     try {
       const response = await API.cards.get(cardId);
       if (response.card) {
-        cardName = this.getCardDisplayName(response.card);
+        cardName = this.getCardDisplayNameRaw(response.card);
       }
     } catch (e) {
       // Ignore - use default name
@@ -3859,7 +3890,7 @@ const App = {
           <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         </div>
         ${!isAnon ? `
-          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}">
+          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}">
             <i class="fas fa-${this.currentCard.visible_to_friends ? 'eye' : 'eye-slash'}"></i>
             <span>${this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private'}</span>
           </button>
@@ -3905,10 +3936,10 @@ const App = {
               <button class="btn btn-secondary" data-action="show-clone-card-modal">
                 📄 Clone
               </button>
-              <button class="btn btn-secondary" data-action="save-template-from-card" data-card-id="${this.currentCard.id}" ${itemCount === 0 ? 'disabled' : ''}>
+              <button class="btn btn-secondary" data-action="save-template-from-card" data-card-id="${this.escapeHtml(this.currentCard.id)}" ${itemCount === 0 ? 'disabled' : ''}>
                 ⭐ Save Template
               </button>
-              <button class="btn btn-secondary" data-action="show-rollover-card-modal" data-card-id="${this.currentCard.id}" ${itemCount === 0 ? 'disabled' : ''}>
+              <button class="btn btn-secondary" data-action="show-rollover-card-modal" data-card-id="${this.escapeHtml(this.currentCard.id)}" ${itemCount === 0 ? 'disabled' : ''}>
                 📅 Rollover
               </button>
             ` : ''}
@@ -3926,7 +3957,7 @@ const App = {
                     🧙 AI
                   </button>
                 ` : `
-                  <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.currentCard.id}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
+                  <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
                     🧙 AI
                   </button>
                   ${this.hasFeature('ai_enhancements') ? `
@@ -4160,10 +4191,10 @@ const App = {
         <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
         <button class="btn btn-ghost btn-sm" data-action="show-edit-finalized-card-modal" title="Edit finalized card (Premium)">📝</button>
-        <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.currentCard.id}" title="Save as template">⭐</button>
-        <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.currentCard.id}" title="New Year rollover">📅</button>
+        <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="Save as template">⭐</button>
+        <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="New Year rollover">📅</button>
         <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
-        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}" aria-label="${visibilityLabel}">
+        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}" aria-label="${visibilityLabel}">
           <i class="fas fa-${visibilityIcon}"></i>
           <span>${visibilityLabel}</span>
         </button>
@@ -4305,7 +4336,7 @@ const App = {
         if (item) {
           const isCompleted = item.is_completed;
           const shortText = this.truncateText(item.content, 50);
-          const itemIdAttr = item.id ? `data-item-id="${item.id}"` : '';
+          const itemIdAttr = item.id ? `data-item-id="${this.escapeHtml(item.id)}"` : '';
           cells.push(`
             <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
                  data-position="${i}"
@@ -4477,17 +4508,17 @@ const App = {
         ${note}
         ${status ? `<p class="text-muted" id="goal-reminder-status">${status}</p>` : ''}
         <div class="reminder-presets">
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="tomorrow" ${disableAttr}>Tomorrow morning</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="week" ${disableAttr}>Next week</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="month" ${disableAttr}>Next month</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="tomorrow" ${disableAttr}>Tomorrow morning</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="week" ${disableAttr}>Next week</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="month" ${disableAttr}>Next month</button>
         </div>
         <div class="reminder-custom">
           <input type="datetime-local" id="reminder-custom-datetime" class="form-input" ${disableAttr}>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="custom" ${disableAttr}>Set custom reminder</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="custom" ${disableAttr}>Set custom reminder</button>
         </div>
         <p class="text-muted">Reminder times use the server clock.</p>
         ${existing ? `
-          <button type="button" class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${existing.id}" ${disableAttr}>Stop reminders for this goal</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${this.escapeHtml(existing.id)}" ${disableAttr}>Stop reminders for this goal</button>
         ` : ''}
       </div>
     `;
@@ -6391,13 +6422,13 @@ const App = {
         </div>
         <p class="mb-lg">What would you like to do?</p>
         <div class="flex flex-col gap-075">
-          <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${existingCard.id}">
+          <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${this.escapeHtml(existingCard.id)}">
             Keep Existing Card
           </button>
           <button class="btn btn-primary" data-action="conflict-save-as-new">
             Save as New Card (with different title)
           </button>
-          <button class="btn btn-ghost btn-ghost-danger" data-action="conflict-replace" data-card-id="${existingCard.id}">
+          <button class="btn btn-ghost btn-ghost-danger" data-action="conflict-replace" data-card-id="${this.escapeHtml(existingCard.id)}">
             Replace Existing Card
           </button>
           <button class="btn btn-ghost" data-action="close-modal">
@@ -6524,7 +6555,7 @@ const App = {
     this.createConflictContext = { year, category };
 
     let buttons = `
-      <button class="btn btn-secondary" data-action="create-conflict-go-to-existing" data-card-id="${existingCard.id}">
+      <button class="btn btn-secondary" data-action="create-conflict-go-to-existing" data-card-id="${this.escapeHtml(existingCard.id)}">
         Go to Existing Card
       </button>
       <button class="btn btn-primary" data-action="create-conflict-save-as-new">
@@ -6534,7 +6565,7 @@ const App = {
     // Only offer replace for unfinalized cards
     if (!existingCard.is_finalized) {
       buttons += `
-        <button class="btn btn-ghost btn-ghost-danger" data-action="create-conflict-replace" data-card-id="${existingCard.id}">
+        <button class="btn btn-ghost btn-ghost-danger" data-action="create-conflict-replace" data-card-id="${this.escapeHtml(existingCard.id)}">
           Delete &amp; Create New
         </button>`;
     }
@@ -6865,7 +6896,7 @@ const App = {
             <div>
               <strong>${this.escapeHtml(user.username)}</strong>
             </div>
-            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${user.id}">
+            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${this.escapeHtml(user.id)}">
               Add Friend
             </button>
           </div>
@@ -6933,7 +6964,7 @@ const App = {
               ${invite.expires_at ? `Expires ${new Date(invite.expires_at).toLocaleDateString()}` : 'No expiration'}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${invite.id}">Revoke</button>
+          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${this.escapeHtml(invite.id)}">Revoke</button>
         </div>
       `).join('');
     } catch (error) {
@@ -6970,7 +7001,7 @@ const App = {
           <div>
             <strong>${this.escapeHtml(user.username)}</strong>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${user.id}">Unblock</button>
+          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${this.escapeHtml(user.id)}">Unblock</button>
         </div>
       `).join('');
     } catch (error) {
@@ -7009,8 +7040,8 @@ const App = {
               <strong>${this.escapeHtml(req.requester_username)}</strong>
             </div>
             <div class="friend-actions">
-              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${req.id}">Accept</button>
-              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>
+              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${this.escapeHtml(req.id)}">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${this.escapeHtml(req.id)}">Reject</button>
             </div>
           </div>
         `).join('');
@@ -7028,7 +7059,7 @@ const App = {
             <div>
               <strong>${this.escapeHtml(req.friend_username)}</strong>
             </div>
-            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${req.id}">Cancel</button>
+            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${this.escapeHtml(req.id)}">Cancel</button>
           </div>
         `).join('');
       } else {
@@ -7048,9 +7079,9 @@ const App = {
                 <strong>${friendName} ${premiumBadge}</strong>
               </div>
               <div class="friend-actions">
-                <a href="/friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${friend.id}">Remove</button>
-                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${otherUserId}">Block</button>
+                <a href="/friend-card/${encodeURIComponent(friend.id)}" class="btn btn-secondary btn-sm">View Card</a>
+                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${this.escapeHtml(friend.id)}">Remove</button>
+                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${this.escapeHtml(otherUserId)}">Block</button>
               </div>
             </div>
           `;
@@ -7310,9 +7341,9 @@ const App = {
         <div class="emoji-buttons">
           ${this.allowedEmojis.map(emoji => `
             <button class="emoji-btn ${userReaction?.emoji === emoji ? 'emoji-btn--selected' : ''}"
-                    data-action="react-item" data-item-id="${itemId}" data-emoji="${emoji}">${emoji}</button>
+                    data-action="react-item" data-item-id="${this.escapeHtml(itemId)}" data-emoji="${emoji}">${emoji}</button>
           `).join('')}
-          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${itemId}">✕</button>` : ''}
+          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${this.escapeHtml(itemId)}">✕</button>` : ''}
         </div>
       </div>
     ` : '';
@@ -7939,6 +7970,24 @@ const App = {
     this.setUpgradeModalState(modal, { tipAmount: amount });
   },
 
+  isTrustedBillingRedirectURL(rawURL) {
+    try {
+      const url = new URL(rawURL);
+      if (url.protocol !== 'https:') return false;
+      return url.hostname === 'checkout.stripe.com' || url.hostname === 'billing.stripe.com';
+    } catch (_err) {
+      return false;
+    }
+  },
+
+  redirectToTrustedBillingURL(rawURL) {
+    if (!this.isTrustedBillingRedirectURL(rawURL)) {
+      this.toast('Unexpected billing redirect URL', 'error');
+      return;
+    }
+    window.location.assign(rawURL);
+  },
+
   async startSelectedCheckout(target) {
     const modal = target?.closest?.('.upgrade-modal') || document.getElementById('upgrade-modal');
     if (!modal) return;
@@ -7962,7 +8011,7 @@ const App = {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createCheckoutSession(payload);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -7974,7 +8023,7 @@ const App = {
     try {
       const resp = await API.billing.createPortalSession();
       if (resp?.url) {
-        window.location.href = resp.url;
+        this.redirectToTrustedBillingURL(resp.url);
       }
     } catch (error) {
       this.toast(error.message, 'error');
@@ -7991,7 +8040,7 @@ const App = {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createSubscriptionCheckoutSession(interval);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -8002,7 +8051,7 @@ const App = {
   async startLifetimeCheckout() {
     try {
       const resp = await API.billing.createLifetimeCheckoutSession();
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -8017,7 +8066,7 @@ const App = {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createTipCheckoutSession(amount);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -8149,7 +8198,7 @@ const App = {
           <div class="card-header-actions">
             <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
             ${showShare ? '<button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>' : ''}
-            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
             </button>
@@ -8415,43 +8464,57 @@ const App = {
 
     try {
       const response = await API.tokens.list();
-	      const tokens = response.tokens || [];
+      const tokens = response.tokens || [];
+      const scopeClasses = {
+        read: 'scope-read',
+        write: 'scope-write',
+        read_write: 'scope-read_write',
+      };
+      const scopeLabels = {
+        read: 'read',
+        write: 'write',
+        read_write: 'read & write',
+      };
 
-	      if (tokens.length === 0) {
-	        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
-	        return;
-	      }
+      if (tokens.length === 0) {
+        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
+        return;
+      }
 
-	      listEl.innerHTML = tokens.map(token => `
-	        <div class="token-item">
-	          <div class="token-info">
-	            <div class="fw-medium">${this.escapeHtml(token.name)}</div>
-	            <div class="token-meta text-muted text-sm">
-	              <code>${this.escapeHtml(token.token_prefix)}...</code>
-	              <span>•</span>
-	              <span class="token-scope scope-${token.scope}">${token.scope.replace('_', ' & ')}</span>
-	              <span>•</span>
-	              <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
-	            </div>
-	            <div class="token-meta text-muted text-sm">
-	              Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
-	            </div>
-	          </div>
-	          <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
-	            <i class="fas fa-trash"></i>
-	          </button>
-	        </div>
-	      `).join('');
+      listEl.innerHTML = tokens.map(token => {
+        const scopeClass = scopeClasses[token.scope] || 'scope-unknown';
+        const scopeLabel = scopeLabels[token.scope] || 'unknown';
+        return `
+          <div class="token-item">
+            <div class="token-info">
+              <div class="fw-medium">${this.escapeHtml(token.name)}</div>
+              <div class="token-meta text-muted text-sm">
+                <code>${this.escapeHtml(token.token_prefix)}...</code>
+                <span>•</span>
+                <span class="token-scope ${scopeClass}">${this.escapeHtml(scopeLabel)}</span>
+                <span>•</span>
+                <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
+              </div>
+              <div class="token-meta text-muted text-sm">
+                Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${this.escapeHtml(token.id)}" title="Revoke Token">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
 
-	      // Add Revoke All button if tokens exist
-	      if (tokens.length > 1) {
-	          listEl.innerHTML += `
-	            <div class="mt-md text-right">
-	                <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
-	            </div>
-	          `;
-	      }
-	    } catch (error) {
+      // Add Revoke All button if tokens exist
+      if (tokens.length > 1) {
+        listEl.innerHTML += `
+          <div class="mt-md text-right">
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
+          </div>
+        `;
+      }
+    } catch (error) {
       listEl.innerHTML = '<p class="text-muted text-danger" id="tokens-error"></p>';
       const errorEl = document.getElementById('tokens-error');
       if (errorEl) errorEl.textContent = `Failed to load tokens: ${error.message}`;
@@ -9204,7 +9267,7 @@ const App = {
     }
 
     const cardOptions = cards.map((card) => {
-      const label = `${this.escapeHtml(this.getCardDisplayName(card))} (${this.escapeHtml(String(card.year))})`;
+      const label = `${this.escapeHtml(this.getCardDisplayNameRaw(card))} (${this.escapeHtml(String(card.year))})`;
       return `<option value="${this.escapeHtml(card.id)}">${label}</option>`;
     }).join('');
 
@@ -9337,7 +9400,7 @@ const App = {
     } catch (error) {
       card = this.currentCard && this.currentCard.id === cardId ? this.currentCard : null;
     }
-    const suggestedName = card ? `${this.getCardDisplayName(card)} Template` : 'New template';
+    const suggestedName = card ? `${this.getCardDisplayNameRaw(card)} Template` : 'New template';
 
     this.openModal('Save as template', `
       <form data-action="create-template-from-card" data-card-id="${this.escapeHtml(cardId)}">
@@ -10325,7 +10388,7 @@ const App = {
       }
     });
   },
-};
+});
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {

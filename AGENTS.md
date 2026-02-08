@@ -11,6 +11,8 @@ Year of Bingo (yearofbingo.com) is a Go + vanilla JS web app for creating annual
 - Backend code: `internal/` (handlers, services, middleware, database, models)
 - DB migrations: `migrations/`
 - Frontend SPA: `web/templates/` + `web/static/` (vanilla JS, path-based routing with legacy hash migration)
+  - Production wiring currently loads `web/static/js/app.js` from `web/templates/index.html`.
+  - Split files `web/static/js/app-*.js` are scaffolds (not template-loaded yet); keep parity when touching extracted areas.
 - OAuth (Google OIDC): `/api/auth/{provider}` handlers + `internal/services/oidc.go`; OIDC mock lives in `tests/oidc/`
 - Docs/specs: `agent_docs/` (how we work) and `plans/` (feature specs)
 - Tests: `make test` (wraps `./scripts/test.sh`), `tests/e2e/`, `web/static/js/tests/`
@@ -58,7 +60,7 @@ When testing billing/checkout flows locally:
 Files: `scripts/stripe-setup.sh`, `internal/services/billing/*`, `internal/handlers/billing.go`
 
 ## Non-negotiables (security + correctness)
-- No inline `<script>` and no HTML event handlers (`onclick=`, `onsubmit=`, etc.); use existing `data-action` delegation in `web/static/js/app.js`.
+- No inline `<script>` and no HTML event handlers (`onclick=`, `onsubmit=`, etc.); use the existing `data-action` delegation pattern (`App.setupActionDelegation` in `web/static/js/app.js`, mirrored in scaffold `web/static/js/app-actions.js`).
 - No inline `style="..."` attributes; use CSS classes instead (CSP disallows `style-src 'unsafe-inline'`).
 - Treat all server/user data as untrusted; prefer DOM APIs (`textContent`, `createElement`) or escape with `App.escapeHtml` (avoid `innerHTML`).
 - For values used in routing decisions, class names, or `data-*` attributes, prefer whitelists/mappings over "escaping".

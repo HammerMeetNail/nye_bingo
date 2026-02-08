@@ -66,37 +66,34 @@ function expect(actual) {
   };
 }
 
+let appForUtilityTests = null;
+
+function getAppForUtilityTests() {
+  if (appForUtilityTests) return appForUtilityTests;
+  if (typeof globalThis.__loadBrowserAppForTests !== 'function') {
+    throw new Error('Browser app loader is not initialized');
+  }
+  const { App } = globalThis.__loadBrowserAppForTests();
+  appForUtilityTests = App;
+  return appForUtilityTests;
+}
+
 // ============================================================
 // UTILITY FUNCTIONS TO TEST (extracted from app.js)
 // ============================================================
 
 function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return getAppForUtilityTests().escapeHtml(text);
 }
 
 function truncateText(text, maxLength) {
-  if (text.length <= maxLength) return text;
-  const truncated = text.substring(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(' ');
-  if (lastSpace > maxLength * 0.5) {
-    return truncated.substring(0, lastSpace) + '…';
-  }
-  return truncated + '…';
+  return getAppForUtilityTests().truncateText(text, maxLength);
 }
 
 function parsePath(path) {
-  if (!path) return { page: 'home', params: [] };
-  let cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  if (cleanPath.endsWith('/')) {
-    cleanPath = cleanPath.slice(0, -1);
-  }
-  const [page, ...params] = cleanPath.split('/');
-  return { page: page || 'home', params };
+  const normalizedPath = path || '/';
+  const route = getAppForUtilityTests().getRouteFromPath(normalizedPath, '');
+  return { page: route.page, params: route.params };
 }
 
 function isValidPosition(position) {
@@ -273,7 +270,7 @@ describe('Premium navigation + page wiring', () => {
     }
   }
 
-  function loadBrowserApp() {
+  function loadBrowserApp(options = {}) {
     const doc = new MockDocument();
     doc._byID.set('nav', new MockElement(doc, { id: 'nav', tagName: 'NAV' }));
     doc._byID.set('main-container', new MockElement(doc, { id: 'main-container' }));
@@ -309,12 +306,34 @@ describe('Premium navigation + page wiring', () => {
       clearInterval,
     };
 
-    const appJsPath = path.join(__dirname, '..', 'app.js');
-    const code = fs.readFileSync(appJsPath, 'utf8') + '\n;globalThis.__AppForTests = App;\n';
     vm.createContext(context);
-    vm.runInContext(code, context, { filename: 'app.js' });
 
-    const AppForTests = context.__AppForTests;
+    const appJsPath = path.join(__dirname, '..', 'app.js');
+    const appCode = fs.readFileSync(appJsPath, 'utf8');
+    vm.runInContext(appCode, context, { filename: 'app.js' });
+
+    if (options.loadSplitModules) {
+      const moduleFiles = [
+        'app-core.js',
+        'app-actions.js',
+        'app-modals.js',
+        'app-notifications.js',
+        'app-reminders.js',
+        'app-friends.js',
+        'app-billing.js',
+        'app-templates.js',
+        'app-ai.js',
+        'app-auth.js',
+        'app-cards.js',
+      ];
+      moduleFiles.forEach((fileName) => {
+        const modulePath = path.join(__dirname, '..', fileName);
+        const moduleCode = fs.readFileSync(modulePath, 'utf8');
+        vm.runInContext(moduleCode, context, { filename: fileName });
+      });
+    }
+
+    const AppForTests = context.window.App;
     if (!AppForTests) {
       throw new Error('Failed to load App from app.js');
     }
@@ -324,6 +343,8 @@ describe('Premium navigation + page wiring', () => {
 
     return { App: AppForTests, document: doc, window: win };
   }
+
+  globalThis.__loadBrowserAppForTests = loadBrowserApp;
 
   test('router supports /premium', () => {
     const { App } = loadBrowserApp();
@@ -503,6 +524,228 @@ describe('Premium navigation + page wiring', () => {
     App.openModal = (_title, html) => { modalHTML = String(html || ''); };
     App.openPremiumCodeModal({ errorMessage: 'Invalid code' });
     expect(modalHTML.includes('id="premium-code-error"')).toBe(true);
+  });
+});
+
+describe('Module boundaries + action dispatch', () => {
+  const moduleFiles = [
+    'app-core.js',
+    'app-actions.js',
+    'app-modals.js',
+    'app-notifications.js',
+    'app-reminders.js',
+    'app-friends.js',
+    'app-billing.js',
+    'app-templates.js',
+    'app-ai.js',
+    'app-auth.js',
+    'app-cards.js',
+  ];
+
+  function readAppModule(fileName) {
+    const filePath = path.join(__dirname, '..', fileName);
+    return fs.readFileSync(filePath, 'utf8');
+  }
+
+  function extractAssignedMethodNames(source) {
+    const methods = new Set();
+    const keywords = new Set([
+      'if',
+      'for',
+      'while',
+      'switch',
+      'catch',
+      'return',
+      'else',
+      'do',
+      'try',
+      'with',
+    ]);
+    const methodPattern = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm;
+    let match;
+    while ((match = methodPattern.exec(source)) !== null) {
+      const name = match[1];
+      if (!keywords.has(name)) {
+        methods.add(name);
+      }
+    }
+    return methods;
+  }
+
+  test('module scaffold files use App composition pattern', () => {
+    moduleFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      expect(source.includes('Object.assign(App, {')).toBe(true);
+    });
+  });
+
+  test('method extraction ignores control-flow keywords', () => {
+    const source = `
+      Object.assign(App, {
+        realMethod() {
+          if (true) {
+            return;
+          }
+          for (let i = 0; i < 2; i += 1) {}
+          while (false) {}
+          try {} catch (error) {}
+        },
+      });
+    `;
+    const names = extractAssignedMethodNames(source);
+    expect(names.has('realMethod')).toBe(true);
+    expect(names.has('if')).toBe(false);
+    expect(names.has('for')).toBe(false);
+    expect(names.has('while')).toBe(false);
+    expect(names.has('catch')).toBe(false);
+  });
+
+  test('module scaffold files parse and execute in VM context', () => {
+    const { App } = globalThis.__loadBrowserAppForTests({ loadSplitModules: true });
+    expect(typeof App.renderEmailVerificationBanner).toBe('function');
+    expect(typeof App.confirmedLogout).toBe('function');
+    expect(typeof App.checkForBingo).toBe('function');
+    expect(App._moduleCardsLoaded).toBe(true);
+    expect(App._moduleAuthLoaded).toBe(true);
+  });
+
+  test('split scripts avoid top-level const App redeclaration', () => {
+    const appFiles = [
+      'app.js',
+      'app-core.js',
+      'app-actions.js',
+      'app-modals.js',
+      'app-notifications.js',
+      'app-reminders.js',
+      'app-friends.js',
+      'app-billing.js',
+      'app-templates.js',
+      'app-ai.js',
+      'app-auth.js',
+      'app-cards.js',
+    ];
+    const forbiddenPattern = /\b(?:const|let)\s+App\s*=\s*window\.App\b/;
+    const requiredPattern = /\bvar\s+App\s*=\s*window\.App\b/;
+    appFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      expect(forbiddenPattern.test(source)).toBe(false);
+      expect(requiredPattern.test(source)).toBe(true);
+    });
+  });
+
+  test('templates must not load overlapping app.js and app-*.js methods together', () => {
+    const appSource = readAppModule('app.js');
+    const appMethods = extractAssignedMethodNames(appSource);
+    const moduleMethods = new Set();
+    moduleFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      extractAssignedMethodNames(source).forEach((methodName) => moduleMethods.add(methodName));
+    });
+
+    const overlap = [...appMethods].filter((methodName) => moduleMethods.has(methodName));
+    const indexTemplatePath = path.join(__dirname, '..', '..', '..', 'templates', 'index.html');
+    const indexTemplate = fs.readFileSync(indexTemplatePath, 'utf8');
+    const loadsModuleRange = indexTemplate.includes('{{range .AppModuleJSPaths}}');
+
+    if (loadsModuleRange && overlap.length > 0) {
+      throw new Error(
+        `index.html loads AppModuleJSPaths while ${overlap.length} App methods overlap app.js and app-*.js`
+      );
+    }
+  });
+
+  test('domain modules contain representative extracted methods', () => {
+    expect(readAppModule('app-billing.js').includes('openUpgradeModal(')).toBe(true);
+    expect(readAppModule('app-billing.js').includes('renderPremium(')).toBe(true);
+
+    expect(readAppModule('app-templates.js').includes('renderTemplates(')).toBe(true);
+    expect(readAppModule('app-templates.js').includes('handleCreateCardFromTemplate(')).toBe(true);
+
+    expect(readAppModule('app-ai.js').includes('handleAIPremiumAssist(')).toBe(true);
+    expect(readAppModule('app-ai.js').includes('fillEmptyWithAI(')).toBe(true);
+
+    expect(readAppModule('app-auth.js').includes('renderLogin(')).toBe(true);
+    expect(readAppModule('app-auth.js').includes('renderProfile(')).toBe(true);
+
+    expect(readAppModule('app-cards.js').includes('showCreateCardModal(')).toBe(true);
+    expect(readAppModule('app-cards.js').includes('renderCard(')).toBe(true);
+  });
+
+  test('handleActionClick dispatches extracted domain actions', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    let premiumCodeModalCount = 0;
+    let createTemplateCount = 0;
+    let aiFillCount = 0;
+    let friendUserID = '';
+    let viewedTemplateID = '';
+
+    App.openPremiumCodeModal = () => { premiumCodeModalCount += 1; };
+    App.showCreateTemplateModal = () => { createTemplateCount += 1; };
+    App.fillEmptyWithAI = () => { aiFillCount += 1; };
+    App.sendFriendRequest = (userID) => { friendUserID = userID; };
+    App.showTemplateModal = (templateID) => { viewedTemplateID = templateID; };
+
+    App.handleActionClick('open-premium-code-modal', { dataset: {} }, {});
+    App.handleActionClick('show-create-template-modal', { dataset: {} }, {});
+    App.handleActionClick('ai-fill-empty-premium', { dataset: {} }, {});
+    App.handleActionClick('send-friend-request', { dataset: { userId: 'friend-123' } }, {});
+    App.handleActionClick('view-template', { dataset: { templateId: 'tpl-007' } }, {});
+
+    expect(premiumCodeModalCount).toBe(1);
+    expect(createTemplateCount).toBe(1);
+    expect(aiFillCount).toBe(1);
+    expect(friendUserID).toBe('friend-123');
+    expect(viewedTemplateID).toBe('tpl-007');
+  });
+
+  test('handleActionSubmit forwards template + item edit forms', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    const submitEvent = { type: 'submit' };
+    const templateForm = { dataset: { templateId: 'tpl-abc' } };
+    const itemForm = { dataset: { position: '7' } };
+
+    let templateEvent = null;
+    let templateFormSeen = null;
+    let editEvent = null;
+    let editPosition = null;
+    let editFormSeen = null;
+
+    App.handleCreateTemplate = (event, form) => {
+      templateEvent = event;
+      templateFormSeen = form;
+    };
+    App.saveItemEdit = (event, position, form) => {
+      editEvent = event;
+      editPosition = position;
+      editFormSeen = form;
+    };
+
+    App.handleActionSubmit('create-template', templateForm, submitEvent);
+    App.handleActionSubmit('save-item-edit', itemForm, submitEvent);
+
+    expect(templateEvent).toBe(submitEvent);
+    expect(templateFormSeen).toBe(templateForm);
+    expect(editEvent).toBe(submitEvent);
+    expect(editPosition).toBe(7);
+    expect(editFormSeen).toBe(itemForm);
+  });
+
+  test('handleActionChange routes dashboard + reminder controls', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    const sortTarget = { value: 'year_desc' };
+    const reminderTarget = { value: 'card-12' };
+
+    let sortValue = '';
+    let reminderTargetSeen = null;
+
+    App.changeDashboardSort = (value) => { sortValue = value; };
+    App.handleReminderCardSelect = (target) => { reminderTargetSeen = target; };
+
+    App.handleActionChange('dashboard-sort', sortTarget, {});
+    App.handleActionChange('reminder-card-select', reminderTarget, {});
+
+    expect(sortValue).toBe('year_desc');
+    expect(reminderTargetSeen).toBe(reminderTarget);
   });
 });
 
@@ -759,7 +1002,7 @@ async function runAll() {
   const testedFunctions = [
     'escapeHtml',
     'truncateText',
-    'parseHash',
+    'parsePath',
     'isValidPosition',
     'calculateProgress',
     'checkBingo',

@@ -22,6 +22,10 @@ Phases 1-10 complete, ongoing enhancements:
 
 See `plans/bingo.md` for the full implementation plan and `plans/auth.md` for email authentication details.
 
+## Active Maintenance Plans
+
+- **`plans/refactor.md`** - Monolith risk reduction refactor for server composition (`cmd/server`), card handler/service domain splits, and frontend `App` decomposition with deterministic multi-script asset loading. Use this plan as the source of truth for incremental PR batching and validation gates.
+
 ## Pending Plans
 
 The following plans are ready for implementation:

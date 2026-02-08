@@ -125,6 +125,71 @@ func TestCardHandler_Create_Success(t *testing.T) {
 	}
 }
 
+func TestCardHandler_Create_NormalizesOptionalTitleAndCategory(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	year := time.Now().Year()
+
+	tests := []struct {
+		name             string
+		title            *string
+		category         *string
+		wantNormalized   *string
+		wantCategoryNorm *string
+	}{
+		{
+			name:             "blank title and category become nil",
+			title:            ptrToString("   "),
+			category:         ptrToString("   "),
+			wantNormalized:   nil,
+			wantCategoryNorm: nil,
+		},
+		{
+			name:             "trim non-empty title and category",
+			title:            ptrToString("  My Card  "),
+			category:         ptrToString("  health  "),
+			wantNormalized:   ptrToString("My Card"),
+			wantCategoryNorm: ptrToString("health"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotConflictTitle *string
+			var gotCreateParams models.CreateCardParams
+
+			handler := NewCardHandler(&mockCardService{
+				CheckForConflictFunc: func(ctx context.Context, userID uuid.UUID, year int, title *string) (*models.BingoCard, error) {
+					gotConflictTitle = title
+					return nil, services.ErrCardNotFound
+				},
+				CreateFunc: func(ctx context.Context, params models.CreateCardParams) (*models.BingoCard, error) {
+					gotCreateParams = params
+					return &models.BingoCard{ID: uuid.New(), UserID: user.ID, Year: year}, nil
+				},
+			})
+
+			bodyBytes, _ := json.Marshal(CreateCardRequest{
+				Year:     year,
+				Title:    tt.title,
+				Category: tt.category,
+				GridSize: ptrToInt(models.MaxGridSize),
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/cards", bytes.NewBuffer(bodyBytes))
+			req = req.WithContext(SetUserInContext(req.Context(), user))
+			rr := httptest.NewRecorder()
+
+			handler.Create(rr, req)
+			if rr.Code != http.StatusCreated {
+				t.Fatalf("expected status 201, got %d", rr.Code)
+			}
+
+			assertOptionalStringEqual(t, gotConflictTitle, tt.wantNormalized)
+			assertOptionalStringEqual(t, gotCreateParams.Title, tt.wantNormalized)
+			assertOptionalStringEqual(t, gotCreateParams.Category, tt.wantCategoryNorm)
+		})
+	}
+}
+
 func ptrToInt(i int) *int {
 	return &i
 }
@@ -881,6 +946,92 @@ func TestCardHandler_Import_FinalizeWithoutFullItems(t *testing.T) {
 
 	if response.Error != "Card must have exactly 24 items to finalize" {
 		t.Errorf("expected finalize item count error, got %q", response.Error)
+	}
+}
+
+func TestCardHandler_Import_NormalizesOptionalTitleAndCategory(t *testing.T) {
+	user := &models.User{ID: uuid.New()}
+	year := time.Now().Year()
+
+	tests := []struct {
+		name             string
+		title            *string
+		category         *string
+		wantNormalized   *string
+		wantCategoryNorm *string
+	}{
+		{
+			name:             "blank title and category become nil",
+			title:            ptrToString("   "),
+			category:         ptrToString("   "),
+			wantNormalized:   nil,
+			wantCategoryNorm: nil,
+		},
+		{
+			name:             "trim non-empty title and category",
+			title:            ptrToString("  Imported  "),
+			category:         ptrToString("  health  "),
+			wantNormalized:   ptrToString("Imported"),
+			wantCategoryNorm: ptrToString("health"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotConflictTitle *string
+			var gotImportParams models.ImportCardParams
+
+			handler := NewCardHandler(&mockCardService{
+				CheckForConflictFunc: func(ctx context.Context, userID uuid.UUID, year int, title *string) (*models.BingoCard, error) {
+					gotConflictTitle = title
+					return nil, services.ErrCardNotFound
+				},
+				ImportFunc: func(ctx context.Context, params models.ImportCardParams) (*models.BingoCard, error) {
+					gotImportParams = params
+					return &models.BingoCard{ID: uuid.New(), UserID: user.ID, Year: year}, nil
+				},
+			})
+
+			bodyBytes, _ := json.Marshal(ImportCardRequest{
+				Year:     year,
+				Title:    tt.title,
+				Category: tt.category,
+				GridSize: 2,
+				Items: []ImportCardItem{
+					{Position: 0, Content: "a"},
+					{Position: 1, Content: "b"},
+					{Position: 2, Content: "c"},
+				},
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/cards/import", bytes.NewBuffer(bodyBytes))
+			req = req.WithContext(SetUserInContext(req.Context(), user))
+			rr := httptest.NewRecorder()
+
+			handler.Import(rr, req)
+			if rr.Code != http.StatusCreated {
+				t.Fatalf("expected status 201, got %d", rr.Code)
+			}
+
+			assertOptionalStringEqual(t, gotConflictTitle, tt.wantNormalized)
+			assertOptionalStringEqual(t, gotImportParams.Title, tt.wantNormalized)
+			assertOptionalStringEqual(t, gotImportParams.Category, tt.wantCategoryNorm)
+		})
+	}
+}
+
+func assertOptionalStringEqual(t *testing.T, got, want *string) {
+	t.Helper()
+	if want == nil {
+		if got != nil {
+			t.Fatalf("expected nil pointer, got %q", *got)
+		}
+		return
+	}
+	if got == nil {
+		t.Fatalf("expected %q, got nil pointer", *want)
+	}
+	if *got != *want {
+		t.Fatalf("expected %q, got %q", *want, *got)
 	}
 }
 

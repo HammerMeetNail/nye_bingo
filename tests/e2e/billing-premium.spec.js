@@ -24,6 +24,22 @@ function dateRegexLine(prefix) {
 }
 
 test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
+  async function submitCheckoutAndGetSession(page) {
+    const checkoutResponsePromise = page.waitForResponse((response) => (
+      response.url().includes('/api/billing/checkout')
+      && response.request().method() === 'POST'
+    ));
+
+    await page.getByRole('button', { name: 'Checkout' }).click();
+
+    const checkoutResponse = await checkoutResponsePromise;
+    expect(checkoutResponse.ok()).toBeTruthy();
+    const checkoutPayload = await checkoutResponse.json();
+    expect(String(checkoutPayload?.url || '')).toMatch(/\/test\/checkout\//);
+
+    return getLastStripeCheckoutSession(page.request);
+  }
+
   test('subscription + tip activates Premium via signed webhooks', async ({ page }, testInfo) => {
     const priceMonthly = process.env.STRIPE_PREMIUM_PRICE_MONTHLY || 'price_premium_monthly';
     const priceTip5 = process.env.STRIPE_TIP_PRICE_5 || 'price_tip_5';
@@ -54,13 +70,8 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
     // Add a $5 tip; keep Monthly as default.
     await page.getByRole('button', { name: '$5' }).click();
 
-    await Promise.all([
-      page.waitForURL(/\/test\/checkout\//),
-      page.getByRole('button', { name: 'Checkout' }).click(),
-    ]);
-
     // Verify the app built a combined checkout session (subscription + tip).
-    const lastSession = await getLastStripeCheckoutSession(page.request);
+    const lastSession = await submitCheckoutAndGetSession(page);
     expect(lastSession.mode).toBe('subscription');
     const prices = (lastSession.line_items || []).map((li) => li.price);
     expect(prices).toContain(priceMonthly);
@@ -130,12 +141,7 @@ test.describe.serial('Billing: Premium (mocked Stripe, no listener)', () => {
 
     await page.getByRole('button', { name: 'Lifetime' }).click();
 
-    await Promise.all([
-      page.waitForURL(/\/test\/checkout\//),
-      page.getByRole('button', { name: 'Checkout' }).click(),
-    ]);
-
-    const lastSession = await getLastStripeCheckoutSession(page.request);
+    const lastSession = await submitCheckoutAndGetSession(page);
     expect(lastSession.mode).toBe('payment');
     const prices = (lastSession.line_items || []).map((li) => li.price);
     expect(prices).toContain(priceLifetime);

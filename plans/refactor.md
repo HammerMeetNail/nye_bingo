@@ -288,7 +288,7 @@ Legend:
 
 ### Track C: Server Composition (`cmd/server`)
 
-- [ ] `C1` Extract API route registration into domain functions (`M`, `Mechanical`)
+- [x] `C1` Extract API route registration into domain functions (`M`, `Mechanical`)
   - Scope:
     - Move route wiring from `run()` into `registerAuthRoutes`, `registerCardRoutes`, etc.
     - Keep wrappers and middleware application exactly as-is.
@@ -299,7 +299,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C2` Extract web/static/share/docs route registration (`S`, `Mechanical`)
+- [x] `C2` Extract web/static/share/docs route registration (`S`, `Mechanical`)
   - Scope:
     - Move static/page/share/OG/docs route wiring to `registerWebRoutes`.
   - Files:
@@ -308,7 +308,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C3` Extract middleware chain builder (`S`, `Mechanical`)
+- [x] `C3` Extract middleware chain builder (`S`, `Mechanical`)
   - Scope:
     - Introduce `buildMiddlewareChain(...)` with explicit order.
   - Files:
@@ -317,7 +317,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C4` Extract rate limit builders/config (`M`, `Mechanical`)
+- [x] `C4` Extract rate limit builders/config (`M`, `Mechanical`)
   - Scope:
     - Move auth/AI/redeem limiter setup and env parsing helpers to `ratelimits.go`.
     - Keep defaults and development overrides unchanged.
@@ -327,7 +327,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C5` Extract reminder/notification background jobs (`M`, `Mechanical`)
+- [x] `C5` Extract reminder/notification background jobs (`M`, `Mechanical`)
   - Scope:
     - Move ticker goroutines + cancellation wiring to `background_jobs.go`.
   - Files:
@@ -336,7 +336,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C6` Add route/middleware composition tests (`M`, `Behavioral`)
+- [x] `C6` Add route/middleware composition tests (`M`, `Behavioral`)
   - Scope:
     - Add tests asserting key routes exist and middleware order remains security-correct.
   - Files:
@@ -346,7 +346,7 @@ Legend:
 
 ### Track B: Card Handler/Service Split
 
-- [ ] `B1` Split handler: read/create/update paths (`M`, `Mechanical`)
+- [x] `B1` Split handler: read/create/update paths (`M`, `Mechanical`)
   - Scope:
     - Move methods from `internal/handlers/card.go` into domain files without logic edits.
   - Files:
@@ -355,7 +355,7 @@ Legend:
   - Validation:
     - `go test ./internal/handlers -count=1`
 
-- [ ] `B2` Split handler: finalize/completion flows (`M`, `Mechanical`)
+- [x] `B2` Split handler: finalize/completion flows (`M`, `Mechanical`)
   - Scope:
     - Move finalize/complete/uncomplete/notes/edit methods.
   - Files:
@@ -363,7 +363,7 @@ Legend:
   - Validation:
     - `go test ./internal/handlers -count=1`
 
-- [ ] `B3` Split handler: bulk/import/export/conflict (`L`, `Mechanical`)
+- [x] `B3` Split handler: bulk/import/export/conflict (`L`, `Mechanical`)
   - Scope:
     - Move bulk/archive/export/import/conflict handling methods and helpers.
   - Files:
@@ -374,7 +374,7 @@ Legend:
     - `go test ./internal/handlers -count=1`
     - `go test ./...`
 
-- [ ] `B4` Split service: read/write/finalize/completion domains (`L`, `Mechanical`)
+- [x] `B4` Split service: read/write/finalize/completion domains (`L`, `Mechanical`)
   - Scope:
     - Move methods from `internal/services/card.go` into domain files with zero signature changes.
   - Files:
@@ -385,7 +385,7 @@ Legend:
   - Validation:
     - `go test ./internal/services -count=1`
 
-- [ ] `B5` Split service: bulk/import/export/conflict/permissions (`L`, `Mechanical`)
+- [x] `B5` Split service: bulk/import/export/conflict/permissions (`L`, `Mechanical`)
   - Scope:
     - Move remaining card service domains and local helpers.
   - Files:
@@ -397,7 +397,7 @@ Legend:
     - `go test ./internal/services -count=1`
     - `go test ./...`
 
-- [ ] `B6` Add focused tests for extracted card domains (`M`, `Behavioral`)
+- [x] `B6` Add focused tests for extracted card domains (`M`, `Behavioral`)
   - Scope:
     - Add/expand tests per extracted area to reduce future regression risk.
   - Validation:
@@ -405,7 +405,7 @@ Legend:
 
 ### Track A: Frontend Decomposition (`web/static/js/app.js`)
 
-- [ ] `A1` Add composition scaffold (`M`, `Mechanical`)
+- [x] `A1` Add composition scaffold (`M`, `Mechanical`)
   - Scope:
     - Introduce `app-core.js` + module composition pattern with no behavior changes.
     - Keep `app.js` as active source, scaffold only.
@@ -415,7 +415,7 @@ Legend:
   - Validation:
     - `node web/static/js/tests/runner.js`
 
-- [ ] `A2` Extract shared helpers + action routing shell (`M`, `Mechanical`)
+- [x] `A2` Extract shared helpers + action routing shell (`M`, `Mechanical`)
   - Scope:
     - Move helper utilities and action delegation maps.
   - Files:
@@ -424,7 +424,7 @@ Legend:
   - Validation:
     - `node web/static/js/tests/runner.js`
 
-- [ ] `A3` Extract notifications/reminders modules (`L`, `Behavioral`)
+- [x] `A3` Extract notifications/reminders modules (`L`, `Behavioral`)
   - Scope:
     - Move render + action flows for notifications and reminders.
   - Files:
@@ -434,14 +434,14 @@ Legend:
     - `node web/static/js/tests/runner.js`
     - targeted E2E: notifications/reminders specs
 
-- [ ] `A4` Extract friends/invites/blocks modules (`L`, `Behavioral`)
+- [x] `A4` Extract friends/invites/blocks modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-friends.js` (new)
   - Validation:
     - JS tests
     - targeted E2E: friend/invite specs
 
-- [ ] `A5` Extract billing/templates/AI modules (`L`, `Behavioral`)
+- [x] `A5` Extract billing/templates/AI modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-billing.js` (new)
     - `web/static/js/app-templates.js` (new)
@@ -450,7 +450,7 @@ Legend:
     - JS tests
     - targeted E2E: billing/templates/ai specs
 
-- [ ] `A6` Extract cards/auth/profile modules (`L`, `Behavioral`)
+- [x] `A6` Extract cards/auth/profile modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-cards.js` (new)
     - `web/static/js/app-auth.js` (new)
@@ -458,7 +458,7 @@ Legend:
     - JS tests
     - targeted E2E: card/auth/profile specs
 
-- [ ] `A7` Wire multi-script loading + hashed manifest support (`M`, `Behavioral`)
+- [x] `A7` Wire multi-script loading + hashed manifest support (`M`, `Behavioral`)
   - Scope:
     - Add manifest getters + template vars for new script files.
     - Ensure deterministic script load order.
@@ -472,7 +472,7 @@ Legend:
     - JS tests
     - smoke E2E
 
-- [ ] `A8` Expand frontend unit test coverage for extracted modules (`M`, `Behavioral`)
+- [x] `A8` Expand frontend unit test coverage for extracted modules (`M`, `Behavioral`)
   - Scope:
     - Add tests for module boundaries and dispatch behavior.
   - Files:
@@ -482,14 +482,14 @@ Legend:
 
 ### Stabilization / Rollout Tasks
 
-- [ ] `R1` Repo-wide verification gate before merge (`S`)
+- [x] `R1` Repo-wide verification gate before merge (`S`)
   - Run:
     - `go test ./...`
     - `node web/static/js/tests/runner.js`
     - `make lint`
     - `make e2e` (or agreed targeted subset per PR)
 
-- [ ] `R2` Documentation updates (`S`)
+- [x] `R2` Documentation updates (`S`)
   - Scope:
     - Update `agent_docs/architecture.md` with new file map and extension points.
     - Link this plan from relevant roadmap docs.
