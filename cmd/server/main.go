@@ -167,61 +167,10 @@ func run() error {
 	shareOGImageHandler := handlers.NewShareOGImageHandler(cardService)
 	ogImageHandler := handlers.NewOGImageHandler()
 
-	if err := notificationService.CleanupOld(context.Background()); err != nil {
-		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
-	}
-	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	cleanupCancel := startNotificationBackgroundJobs(notificationService, logger)
 	defer cleanupCancel()
-	notificationService.SetAsyncContext(cleanupCtx)
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-cleanupCtx.Done():
-				return
-			case <-ticker.C:
-				if err := notificationService.CleanupOld(context.Background()); err != nil {
-					logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
-				}
-			}
-		}
-	}()
-
-	if err := reminderService.CleanupOld(context.Background()); err != nil {
-		logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
-	}
-	reminderCtx, reminderCancel := context.WithCancel(context.Background())
+	reminderCancel := startReminderBackgroundJobs(reminderService, logger, os.LookupEnv)
 	defer reminderCancel()
-	go func() {
-		interval := resolveRemindersPollInterval(logger, os.LookupEnv)
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-reminderCtx.Done():
-				return
-			case <-ticker.C:
-				if _, err := reminderService.RunDue(context.Background(), time.Now(), 50); err != nil {
-					logger.Warn("Reminder runner failed", map[string]interface{}{"error": err.Error()})
-				}
-			}
-		}
-	}()
-	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-reminderCtx.Done():
-				return
-			case <-ticker.C:
-				if err := reminderService.CleanupOld(context.Background()); err != nil {
-					logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
-				}
-			}
-		}
-	}()
 
 	// Initialize middleware
 	authMiddleware := middleware.NewAuthMiddleware(authService, userService, apiTokenService)
@@ -289,16 +238,19 @@ func run() error {
 		sharePublicHandler:    sharePublicHandler,
 	}, requireSession)
 
-	handler := buildMiddlewareChain(mux, &middlewareChain{
-		authMiddleware:     authMiddleware,
-		maxBodySize:        maxBodySize,
-		csrfMiddleware:     csrfMiddleware,
-		cacheControl:       cacheControl,
-		compress:           compress,
-		securityHeaders:    securityHeaders,
-		requestLogger:      requestLogger,
-		trustedProxyHeader: trustedProxyHeaders,
-	})
+	handler := buildMiddlewareChain(
+		mux,
+		newMiddlewareChain(
+			authMiddleware,
+			maxBodySize,
+			csrfMiddleware,
+			cacheControl,
+			compress,
+			securityHeaders,
+			requestLogger,
+			trustedProxyHeaders,
+		),
+	)
 
 	// Create server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -345,21 +297,4 @@ func run() error {
 	<-done
 	logger.Info("Server stopped")
 	return nil
-}
-
-func resolveRemindersPollInterval(logger *logging.Logger, lookupEnv func(string) (string, bool)) time.Duration {
-	interval := time.Minute
-	if value, ok := lookupEnv("REMINDERS_POLL_INTERVAL"); ok && value != "" {
-		parsed, err := time.ParseDuration(value)
-		if err != nil || parsed <= 0 {
-			logger.Warn("Invalid REMINDERS_POLL_INTERVAL; using default", map[string]interface{}{
-				"value":   value,
-				"default": interval.String(),
-			})
-		} else {
-			interval = parsed
-			logger.Info("Using reminders poll interval from env", map[string]interface{}{"interval": interval.String()})
-		}
-	}
-	return interval
 }

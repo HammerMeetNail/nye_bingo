@@ -327,7 +327,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C5` Extract reminder/notification background jobs (`M`, `Mechanical`)
+- [x] `C5` Extract reminder/notification background jobs (`M`, `Mechanical`)
   - Scope:
     - Move ticker goroutines + cancellation wiring to `background_jobs.go`.
   - Files:
@@ -336,7 +336,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C6` Add route/middleware composition tests (`M`, `Behavioral`)
+- [x] `C6` Add route/middleware composition tests (`M`, `Behavioral`)
   - Scope:
     - Add tests asserting key routes exist and middleware order remains security-correct.
   - Files:
