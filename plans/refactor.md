@@ -424,7 +424,7 @@ Legend:
   - Validation:
     - `node web/static/js/tests/runner.js`
 
-- [ ] `A3` Extract notifications/reminders modules (`L`, `Behavioral`)
+- [x] `A3` Extract notifications/reminders modules (`L`, `Behavioral`)
   - Scope:
     - Move render + action flows for notifications and reminders.
   - Files:
