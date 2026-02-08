@@ -472,7 +472,7 @@ Legend:
     - JS tests
     - smoke E2E
 
-- [ ] `A8` Expand frontend unit test coverage for extracted modules (`M`, `Behavioral`)
+- [x] `A8` Expand frontend unit test coverage for extracted modules (`M`, `Behavioral`)
   - Scope:
     - Add tests for module boundaries and dispatch behavior.
   - Files:
@@ -482,14 +482,14 @@ Legend:
 
 ### Stabilization / Rollout Tasks
 
-- [ ] `R1` Repo-wide verification gate before merge (`S`)
+- [x] `R1` Repo-wide verification gate before merge (`S`)
   - Run:
     - `go test ./...`
     - `node web/static/js/tests/runner.js`
     - `make lint`
     - `make e2e` (or agreed targeted subset per PR)
 
-- [ ] `R2` Documentation updates (`S`)
+- [x] `R2` Documentation updates (`S`)
   - Scope:
     - Update `agent_docs/architecture.md` with new file map and extension points.
     - Link this plan from relevant roadmap docs.

@@ -325,6 +325,8 @@ describe('Premium navigation + page wiring', () => {
     return { App: AppForTests, document: doc, window: win };
   }
 
+  globalThis.__loadBrowserAppForTests = loadBrowserApp;
+
   test('router supports /premium', () => {
     const { App } = loadBrowserApp();
     const { page } = App.getRouteFromPath('/premium', '');
@@ -503,6 +505,127 @@ describe('Premium navigation + page wiring', () => {
     App.openModal = (_title, html) => { modalHTML = String(html || ''); };
     App.openPremiumCodeModal({ errorMessage: 'Invalid code' });
     expect(modalHTML.includes('id="premium-code-error"')).toBe(true);
+  });
+});
+
+describe('Module boundaries + action dispatch', () => {
+  function readAppModule(fileName) {
+    const filePath = path.join(__dirname, '..', fileName);
+    return fs.readFileSync(filePath, 'utf8');
+  }
+
+  test('module scaffold files use App composition pattern', () => {
+    const moduleFiles = [
+      'app-core.js',
+      'app-actions.js',
+      'app-modals.js',
+      'app-notifications.js',
+      'app-reminders.js',
+      'app-friends.js',
+      'app-billing.js',
+      'app-templates.js',
+      'app-ai.js',
+      'app-auth.js',
+      'app-cards.js',
+    ];
+    moduleFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      expect(source.includes('Object.assign(App, {')).toBe(true);
+    });
+  });
+
+  test('domain modules contain representative extracted methods', () => {
+    expect(readAppModule('app-billing.js').includes('openUpgradeModal(')).toBe(true);
+    expect(readAppModule('app-billing.js').includes('renderPremium(')).toBe(true);
+
+    expect(readAppModule('app-templates.js').includes('renderTemplates(')).toBe(true);
+    expect(readAppModule('app-templates.js').includes('handleCreateCardFromTemplate(')).toBe(true);
+
+    expect(readAppModule('app-ai.js').includes('handleAIPremiumAssist(')).toBe(true);
+    expect(readAppModule('app-ai.js').includes('fillEmptyWithAI(')).toBe(true);
+
+    expect(readAppModule('app-auth.js').includes('renderLogin(')).toBe(true);
+    expect(readAppModule('app-auth.js').includes('renderProfile(')).toBe(true);
+
+    expect(readAppModule('app-cards.js').includes('showCreateCardModal(')).toBe(true);
+    expect(readAppModule('app-cards.js').includes('renderCard(')).toBe(true);
+  });
+
+  test('handleActionClick dispatches extracted domain actions', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    let premiumCodeModalCount = 0;
+    let createTemplateCount = 0;
+    let aiFillCount = 0;
+    let friendUserID = '';
+    let viewedTemplateID = '';
+
+    App.openPremiumCodeModal = () => { premiumCodeModalCount += 1; };
+    App.showCreateTemplateModal = () => { createTemplateCount += 1; };
+    App.fillEmptyWithAI = () => { aiFillCount += 1; };
+    App.sendFriendRequest = (userID) => { friendUserID = userID; };
+    App.showTemplateModal = (templateID) => { viewedTemplateID = templateID; };
+
+    App.handleActionClick('open-premium-code-modal', { dataset: {} }, {});
+    App.handleActionClick('show-create-template-modal', { dataset: {} }, {});
+    App.handleActionClick('ai-fill-empty-premium', { dataset: {} }, {});
+    App.handleActionClick('send-friend-request', { dataset: { userId: 'friend-123' } }, {});
+    App.handleActionClick('view-template', { dataset: { templateId: 'tpl-007' } }, {});
+
+    expect(premiumCodeModalCount).toBe(1);
+    expect(createTemplateCount).toBe(1);
+    expect(aiFillCount).toBe(1);
+    expect(friendUserID).toBe('friend-123');
+    expect(viewedTemplateID).toBe('tpl-007');
+  });
+
+  test('handleActionSubmit forwards template + item edit forms', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    const submitEvent = { type: 'submit' };
+    const templateForm = { dataset: { templateId: 'tpl-abc' } };
+    const itemForm = { dataset: { position: '7' } };
+
+    let templateEvent = null;
+    let templateFormSeen = null;
+    let editEvent = null;
+    let editPosition = null;
+    let editFormSeen = null;
+
+    App.handleCreateTemplate = (event, form) => {
+      templateEvent = event;
+      templateFormSeen = form;
+    };
+    App.saveItemEdit = (event, position, form) => {
+      editEvent = event;
+      editPosition = position;
+      editFormSeen = form;
+    };
+
+    App.handleActionSubmit('create-template', templateForm, submitEvent);
+    App.handleActionSubmit('save-item-edit', itemForm, submitEvent);
+
+    expect(templateEvent).toBe(submitEvent);
+    expect(templateFormSeen).toBe(templateForm);
+    expect(editEvent).toBe(submitEvent);
+    expect(editPosition).toBe(7);
+    expect(editFormSeen).toBe(itemForm);
+  });
+
+  test('handleActionChange routes dashboard + reminder controls', () => {
+    const { App } = globalThis.__loadBrowserAppForTests();
+    const sortTarget = { value: 'year_desc' };
+    const reminderTarget = { value: 'card-12' };
+
+    let sortValue = '';
+    let reminderTargetSeen = null;
+
+    App.changeDashboardSort = (value) => { sortValue = value; };
+    App.handleReminderCardSelect = (target) => { reminderTargetSeen = target; };
+
+    App.handleActionChange('dashboard-sort', sortTarget, {});
+    App.handleActionChange('reminder-card-select', reminderTarget, {});
+
+    expect(sortValue).toBe('year_desc');
+    expect(reminderTargetSeen).toBe(reminderTarget);
   });
 });
 

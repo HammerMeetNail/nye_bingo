@@ -2,12 +2,17 @@
 
 ## Backend Structure
 
-- `cmd/server/main.go` - Application entry point, wires up all dependencies and routes
+- `cmd/server/main.go` - Application entrypoint shell (`main`, `run`)
+- `cmd/server/bootstrap.go` - Dependency construction and wiring
+- `cmd/server/routes_api.go` / `cmd/server/routes_web.go` - API/web route registration
+- `cmd/server/middleware_chain.go` - Middleware ordering/composition
+- `cmd/server/ratelimits.go` - Auth/AI/redeem rate-limit builders
+- `cmd/server/background_jobs.go` - Reminder/notification background loops
 - `internal/config/` - Environment-based configuration loading
 - `internal/database/` - PostgreSQL pool (`postgres.go`), Redis client (`redis.go`), migrations (`migrate.go`)
 - `internal/models/` - Data structures (User, Session, BingoCard, BingoItem, Suggestion, Friendship, Reaction)
-- `internal/services/` - Business logic layer (UserService, AuthService, CardService, SuggestionService, FriendService, ReactionService)
-- `internal/handlers/` - HTTP handlers that call services and return JSON
+- `internal/services/` - Business logic layer split by domain (including card service domain files: read/write/finalize/completion/bulk/import-export/conflict/permissions)
+- `internal/handlers/` - HTTP handlers split by domain (including card handler domain files: create-read/update/finalize-completion/bulk/import-export/conflict)
 - `internal/middleware/` - Auth validation, CSRF protection, security headers, compression, caching, request logging
 - `internal/logging/` - Structured JSON logging
 - `scripts/` - Development/testing scripts (seed.sh, cleanup.sh, test-archive.sh) - use API, not direct DB access
@@ -16,14 +21,21 @@
 
 - `web/templates/index.html` - Single HTML entry point for SPA (main container has `id="main-container"`)
 - `web/static/js/api.js` - API client with CSRF token handling, all methods under `API` object
-- `web/static/js/app.js` - SPA router and all UI logic under global `App` object
+- `web/static/js/app.js` - Main SPA source + bootstrap listener wiring for global `App`
+- `web/static/js/app-core.js` - Shared state/helpers scaffold
+- `web/static/js/app-actions.js` - Delegated action/submit/change dispatch scaffold
+- `web/static/js/app-modals.js` - Modal primitives scaffold
+- `web/static/js/app-notifications.js` / `web/static/js/app-reminders.js` - Notifications/reminders scaffold
+- `web/static/js/app-friends.js` - Friends/invites scaffold
+- `web/static/js/app-billing.js` / `web/static/js/app-templates.js` / `web/static/js/app-ai.js` - Billing/templates/AI scaffold
+- `web/static/js/app-auth.js` / `web/static/js/app-cards.js` - Auth/profile and card-domain scaffold
 - `web/static/css/styles.css` - Design system with CSS variables, uses OpenDyslexic font for bingo cells
 
 **External Dependencies**: FontAwesome 6.5 loaded from cdnjs.cloudflare.com for icons (eye, eye-slash for visibility toggles). CSP allows cdnjs.cloudflare.com for script-src, style-src, and font-src.
 
 ## Frontend Patterns
 
-**App Object**: All frontend logic lives in global `App` object. Key methods:
+**App Object**: Frontend logic composes into global `App` (`Object.assign(App, {...})`) across `app-*.js` files. Key methods:
 - `route()` - Hash-based routing, renders appropriate page
 - `renderDashboard()` - Unified dashboard showing all cards (current year and archived) with sorting, selection, and bulk actions
 - `renderFinalizedCard()` / `renderCardEditor()` - Card views (handles both authenticated and anonymous modes)
@@ -40,7 +52,11 @@
 
 **API Object**: Wraps fetch calls with CSRF handling. Namespaced: `API.auth.*`, `API.cards.*`, `API.suggestions.*`, `API.friends.*`, `API.reactions.*`, `API.support.*`
 
-**Adding New Features**: Add API methods to `api.js`, UI methods to `App` object in `app.js`, styles to `styles.css`
+**Adding New Features**:
+- Add API methods to `web/static/js/api.js`
+- Add UI/domain methods in the matching `app-<domain>.js` module (fallback to `app.js` only when needed)
+- Add/extend action routing in `web/static/js/app-actions.js`/`app.js` delegated handlers
+- Add styles to `web/static/css/styles.css`
 
 ### Key Patterns
 
