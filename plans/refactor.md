@@ -450,7 +450,7 @@ Legend:
     - JS tests
     - targeted E2E: billing/templates/ai specs
 
-- [ ] `A6` Extract cards/auth/profile modules (`L`, `Behavioral`)
+- [x] `A6` Extract cards/auth/profile modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-cards.js` (new)
     - `web/static/js/app-auth.js` (new)
@@ -458,7 +458,7 @@ Legend:
     - JS tests
     - targeted E2E: card/auth/profile specs
 
-- [ ] `A7` Wire multi-script loading + hashed manifest support (`M`, `Behavioral`)
+- [x] `A7` Wire multi-script loading + hashed manifest support (`M`, `Behavioral`)
   - Scope:
     - Add manifest getters + template vars for new script files.
     - Ensure deterministic script load order.

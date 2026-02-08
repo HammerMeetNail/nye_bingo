@@ -37,6 +37,18 @@ func TestPageHandler_IndexAndErrors(t *testing.T) {
 		if !containsAll(body, []string{`property="og:image"`, `/og/default.png`, `name="twitter:card"`}) {
 			t.Fatalf("expected OpenGraph/Twitter meta tags to be present")
 		}
+		if !containsAll(body, []string{`/static/js/app.js`, `/static/js/app-core.js`, `/static/js/app-auth.js`, `/static/js/app-cards.js`}) {
+			t.Fatalf("expected app module script tags to be present")
+		}
+		appIdx := strings.Index(body, `/static/js/app.js`)
+		coreIdx := strings.Index(body, `/static/js/app-core.js`)
+		cardsIdx := strings.Index(body, `/static/js/app-cards.js`)
+		if appIdx < 0 || coreIdx < 0 || cardsIdx < 0 {
+			t.Fatalf("expected app.js and module scripts in body")
+		}
+		if appIdx >= coreIdx || coreIdx >= cardsIdx {
+			t.Fatalf("expected deterministic script order app.js -> app-core.js -> app-cards.js")
+		}
 	})
 
 	t.Run("not found", func(t *testing.T) {

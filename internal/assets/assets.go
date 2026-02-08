@@ -79,3 +79,76 @@ func (m *Manifest) GetAnonymousCardJS() string {
 func (m *Manifest) GetAIWizardJS() string {
 	return m.Get("js/ai-wizard.js")
 }
+
+// GetAppCoreJS returns the hashed path for app-core.js
+func (m *Manifest) GetAppCoreJS() string {
+	return m.Get("js/app-core.js")
+}
+
+// GetAppActionsJS returns the hashed path for app-actions.js
+func (m *Manifest) GetAppActionsJS() string {
+	return m.Get("js/app-actions.js")
+}
+
+// GetAppModalsJS returns the hashed path for app-modals.js
+func (m *Manifest) GetAppModalsJS() string {
+	return m.Get("js/app-modals.js")
+}
+
+// GetAppNotificationsJS returns the hashed path for app-notifications.js
+func (m *Manifest) GetAppNotificationsJS() string {
+	return m.Get("js/app-notifications.js")
+}
+
+// GetAppRemindersJS returns the hashed path for app-reminders.js
+func (m *Manifest) GetAppRemindersJS() string {
+	return m.Get("js/app-reminders.js")
+}
+
+// GetAppFriendsJS returns the hashed path for app-friends.js
+func (m *Manifest) GetAppFriendsJS() string {
+	return m.Get("js/app-friends.js")
+}
+
+// GetAppBillingJS returns the hashed path for app-billing.js
+func (m *Manifest) GetAppBillingJS() string {
+	return m.Get("js/app-billing.js")
+}
+
+// GetAppTemplatesJS returns the hashed path for app-templates.js
+func (m *Manifest) GetAppTemplatesJS() string {
+	return m.Get("js/app-templates.js")
+}
+
+// GetAppAIJS returns the hashed path for app-ai.js
+func (m *Manifest) GetAppAIJS() string {
+	return m.Get("js/app-ai.js")
+}
+
+// GetAppAuthJS returns the hashed path for app-auth.js
+func (m *Manifest) GetAppAuthJS() string {
+	return m.Get("js/app-auth.js")
+}
+
+// GetAppCardsJS returns the hashed path for app-cards.js
+func (m *Manifest) GetAppCardsJS() string {
+	return m.Get("js/app-cards.js")
+}
+
+// GetAppModuleJSPaths returns deterministic module loading order.
+// app.js remains the composition source and is loaded before these modules.
+func (m *Manifest) GetAppModuleJSPaths() []string {
+	return []string{
+		m.GetAppCoreJS(),
+		m.GetAppActionsJS(),
+		m.GetAppModalsJS(),
+		m.GetAppNotificationsJS(),
+		m.GetAppRemindersJS(),
+		m.GetAppFriendsJS(),
+		m.GetAppBillingJS(),
+		m.GetAppTemplatesJS(),
+		m.GetAppAIJS(),
+		m.GetAppAuthJS(),
+		m.GetAppCardsJS(),
+	}
+}
