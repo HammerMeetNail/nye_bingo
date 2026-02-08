@@ -66,37 +66,34 @@ function expect(actual) {
   };
 }
 
+let appForUtilityTests = null;
+
+function getAppForUtilityTests() {
+  if (appForUtilityTests) return appForUtilityTests;
+  if (typeof globalThis.__loadBrowserAppForTests !== 'function') {
+    throw new Error('Browser app loader is not initialized');
+  }
+  const { App } = globalThis.__loadBrowserAppForTests();
+  appForUtilityTests = App;
+  return appForUtilityTests;
+}
+
 // ============================================================
 // UTILITY FUNCTIONS TO TEST (extracted from app.js)
 // ============================================================
 
 function escapeHtml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return getAppForUtilityTests().escapeHtml(text);
 }
 
 function truncateText(text, maxLength) {
-  if (text.length <= maxLength) return text;
-  const truncated = text.substring(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(' ');
-  if (lastSpace > maxLength * 0.5) {
-    return truncated.substring(0, lastSpace) + '…';
-  }
-  return truncated + '…';
+  return getAppForUtilityTests().truncateText(text, maxLength);
 }
 
 function parsePath(path) {
-  if (!path) return { page: 'home', params: [] };
-  let cleanPath = path.startsWith('/') ? path.slice(1) : path;
-  if (cleanPath.endsWith('/')) {
-    cleanPath = cleanPath.slice(0, -1);
-  }
-  const [page, ...params] = cleanPath.split('/');
-  return { page: page || 'home', params };
+  const normalizedPath = path || '/';
+  const route = getAppForUtilityTests().getRouteFromPath(normalizedPath, '');
+  return { page: route.page, params: route.params };
 }
 
 function isValidPosition(position) {
@@ -273,7 +270,7 @@ describe('Premium navigation + page wiring', () => {
     }
   }
 
-  function loadBrowserApp() {
+  function loadBrowserApp(options = {}) {
     const doc = new MockDocument();
     doc._byID.set('nav', new MockElement(doc, { id: 'nav', tagName: 'NAV' }));
     doc._byID.set('main-container', new MockElement(doc, { id: 'main-container' }));
@@ -309,12 +306,34 @@ describe('Premium navigation + page wiring', () => {
       clearInterval,
     };
 
-    const appJsPath = path.join(__dirname, '..', 'app.js');
-    const code = fs.readFileSync(appJsPath, 'utf8') + '\n;globalThis.__AppForTests = App;\n';
     vm.createContext(context);
-    vm.runInContext(code, context, { filename: 'app.js' });
 
-    const AppForTests = context.__AppForTests;
+    const appJsPath = path.join(__dirname, '..', 'app.js');
+    const appCode = fs.readFileSync(appJsPath, 'utf8');
+    vm.runInContext(appCode, context, { filename: 'app.js' });
+
+    if (options.loadSplitModules) {
+      const moduleFiles = [
+        'app-core.js',
+        'app-actions.js',
+        'app-modals.js',
+        'app-notifications.js',
+        'app-reminders.js',
+        'app-friends.js',
+        'app-billing.js',
+        'app-templates.js',
+        'app-ai.js',
+        'app-auth.js',
+        'app-cards.js',
+      ];
+      moduleFiles.forEach((fileName) => {
+        const modulePath = path.join(__dirname, '..', fileName);
+        const moduleCode = fs.readFileSync(modulePath, 'utf8');
+        vm.runInContext(moduleCode, context, { filename: fileName });
+      });
+    }
+
+    const AppForTests = context.window.App;
     if (!AppForTests) {
       throw new Error('Failed to load App from app.js');
     }
@@ -543,6 +562,15 @@ describe('Module boundaries + action dispatch', () => {
       const source = readAppModule(fileName);
       expect(source.includes('Object.assign(App, {')).toBe(true);
     });
+  });
+
+  test('module scaffold files parse and execute in VM context', () => {
+    const { App } = globalThis.__loadBrowserAppForTests({ loadSplitModules: true });
+    expect(typeof App.renderEmailVerificationBanner).toBe('function');
+    expect(typeof App.confirmedLogout).toBe('function');
+    expect(typeof App.checkForBingo).toBe('function');
+    expect(App._moduleCardsLoaded).toBe(true);
+    expect(App._moduleAuthLoaded).toBe(true);
   });
 
   test('split scripts avoid top-level const App redeclaration', () => {
@@ -938,7 +966,7 @@ async function runAll() {
   const testedFunctions = [
     'escapeHtml',
     'truncateText',
-    'parseHash',
+    'parsePath',
     'isValidPosition',
     'calculateProgress',
     'checkBingo',

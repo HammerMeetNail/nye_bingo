@@ -1,7 +1,11 @@
 // Year of Bingo - App Action Delegation Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleActionsLoaded) {
+  App._moduleActionsLoaded = true;
 
 Object.assign(App, {
   setupActionDelegation() {
@@ -487,3 +491,4 @@ Object.assign(App, {
     }
   },
 });
+}

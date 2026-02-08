@@ -53,5 +53,3 @@ func (s *CardService) CheckForConflict(ctx context.Context, userID uuid.UUID, ye
 
 	return &card, nil
 }
-
-// Import imports an anonymous card, creating the card and all items in one transaction

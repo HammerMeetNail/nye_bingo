@@ -1,7 +1,11 @@
 // Year of Bingo - Notifications Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleNotificationsLoaded) {
+  App._moduleNotificationsLoaded = true;
 
 Object.assign(App, {
   startNotificationPolling() {
@@ -484,3 +488,4 @@ Object.assign(App, {
     }
   },
 });
+}

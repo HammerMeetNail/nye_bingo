@@ -299,5 +299,3 @@ func (s *CardService) countBingos(items []models.BingoItem, gridSize int, freePo
 
 	return bingos
 }
-
-// CheckForConflict checks if a card already exists for the given user, year, and optional title

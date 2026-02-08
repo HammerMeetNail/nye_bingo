@@ -1,7 +1,11 @@
 // Year of Bingo - Templates Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleTemplatesLoaded) {
+  App._moduleTemplatesLoaded = true;
 
 Object.assign(App, {
   async renderTemplates(container) {
@@ -128,7 +132,8 @@ Object.assign(App, {
     }
 
     const cardOptions = cards.map((card) => {
-      const label = `${this.escapeHtml(this.getCardDisplayName(card))} (${this.escapeHtml(String(card.year))})`;
+      const displayName = this.getCardDisplayNameRaw ? this.getCardDisplayNameRaw(card) : this.getCardDisplayName(card);
+      const label = `${this.escapeHtml(displayName)} (${this.escapeHtml(String(card.year))})`;
       return `<option value="${this.escapeHtml(card.id)}">${label}</option>`;
     }).join('');
 
@@ -261,7 +266,8 @@ Object.assign(App, {
     } catch (error) {
       card = this.currentCard && this.currentCard.id === cardId ? this.currentCard : null;
     }
-    const suggestedName = card ? `${this.getCardDisplayName(card)} Template` : 'New template';
+    const displayName = card ? (this.getCardDisplayNameRaw ? this.getCardDisplayNameRaw(card) : this.getCardDisplayName(card)) : '';
+    const suggestedName = card ? `${displayName} Template` : 'New template';
 
     this.openModal('Save as template', `
       <form data-action="create-template-from-card" data-card-id="${this.escapeHtml(cardId)}">
@@ -883,3 +889,4 @@ Object.assign(App, {
     return lines;
   },
 });
+}

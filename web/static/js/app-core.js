@@ -1,7 +1,11 @@
 // Year of Bingo - App Core Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleCoreLoaded) {
+  App._moduleCoreLoaded = true;
 
 Object.assign(App, {
   qs(id) {
@@ -63,3 +67,4 @@ Object.assign(App, {
     }
   },
 });
+}

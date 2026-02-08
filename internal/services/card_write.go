@@ -630,8 +630,6 @@ func (s *CardService) Shuffle(ctx context.Context, userID, cardID uuid.UUID) (*m
 	return s.GetByID(ctx, cardID)
 }
 
-// FinalizeParams contains optional parameters for finalizing a card
-
 func (s *CardService) findRandomPosition(card *models.BingoCard) (int, error) {
 	occupied := make(map[int]bool, len(card.Items)+1)
 	for _, item := range card.Items {
@@ -654,8 +652,6 @@ func (s *CardService) findRandomPosition(card *models.BingoCard) (int, error) {
 
 	return available[rand.Intn(len(available))], nil
 }
-
-// GetArchive returns all finalized cards from past years (not current year)
 
 func (s *CardService) UpdateConfig(ctx context.Context, userID, cardID uuid.UUID, params models.UpdateCardConfigParams) (*models.BingoCard, error) {
 	card, err := s.GetByID(ctx, cardID)

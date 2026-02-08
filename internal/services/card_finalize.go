@@ -55,8 +55,6 @@ func (s *CardService) Finalize(ctx context.Context, userID, cardID uuid.UUID, pa
 	return card, nil
 }
 
-// UpdateVisibility updates the visibility of a card to friends
-
 func (s *CardService) suggestEditTitle(ctx context.Context, userID uuid.UUID, year int, baseTitle string) (string, error) {
 	baseTitle = strings.TrimSpace(baseTitle)
 	if baseTitle == "" {

@@ -1,7 +1,11 @@
 // Year of Bingo - Billing/Premium Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleBillingLoaded) {
+  App._moduleBillingLoaded = true;
 
 Object.assign(App, {
   storePendingPremiumCode(code) {
@@ -344,6 +348,24 @@ Object.assign(App, {
     this.setUpgradeModalState(modal, { tipAmount: amount });
   },
 
+  isTrustedBillingRedirectURL(rawURL) {
+    try {
+      const url = new URL(rawURL);
+      if (url.protocol !== 'https:') return false;
+      return url.hostname === 'checkout.stripe.com' || url.hostname === 'billing.stripe.com';
+    } catch (_err) {
+      return false;
+    }
+  },
+
+  redirectToTrustedBillingURL(rawURL) {
+    if (!this.isTrustedBillingRedirectURL(rawURL)) {
+      this.toast('Unexpected billing redirect URL', 'error');
+      return;
+    }
+    window.location.assign(rawURL);
+  },
+
   async startSelectedCheckout(target) {
     const modal = target?.closest?.('.upgrade-modal') || document.getElementById('upgrade-modal');
     if (!modal) return;
@@ -367,7 +389,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createCheckoutSession(payload);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -379,7 +401,7 @@ Object.assign(App, {
     try {
       const resp = await API.billing.createPortalSession();
       if (resp?.url) {
-        window.location.href = resp.url;
+        this.redirectToTrustedBillingURL(resp.url);
       }
     } catch (error) {
       this.toast(error.message, 'error');
@@ -396,7 +418,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createSubscriptionCheckoutSession(interval);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -407,7 +429,7 @@ Object.assign(App, {
   async startLifetimeCheckout() {
     try {
       const resp = await API.billing.createLifetimeCheckoutSession();
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -422,7 +444,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createTipCheckoutSession(amount);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -680,3 +702,4 @@ Object.assign(App, {
     }
   },
 });
+}

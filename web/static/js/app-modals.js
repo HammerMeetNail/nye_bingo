@@ -1,7 +1,11 @@
 // Year of Bingo - App Modal Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleModalsLoaded) {
+  App._moduleModalsLoaded = true;
 
 Object.assign(App, {
   setupModal() {
@@ -38,6 +42,26 @@ Object.assign(App, {
     document.body.style.top = `-${this.modalScrollY}px`;
   },
 
+  openModalSafe(title, contentNode) {
+    const overlay = document.getElementById('modal-overlay');
+    const titleEl = document.getElementById('modal-title');
+    const bodyEl = document.getElementById('modal-body');
+
+    if (titleEl) titleEl.textContent = title;
+    if (bodyEl) {
+      bodyEl.replaceChildren();
+      if (contentNode instanceof Node) {
+        bodyEl.appendChild(contentNode);
+      }
+    }
+    if (bodyEl) bodyEl.scrollTop = 0;
+    if (overlay) overlay.scrollTop = 0;
+    this.modalScrollY = window.scrollY || window.pageYOffset || 0;
+    if (overlay) overlay.classList.add('modal-overlay--visible');
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${this.modalScrollY}px`;
+  },
+
   closeModal() {
     const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.classList.remove('modal-overlay--visible');
@@ -49,3 +73,4 @@ Object.assign(App, {
     }
   },
 });
+}

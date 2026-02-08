@@ -1,7 +1,13 @@
 // Year of Bingo - Cards Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleCardsLoaded) {
+  App._moduleCardsLoaded = true;
+  App._itemEditInFlightPositions = App._itemEditInFlightPositions || new Set();
+  App._addItemInFlight = App._addItemInFlight || false;
 
 Object.assign(App, {
   async showCreateCardModal() {
@@ -562,6 +568,13 @@ Object.assign(App, {
   },
 
 
+  getCardDisplayNameRaw(card) {
+    if (card.title) {
+      return card.title;
+    }
+    return `${card.year} Bingo Card`;
+  },
+
   getCardDisplayName(card) {
     if (card.title) {
       return this.escapeHtml(card.title);
@@ -592,7 +605,7 @@ Object.assign(App, {
     try {
       const response = await API.cards.get(cardId);
       if (response.card) {
-        cardName = this.getCardDisplayName(response.card);
+        cardName = this.getCardDisplayNameRaw(response.card);
       }
     } catch (e) {
       // Ignore - use default name
@@ -3791,6 +3804,44 @@ Object.assign(App, {
   },
 
   checkForBingo() {
+    const cells = document.querySelectorAll('.bingo-cell');
+    const grid = [];
+    cells.forEach((cell) => {
+      grid.push(cell.classList.contains('bingo-cell--completed') || cell.classList.contains('bingo-cell--free'));
+    });
+
+    const size = this.getGridSize(this.currentCard);
+
+    // Check rows
+    for (let row = 0; row < size; row++) {
+      if (grid.slice(row * size, row * size + size).every(Boolean)) {
+        this.toast('BINGO! Row complete! 🎉🎉🎉', 'success');
+        this.confetti(100);
+        return;
+      }
+    }
+
+    // Check columns
+    for (let col = 0; col < size; col++) {
+      if (Array.from({ length: size }).map((_, row) => grid[row * size + col]).every(Boolean)) {
+        this.toast('BINGO! Column complete! 🎉🎉🎉', 'success');
+        this.confetti(100);
+        return;
+      }
+    }
+
+    // Check diagonals
+    if (Array.from({ length: size }).map((_, i) => grid[i * size + i]).every(Boolean)) {
+      this.toast('BINGO! Diagonal complete! 🎉🎉🎉', 'success');
+      this.confetti(100);
+      return;
+    }
+    if (Array.from({ length: size }).map((_, i) => grid[i * size + (size - 1 - i)]).every(Boolean)) {
+      this.toast('BINGO! Diagonal complete! 🎉🎉🎉', 'success');
+      this.confetti(100);
+      return;
+    }
+  },
 
   async renderArchiveCard(container, cardId) {
     container.innerHTML = `
@@ -4024,3 +4075,4 @@ Object.assign(App, {
   },
 
 });
+}

@@ -1844,6 +1844,26 @@ Object.assign(App, {
     document.body.style.top = `-${this.modalScrollY}px`;
   },
 
+  openModalSafe(title, contentNode) {
+    const overlay = document.getElementById('modal-overlay');
+    const titleEl = document.getElementById('modal-title');
+    const bodyEl = document.getElementById('modal-body');
+
+    if (titleEl) titleEl.textContent = title;
+    if (bodyEl) {
+      bodyEl.replaceChildren();
+      if (contentNode instanceof Node) {
+        bodyEl.appendChild(contentNode);
+      }
+    }
+    if (bodyEl) bodyEl.scrollTop = 0;
+    if (overlay) overlay.scrollTop = 0;
+    this.modalScrollY = window.scrollY || window.pageYOffset || 0;
+    if (overlay) overlay.classList.add('modal-overlay--visible');
+    document.body.classList.add('modal-open');
+    document.body.style.top = `-${this.modalScrollY}px`;
+  },
+
   closeModal() {
     const overlay = document.getElementById('modal-overlay');
     if (overlay) overlay.classList.remove('modal-overlay--visible');
@@ -3429,6 +3449,14 @@ Object.assign(App, {
   },
 
   // Get display name for a card (title if set, otherwise "YYYY Bingo Card")
+  getCardDisplayNameRaw(card) {
+    if (card.title) {
+      return card.title;
+    }
+    return `${card.year} Bingo Card`;
+  },
+
+  // Get display name for HTML contexts
   getCardDisplayName(card) {
     if (card.title) {
       return this.escapeHtml(card.title);
@@ -3459,7 +3487,7 @@ Object.assign(App, {
     try {
       const response = await API.cards.get(cardId);
       if (response.card) {
-        cardName = this.getCardDisplayName(response.card);
+        cardName = this.getCardDisplayNameRaw(response.card);
       }
     } catch (e) {
       // Ignore - use default name
@@ -6868,7 +6896,7 @@ Object.assign(App, {
             <div>
               <strong>${this.escapeHtml(user.username)}</strong>
             </div>
-            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${user.id}">
+            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${this.escapeHtml(user.id)}">
               Add Friend
             </button>
           </div>
@@ -6936,7 +6964,7 @@ Object.assign(App, {
               ${invite.expires_at ? `Expires ${new Date(invite.expires_at).toLocaleDateString()}` : 'No expiration'}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${invite.id}">Revoke</button>
+          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${this.escapeHtml(invite.id)}">Revoke</button>
         </div>
       `).join('');
     } catch (error) {
@@ -6973,7 +7001,7 @@ Object.assign(App, {
           <div>
             <strong>${this.escapeHtml(user.username)}</strong>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${user.id}">Unblock</button>
+          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${this.escapeHtml(user.id)}">Unblock</button>
         </div>
       `).join('');
     } catch (error) {
@@ -7012,8 +7040,8 @@ Object.assign(App, {
               <strong>${this.escapeHtml(req.requester_username)}</strong>
             </div>
             <div class="friend-actions">
-              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${req.id}">Accept</button>
-              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>
+              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${this.escapeHtml(req.id)}">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${this.escapeHtml(req.id)}">Reject</button>
             </div>
           </div>
         `).join('');
@@ -7031,7 +7059,7 @@ Object.assign(App, {
             <div>
               <strong>${this.escapeHtml(req.friend_username)}</strong>
             </div>
-            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${req.id}">Cancel</button>
+            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${this.escapeHtml(req.id)}">Cancel</button>
           </div>
         `).join('');
       } else {
@@ -7051,9 +7079,9 @@ Object.assign(App, {
                 <strong>${friendName} ${premiumBadge}</strong>
               </div>
               <div class="friend-actions">
-                <a href="/friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${friend.id}">Remove</button>
-                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${otherUserId}">Block</button>
+                <a href="/friend-card/${encodeURIComponent(friend.id)}" class="btn btn-secondary btn-sm">View Card</a>
+                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${this.escapeHtml(friend.id)}">Remove</button>
+                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${this.escapeHtml(otherUserId)}">Block</button>
               </div>
             </div>
           `;
@@ -7313,9 +7341,9 @@ Object.assign(App, {
         <div class="emoji-buttons">
           ${this.allowedEmojis.map(emoji => `
             <button class="emoji-btn ${userReaction?.emoji === emoji ? 'emoji-btn--selected' : ''}"
-                    data-action="react-item" data-item-id="${itemId}" data-emoji="${emoji}">${emoji}</button>
+                    data-action="react-item" data-item-id="${this.escapeHtml(itemId)}" data-emoji="${emoji}">${emoji}</button>
           `).join('')}
-          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${itemId}">✕</button>` : ''}
+          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${this.escapeHtml(itemId)}">✕</button>` : ''}
         </div>
       </div>
     ` : '';
@@ -7942,6 +7970,24 @@ Object.assign(App, {
     this.setUpgradeModalState(modal, { tipAmount: amount });
   },
 
+  isTrustedBillingRedirectURL(rawURL) {
+    try {
+      const url = new URL(rawURL);
+      if (url.protocol !== 'https:') return false;
+      return url.hostname === 'checkout.stripe.com' || url.hostname === 'billing.stripe.com';
+    } catch (_err) {
+      return false;
+    }
+  },
+
+  redirectToTrustedBillingURL(rawURL) {
+    if (!this.isTrustedBillingRedirectURL(rawURL)) {
+      this.toast('Unexpected billing redirect URL', 'error');
+      return;
+    }
+    window.location.assign(rawURL);
+  },
+
   async startSelectedCheckout(target) {
     const modal = target?.closest?.('.upgrade-modal') || document.getElementById('upgrade-modal');
     if (!modal) return;
@@ -7965,7 +8011,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createCheckoutSession(payload);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -7977,7 +8023,7 @@ Object.assign(App, {
     try {
       const resp = await API.billing.createPortalSession();
       if (resp?.url) {
-        window.location.href = resp.url;
+        this.redirectToTrustedBillingURL(resp.url);
       }
     } catch (error) {
       this.toast(error.message, 'error');
@@ -7994,7 +8040,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createSubscriptionCheckoutSession(interval);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -8005,7 +8051,7 @@ Object.assign(App, {
   async startLifetimeCheckout() {
     try {
       const resp = await API.billing.createLifetimeCheckoutSession();
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     }
@@ -8020,7 +8066,7 @@ Object.assign(App, {
     try {
       this.setButtonLoading(target, true);
       const resp = await API.billing.createTipCheckoutSession(amount);
-      if (resp?.url) window.location.href = resp.url;
+      if (resp?.url) this.redirectToTrustedBillingURL(resp.url);
     } catch (error) {
       this.toast(error.message, 'error');
     } finally {
@@ -8418,43 +8464,57 @@ Object.assign(App, {
 
     try {
       const response = await API.tokens.list();
-	      const tokens = response.tokens || [];
+      const tokens = response.tokens || [];
+      const scopeClasses = {
+        read: 'scope-read',
+        write: 'scope-write',
+        read_write: 'scope-read_write',
+      };
+      const scopeLabels = {
+        read: 'read',
+        write: 'write',
+        read_write: 'read & write',
+      };
 
-	      if (tokens.length === 0) {
-	        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
-	        return;
-	      }
+      if (tokens.length === 0) {
+        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
+        return;
+      }
 
-	      listEl.innerHTML = tokens.map(token => `
-	        <div class="token-item">
-	          <div class="token-info">
-	            <div class="fw-medium">${this.escapeHtml(token.name)}</div>
-	            <div class="token-meta text-muted text-sm">
-	              <code>${this.escapeHtml(token.token_prefix)}...</code>
-	              <span>•</span>
-	              <span class="token-scope scope-${token.scope}">${token.scope.replace('_', ' & ')}</span>
-	              <span>•</span>
-	              <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
-	            </div>
-	            <div class="token-meta text-muted text-sm">
-	              Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
-	            </div>
-	          </div>
-	          <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
-	            <i class="fas fa-trash"></i>
-	          </button>
-	        </div>
-	      `).join('');
+      listEl.innerHTML = tokens.map(token => {
+        const scopeClass = scopeClasses[token.scope] || 'scope-unknown';
+        const scopeLabel = scopeLabels[token.scope] || 'unknown';
+        return `
+          <div class="token-item">
+            <div class="token-info">
+              <div class="fw-medium">${this.escapeHtml(token.name)}</div>
+              <div class="token-meta text-muted text-sm">
+                <code>${this.escapeHtml(token.token_prefix)}...</code>
+                <span>•</span>
+                <span class="token-scope ${scopeClass}">${this.escapeHtml(scopeLabel)}</span>
+                <span>•</span>
+                <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
+              </div>
+              <div class="token-meta text-muted text-sm">
+                Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${this.escapeHtml(token.id)}" title="Revoke Token">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
 
-	      // Add Revoke All button if tokens exist
-	      if (tokens.length > 1) {
-	          listEl.innerHTML += `
-	            <div class="mt-md text-right">
-	                <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
-	            </div>
-	          `;
-	      }
-	    } catch (error) {
+      // Add Revoke All button if tokens exist
+      if (tokens.length > 1) {
+        listEl.innerHTML += `
+          <div class="mt-md text-right">
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
+          </div>
+        `;
+      }
+    } catch (error) {
       listEl.innerHTML = '<p class="text-muted text-danger" id="tokens-error"></p>';
       const errorEl = document.getElementById('tokens-error');
       if (errorEl) errorEl.textContent = `Failed to load tokens: ${error.message}`;
@@ -9207,7 +9267,7 @@ Object.assign(App, {
     }
 
     const cardOptions = cards.map((card) => {
-      const label = `${this.escapeHtml(this.getCardDisplayName(card))} (${this.escapeHtml(String(card.year))})`;
+      const label = `${this.escapeHtml(this.getCardDisplayNameRaw(card))} (${this.escapeHtml(String(card.year))})`;
       return `<option value="${this.escapeHtml(card.id)}">${label}</option>`;
     }).join('');
 
@@ -9340,7 +9400,7 @@ Object.assign(App, {
     } catch (error) {
       card = this.currentCard && this.currentCard.id === cardId ? this.currentCard : null;
     }
-    const suggestedName = card ? `${this.getCardDisplayName(card)} Template` : 'New template';
+    const suggestedName = card ? `${this.getCardDisplayNameRaw(card)} Template` : 'New template';
 
     this.openModal('Save as template', `
       <form data-action="create-template-from-card" data-card-id="${this.escapeHtml(cardId)}">

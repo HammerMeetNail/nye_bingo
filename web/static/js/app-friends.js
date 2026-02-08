@@ -1,7 +1,11 @@
 // Year of Bingo - Friends/Invites Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleFriendsLoaded) {
+  App._moduleFriendsLoaded = true;
 
 Object.assign(App, {
   // Friends page
@@ -175,7 +179,7 @@ Object.assign(App, {
             <div>
               <strong>${this.escapeHtml(user.username)}</strong>
             </div>
-            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${user.id}">
+            <button class="btn btn-primary btn-sm" data-action="send-friend-request" data-user-id="${this.escapeHtml(user.id)}">
               Add Friend
             </button>
           </div>
@@ -243,7 +247,7 @@ Object.assign(App, {
               ${invite.expires_at ? `Expires ${new Date(invite.expires_at).toLocaleDateString()}` : 'No expiration'}
             </div>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${invite.id}">Revoke</button>
+          <button class="btn btn-ghost btn-sm" data-action="revoke-invite" data-invite-id="${this.escapeHtml(invite.id)}">Revoke</button>
         </div>
       `).join('');
     } catch (error) {
@@ -280,7 +284,7 @@ Object.assign(App, {
           <div>
             <strong>${this.escapeHtml(user.username)}</strong>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${user.id}">Unblock</button>
+          <button class="btn btn-ghost btn-sm" data-action="unblock-user" data-user-id="${this.escapeHtml(user.id)}">Unblock</button>
         </div>
       `).join('');
     } catch (error) {
@@ -319,8 +323,8 @@ Object.assign(App, {
               <strong>${this.escapeHtml(req.requester_username)}</strong>
             </div>
             <div class="friend-actions">
-              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${req.id}">Accept</button>
-              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${req.id}">Reject</button>
+              <button class="btn btn-primary btn-sm" data-action="accept-request" data-request-id="${this.escapeHtml(req.id)}">Accept</button>
+              <button class="btn btn-ghost btn-sm" data-action="reject-request" data-request-id="${this.escapeHtml(req.id)}">Reject</button>
             </div>
           </div>
         `).join('');
@@ -338,7 +342,7 @@ Object.assign(App, {
             <div>
               <strong>${this.escapeHtml(req.friend_username)}</strong>
             </div>
-            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${req.id}">Cancel</button>
+            <button class="btn btn-ghost btn-sm" data-action="cancel-request" data-request-id="${this.escapeHtml(req.id)}">Cancel</button>
           </div>
         `).join('');
       } else {
@@ -358,9 +362,9 @@ Object.assign(App, {
                 <strong>${friendName} ${premiumBadge}</strong>
               </div>
               <div class="friend-actions">
-                <a href="/friend-card/${friend.id}" class="btn btn-secondary btn-sm">View Card</a>
-                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${friend.id}">Remove</button>
-                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${otherUserId}">Block</button>
+                <a href="/friend-card/${encodeURIComponent(friend.id)}" class="btn btn-secondary btn-sm">View Card</a>
+                <button class="btn btn-ghost btn-sm" data-action="remove-friend" data-friendship-id="${this.escapeHtml(friend.id)}">Remove</button>
+                <button class="btn btn-ghost btn-sm" data-action="block-user" data-other-user-id="${this.escapeHtml(otherUserId)}">Block</button>
               </div>
             </div>
           `;
@@ -620,9 +624,9 @@ Object.assign(App, {
         <div class="emoji-buttons">
           ${this.allowedEmojis.map(emoji => `
             <button class="emoji-btn ${userReaction?.emoji === emoji ? 'emoji-btn--selected' : ''}"
-                    data-action="react-item" data-item-id="${itemId}" data-emoji="${emoji}">${emoji}</button>
+                    data-action="react-item" data-item-id="${this.escapeHtml(itemId)}" data-emoji="${emoji}">${emoji}</button>
           `).join('')}
-          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${itemId}">✕</button>` : ''}
+          ${userReaction ? `<button class="emoji-btn emoji-btn--remove" data-action="remove-reaction" data-item-id="${this.escapeHtml(itemId)}">✕</button>` : ''}
         </div>
       </div>
     ` : '';
@@ -672,3 +676,4 @@ Object.assign(App, {
     }
   },
 });
+}

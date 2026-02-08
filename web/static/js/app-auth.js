@@ -1,7 +1,11 @@
 // Year of Bingo - Auth/Profile Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleAuthLoaded) {
+  App._moduleAuthLoaded = true;
 
 Object.assign(App, {
   async checkAuth() {
@@ -713,6 +717,15 @@ Object.assign(App, {
           <strong class="verification-banner-title">Please verify your email</strong>
           <span class="verification-banner-subtitle"> to enable all features.</span>
           <div class="text-muted verification-banner-detail">
+            AI Goal Wizard: <strong>${remaining}</strong> free generations left before verification is required.
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" data-action="resend-verification">
+          Resend verification email
+        </button>
+      </div>
+    `;
+  },
 
   async exportAccountData(button) {
     if (!this.user) return;
@@ -858,15 +871,15 @@ Object.assign(App, {
 
     try {
       if (submitButton) this.setButtonLoading(submitButton, true);
-	      await API.account.delete(confirmUsername.trim(), password);
-	      this.closeModal();
-	      this.user = null;
-	      this.isPremium = false;
-	      this.entitlements = {};
-	      this.billingStatus = null;
-	      this.notificationSettings = null;
-	      this.notificationUnreadCount = 0;
-	      this.stopNotificationPolling();
+        await API.account.delete(confirmUsername.trim(), password);
+        this.closeModal();
+        this.user = null;
+        this.isPremium = false;
+        this.entitlements = {};
+        this.billingStatus = null;
+        this.notificationSettings = null;
+        this.notificationUnreadCount = 0;
+        this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
       this.navigate('/', { skipWarning: true });
@@ -1107,17 +1120,23 @@ Object.assign(App, {
 
   async confirmedLogout() {
     try {
-	      this.closeModal();
-	      await API.auth.logout();
-	      this.user = null;
-	      this.isPremium = false;
-	      this.entitlements = {};
-	      this.billingStatus = null;
-	      this.notificationSettings = null;
-	      this.notificationUnreadCount = 0;
+      this.closeModal();
+      await API.auth.logout();
+      this.user = null;
+      this.isPremium = false;
+      this.entitlements = {};
+      this.billingStatus = null;
+      this.notificationSettings = null;
+      this.notificationUnreadCount = 0;
       this.stopNotificationPolling();
       this.setupNavigation();
       sessionStorage.removeItem('pendingInviteToken');
+      this.navigate('/', { skipWarning: true });
+      this.toast('Logged out successfully', 'success');
+    } catch (error) {
+      this.toast(error.message, 'error');
+    }
+  },
 
   async loadApiTokens() {
     const listEl = document.getElementById('api-tokens-list');
@@ -1125,52 +1144,66 @@ Object.assign(App, {
 
     try {
       const response = await API.tokens.list();
-	      const tokens = response.tokens || [];
+      const tokens = response.tokens || [];
+      const scopeClasses = {
+        read: 'scope-read',
+        write: 'scope-write',
+        read_write: 'scope-read_write',
+      };
+      const scopeLabels = {
+        read: 'read',
+        write: 'write',
+        read_write: 'read & write',
+      };
 
-	      if (tokens.length === 0) {
-	        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
-	        return;
-	      }
+      if (tokens.length === 0) {
+        listEl.innerHTML = '<p class="text-muted mt-md">No active tokens.</p>';
+        return;
+      }
 
-	      listEl.innerHTML = tokens.map(token => `
-	        <div class="token-item">
-	          <div class="token-info">
-	            <div class="fw-medium">${this.escapeHtml(token.name)}</div>
-	            <div class="token-meta text-muted text-sm">
-	              <code>${this.escapeHtml(token.token_prefix)}...</code>
-	              <span>•</span>
-	              <span class="token-scope scope-${token.scope}">${token.scope.replace('_', ' & ')}</span>
-	              <span>•</span>
-	              <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
-	            </div>
-	            <div class="token-meta text-muted text-sm">
-	              Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
-	            </div>
-	          </div>
-	          <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${token.id}" title="Revoke Token">
-	            <i class="fas fa-trash"></i>
-	          </button>
-	        </div>
-	      `).join('');
+      listEl.innerHTML = tokens.map(token => {
+        const scopeClass = scopeClasses[token.scope] || 'scope-unknown';
+        const scopeLabel = scopeLabels[token.scope] || 'unknown';
+        return `
+          <div class="token-item">
+            <div class="token-info">
+              <div class="fw-medium">${this.escapeHtml(token.name)}</div>
+              <div class="token-meta text-muted text-sm">
+                <code>${this.escapeHtml(token.token_prefix)}...</code>
+                <span>•</span>
+                <span class="token-scope ${scopeClass}">${this.escapeHtml(scopeLabel)}</span>
+                <span>•</span>
+                <span>${token.expires_at ? 'Expires ' + new Date(token.expires_at).toLocaleDateString() : 'Never expires'}</span>
+              </div>
+              <div class="token-meta text-muted text-sm">
+                Last used: ${token.last_used_at ? new Date(token.last_used_at).toLocaleString() : 'Never'}
+              </div>
+            </div>
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="delete-token" data-token-id="${this.escapeHtml(token.id)}" title="Revoke Token">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        `;
+      }).join('');
 
-	      // Add Revoke All button if tokens exist
-	      if (tokens.length > 1) {
-	          listEl.innerHTML += `
-	            <div class="mt-md text-right">
-	                <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
-	            </div>
-	          `;
-	      }
-	    } catch (error) {
+      // Add Revoke All button if tokens exist
+      if (tokens.length > 1) {
+        listEl.innerHTML += `
+          <div class="mt-md text-right">
+            <button class="btn btn-ghost btn-sm btn-ghost-danger" data-action="revoke-all-tokens">Revoke All Tokens</button>
+          </div>
+        `;
+      }
+    } catch (error) {
       listEl.innerHTML = '<p class="text-muted text-danger" id="tokens-error"></p>';
       const errorEl = document.getElementById('tokens-error');
       if (errorEl) errorEl.textContent = `Failed to load tokens: ${error.message}`;
     }
   },
 
-	  showCreateTokenModal() {
-	    this.openModal('Create API Token', `
-	      <form data-action="create-token">
+    showCreateTokenModal() {
+      this.openModal('Create API Token', `
+        <form data-action="create-token">
         <div class="form-group">
           <label for="token-name">Name</label>
           <input type="text" id="token-name" class="form-input" required placeholder="e.g., Backup Script" maxlength="100">
@@ -1193,13 +1226,13 @@ Object.assign(App, {
             <option value="0">Never</option>
           </select>
         </div>
-	        <div class="flex gap-md justify-end">
-	          <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
-	          <button type="submit" class="btn btn-primary">Generate Token</button>
-	        </div>
-	      </form>
-	    `);
-	  },
+          <div class="flex gap-md justify-end">
+            <button type="button" class="btn btn-ghost" data-action="close-modal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Generate Token</button>
+          </div>
+        </form>
+      `);
+    },
 
   async handleCreateToken(event) {
     event.preventDefault();
@@ -1217,25 +1250,25 @@ Object.assign(App, {
     }
   },
 
-	  showTokenCreatedModal(token, meta) {
-	    this.openModal('Token Generated', `
-	      <div class="token-created-modal">
-	        <p><strong>Save this token now!</strong> You won't be able to see it again.</p>
-	        <div class="token-display">
-	          <code id="new-token" class="break-all">${this.escapeHtml(token)}</code>
-	          <button class="btn btn-secondary btn-sm" data-action="copy-new-token">Copy</button>
-	        </div>
-	        <p class="text-muted mt-md text-sm">
-	          Use this token in the <code>Authorization</code> header:
-	          <br>
-	          <code class="block surface-2 p-sm mt-sm rounded-sm">Authorization: Bearer ${this.escapeHtml(token.substring(0, 10))}...</code>
-	        </p>
-	        <div class="mt-lg text-right">
-	          <button class="btn btn-primary" data-action="token-modal-done">Done</button>
-	        </div>
-	      </div>
-	    `);
-	  },
+    showTokenCreatedModal(token, meta) {
+      this.openModal('Token Generated', `
+        <div class="token-created-modal">
+          <p><strong>Save this token now!</strong> You won't be able to see it again.</p>
+          <div class="token-display">
+            <code id="new-token" class="break-all">${this.escapeHtml(token)}</code>
+            <button class="btn btn-secondary btn-sm" data-action="copy-new-token">Copy</button>
+          </div>
+          <p class="text-muted mt-md text-sm">
+            Use this token in the <code>Authorization</code> header:
+            <br>
+            <code class="block surface-2 p-sm mt-sm rounded-sm">Authorization: Bearer ${this.escapeHtml(token.substring(0, 10))}...</code>
+          </p>
+          <div class="mt-lg text-right">
+            <button class="btn btn-primary" data-action="token-modal-done">Done</button>
+          </div>
+        </div>
+      `);
+    },
 
   copyToClipboard(text) {
     navigator.clipboard.writeText(text).then(() => {
@@ -1267,3 +1300,4 @@ Object.assign(App, {
     }
   },
 });
+}

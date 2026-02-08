@@ -1,7 +1,11 @@
 // Year of Bingo - Reminders Module (scaffold)
+// SCAFFOLD: Not yet loaded in production. See plans/refactor.md for extraction status.
 
 window.App = window.App || {};
 var App = window.App;
+
+if (!App._moduleRemindersLoaded) {
+  App._moduleRemindersLoaded = true;
 
 Object.assign(App, {
   async loadReminderSettings() {
@@ -392,3 +396,4 @@ Object.assign(App, {
     return parsed.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   },
 });
+}
