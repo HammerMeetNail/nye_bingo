@@ -1,7 +1,7 @@
 // Year of Bingo - Templates Module (scaffold)
 
 window.App = window.App || {};
-const App = window.App;
+var App = window.App;
 
 Object.assign(App, {
   async renderTemplates(container) {

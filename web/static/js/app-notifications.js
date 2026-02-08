@@ -1,7 +1,7 @@
 // Year of Bingo - Notifications Module (scaffold)
 
 window.App = window.App || {};
-const App = window.App;
+var App = window.App;
 
 Object.assign(App, {
   startNotificationPolling() {

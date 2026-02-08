@@ -534,6 +534,28 @@ describe('Module boundaries + action dispatch', () => {
     });
   });
 
+  test('split scripts avoid top-level const App redeclaration', () => {
+    const appFiles = [
+      'app.js',
+      'app-core.js',
+      'app-actions.js',
+      'app-modals.js',
+      'app-notifications.js',
+      'app-reminders.js',
+      'app-friends.js',
+      'app-billing.js',
+      'app-templates.js',
+      'app-ai.js',
+      'app-auth.js',
+      'app-cards.js',
+    ];
+    appFiles.forEach((fileName) => {
+      const source = readAppModule(fileName);
+      expect(source.includes('const App = window.App;')).toBe(false);
+      expect(source.includes('var App = window.App;')).toBe(true);
+    });
+  });
+
   test('domain modules contain representative extracted methods', () => {
     expect(readAppModule('app-billing.js').includes('openUpgradeModal(')).toBe(true);
     expect(readAppModule('app-billing.js').includes('renderPremium(')).toBe(true);

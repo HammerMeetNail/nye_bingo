@@ -1,7 +1,7 @@
 // Year of Bingo - App Action Delegation Module (scaffold)
 
 window.App = window.App || {};
-const App = window.App;
+var App = window.App;
 
 Object.assign(App, {
   setupActionDelegation() {

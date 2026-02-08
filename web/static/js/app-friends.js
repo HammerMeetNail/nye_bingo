@@ -1,7 +1,7 @@
 // Year of Bingo - Friends/Invites Module (scaffold)
 
 window.App = window.App || {};
-const App = window.App;
+var App = window.App;
 
 Object.assign(App, {
   // Friends page
