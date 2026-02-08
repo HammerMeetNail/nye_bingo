@@ -1538,7 +1538,7 @@ Object.assign(App, {
             <p class="reminder-goal-text">${goalText}</p>
             <p class="reminder-goal-meta">${cardName} - ${this.escapeHtml(nextSend)}</p>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${reminder.id}">Stop</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${this.escapeHtml(reminder.id)}">Stop</button>
         </div>
       `;
     }).join('');
@@ -3061,14 +3061,14 @@ Object.assign(App, {
 	    const visibilityIcon = card.visible_to_friends ? 'eye' : 'eye-slash';
 	    const visibilityLabel = card.visible_to_friends ? 'Visible to friends' : 'Private';
 	    const isSelected = this.selectedCards.includes(card.id);
-	    const cardLink = card.is_archived ? `/archive-card/${card.id}` : `/card/${card.id}`;
+    const cardLink = card.is_archived ? `/archive-card/${encodeURIComponent(card.id)}` : `/card/${encodeURIComponent(card.id)}`;
 
     return `
       <div class="card dashboard-card-preview">
         <div class="dashboard-card-preview-header">
           <div class="dashboard-card-preview-main">
             <label class="dashboard-checkbox-label" data-stop-propagation="true">
-              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${card.id}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
+              <input type="checkbox" class="dashboard-card-checkbox" data-card-id="${this.escapeHtml(card.id)}" ${isSelected ? 'checked' : ''} data-change-action="dashboard-selection">
             </label>
             <a href="${cardLink}" class="dashboard-card-preview-link">
               <div class="dashboard-card-preview-title-row">
@@ -3088,7 +3088,7 @@ Object.assign(App, {
               <i class="fas fa-${visibilityIcon}"></i> ${card.visible_to_friends ? 'Visible' : 'Private'}
             </span>
             ${card.is_archived ? '<div class="archive-badge">Archived</div>' : ''}
-            <button class="btn btn-ghost btn-sm dashboard-delete-btn" data-action="delete-card" data-card-id="${card.id}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
+            <button class="btn btn-ghost btn-sm dashboard-delete-btn" data-action="delete-card" data-card-id="${this.escapeHtml(card.id)}" data-stop-propagation="true" aria-label="Delete card" title="Delete card">
               <i class="fas fa-trash"></i>
             </button>
           </div>
@@ -3890,7 +3890,7 @@ Object.assign(App, {
           <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         </div>
         ${!isAnon ? `
-          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}">
+          <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}">
             <i class="fas fa-${this.currentCard.visible_to_friends ? 'eye' : 'eye-slash'}"></i>
             <span>${this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private'}</span>
           </button>
@@ -3936,10 +3936,10 @@ Object.assign(App, {
               <button class="btn btn-secondary" data-action="show-clone-card-modal">
                 📄 Clone
               </button>
-              <button class="btn btn-secondary" data-action="save-template-from-card" data-card-id="${this.currentCard.id}" ${itemCount === 0 ? 'disabled' : ''}>
+              <button class="btn btn-secondary" data-action="save-template-from-card" data-card-id="${this.escapeHtml(this.currentCard.id)}" ${itemCount === 0 ? 'disabled' : ''}>
                 ⭐ Save Template
               </button>
-              <button class="btn btn-secondary" data-action="show-rollover-card-modal" data-card-id="${this.currentCard.id}" ${itemCount === 0 ? 'disabled' : ''}>
+              <button class="btn btn-secondary" data-action="show-rollover-card-modal" data-card-id="${this.escapeHtml(this.currentCard.id)}" ${itemCount === 0 ? 'disabled' : ''}>
                 📅 Rollover
               </button>
             ` : ''}
@@ -3957,7 +3957,7 @@ Object.assign(App, {
                     🧙 AI
                   </button>
                 ` : `
-                  <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.currentCard.id}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
+                  <button class="btn btn-secondary btn-sm" id="ai-btn" data-action="open-ai-wizard" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-desired-count="${capacity - itemCount}" title="Generate goals with AI" ${itemCount >= capacity ? 'disabled' : ''}>
                     🧙 AI
                   </button>
                   ${this.hasFeature('ai_enhancements') ? `
@@ -4191,10 +4191,10 @@ Object.assign(App, {
         <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
         <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
         <button class="btn btn-ghost btn-sm" data-action="show-edit-finalized-card-modal" title="Edit finalized card (Premium)">📝</button>
-        <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.currentCard.id}" title="Save as template">⭐</button>
-        <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.currentCard.id}" title="New Year rollover">📅</button>
+        <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="Save as template">⭐</button>
+        <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="New Year rollover">📅</button>
         <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
-        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}" aria-label="${visibilityLabel}">
+        <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}" aria-label="${visibilityLabel}">
           <i class="fas fa-${visibilityIcon}"></i>
           <span>${visibilityLabel}</span>
         </button>
@@ -4336,7 +4336,7 @@ Object.assign(App, {
         if (item) {
           const isCompleted = item.is_completed;
           const shortText = this.truncateText(item.content, 50);
-          const itemIdAttr = item.id ? `data-item-id="${item.id}"` : '';
+          const itemIdAttr = item.id ? `data-item-id="${this.escapeHtml(item.id)}"` : '';
           cells.push(`
             <div class="bingo-cell ${isCompleted ? 'bingo-cell--completed' : ''}"
                  data-position="${i}"
@@ -4508,17 +4508,17 @@ Object.assign(App, {
         ${note}
         ${status ? `<p class="text-muted" id="goal-reminder-status">${status}</p>` : ''}
         <div class="reminder-presets">
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="tomorrow" ${disableAttr}>Tomorrow morning</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="week" ${disableAttr}>Next week</button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="month" ${disableAttr}>Next month</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="tomorrow" ${disableAttr}>Tomorrow morning</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="week" ${disableAttr}>Next week</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="month" ${disableAttr}>Next month</button>
         </div>
         <div class="reminder-custom">
           <input type="datetime-local" id="reminder-custom-datetime" class="form-input" ${disableAttr}>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${item.id}" data-preset="custom" ${disableAttr}>Set custom reminder</button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="set-goal-reminder" data-item-id="${this.escapeHtml(item.id)}" data-preset="custom" ${disableAttr}>Set custom reminder</button>
         </div>
         <p class="text-muted">Reminder times use the server clock.</p>
         ${existing ? `
-          <button type="button" class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${existing.id}" ${disableAttr}>Stop reminders for this goal</button>
+          <button type="button" class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${this.escapeHtml(existing.id)}" ${disableAttr}>Stop reminders for this goal</button>
         ` : ''}
       </div>
     `;
@@ -6422,13 +6422,13 @@ Object.assign(App, {
         </div>
         <p class="mb-lg">What would you like to do?</p>
         <div class="flex flex-col gap-075">
-          <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${existingCard.id}">
+          <button class="btn btn-secondary" data-action="conflict-keep-existing" data-card-id="${this.escapeHtml(existingCard.id)}">
             Keep Existing Card
           </button>
           <button class="btn btn-primary" data-action="conflict-save-as-new">
             Save as New Card (with different title)
           </button>
-          <button class="btn btn-ghost btn-ghost-danger" data-action="conflict-replace" data-card-id="${existingCard.id}">
+          <button class="btn btn-ghost btn-ghost-danger" data-action="conflict-replace" data-card-id="${this.escapeHtml(existingCard.id)}">
             Replace Existing Card
           </button>
           <button class="btn btn-ghost" data-action="close-modal">
@@ -6555,7 +6555,7 @@ Object.assign(App, {
     this.createConflictContext = { year, category };
 
     let buttons = `
-      <button class="btn btn-secondary" data-action="create-conflict-go-to-existing" data-card-id="${existingCard.id}">
+      <button class="btn btn-secondary" data-action="create-conflict-go-to-existing" data-card-id="${this.escapeHtml(existingCard.id)}">
         Go to Existing Card
       </button>
       <button class="btn btn-primary" data-action="create-conflict-save-as-new">
@@ -6565,7 +6565,7 @@ Object.assign(App, {
     // Only offer replace for unfinalized cards
     if (!existingCard.is_finalized) {
       buttons += `
-        <button class="btn btn-ghost btn-ghost-danger" data-action="create-conflict-replace" data-card-id="${existingCard.id}">
+        <button class="btn btn-ghost btn-ghost-danger" data-action="create-conflict-replace" data-card-id="${this.escapeHtml(existingCard.id)}">
           Delete &amp; Create New
         </button>`;
     }
@@ -8198,7 +8198,7 @@ Object.assign(App, {
           <div class="card-header-actions">
             <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
             ${showShare ? '<button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>' : ''}
-            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.currentCard.id}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
+            <button class="visibility-toggle-btn ${this.currentCard.visible_to_friends ? 'visibility-toggle-btn--visible' : 'visibility-toggle-btn--private'}" data-action="toggle-card-visibility" data-card-id="${this.escapeHtml(this.currentCard.id)}" data-visible="${!this.currentCard.visible_to_friends}" title="${visibilityLabel}">
               <i class="fas fa-${visibilityIcon}"></i>
               <span>${visibilityLabel}</span>
             </button>

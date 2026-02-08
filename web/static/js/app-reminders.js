@@ -143,7 +143,7 @@ Object.assign(App, {
             <p class="reminder-goal-text">${goalText}</p>
             <p class="reminder-goal-meta">${cardName} - ${this.escapeHtml(nextSend)}</p>
           </div>
-          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${reminder.id}">Stop</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete-goal-reminder" data-reminder-id="${this.escapeHtml(reminder.id)}">Stop</button>
         </div>
       `;
     }).join('');
