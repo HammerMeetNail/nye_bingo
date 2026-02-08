@@ -346,7 +346,7 @@ Legend:
 
 ### Track B: Card Handler/Service Split
 
-- [ ] `B1` Split handler: read/create/update paths (`M`, `Mechanical`)
+- [x] `B1` Split handler: read/create/update paths (`M`, `Mechanical`)
   - Scope:
     - Move methods from `internal/handlers/card.go` into domain files without logic edits.
   - Files:
@@ -355,7 +355,7 @@ Legend:
   - Validation:
     - `go test ./internal/handlers -count=1`
 
-- [ ] `B2` Split handler: finalize/completion flows (`M`, `Mechanical`)
+- [x] `B2` Split handler: finalize/completion flows (`M`, `Mechanical`)
   - Scope:
     - Move finalize/complete/uncomplete/notes/edit methods.
   - Files:
