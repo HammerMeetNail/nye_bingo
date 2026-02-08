@@ -441,7 +441,7 @@ Legend:
     - JS tests
     - targeted E2E: friend/invite specs
 
-- [ ] `A5` Extract billing/templates/AI modules (`L`, `Behavioral`)
+- [x] `A5` Extract billing/templates/AI modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-billing.js` (new)
     - `web/static/js/app-templates.js` (new)
