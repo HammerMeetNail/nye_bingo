@@ -7,14 +7,16 @@ func logError(message string, err error, extraFields ...map[string]interface{}) 
 		return
 	}
 
-	fields := map[string]interface{}{
-		"error": err.Error(),
-	}
+	fields := map[string]interface{}{}
 	for _, extra := range extraFields {
 		for k, v := range extra {
+			if k == "error" {
+				continue
+			}
 			fields[k] = v
 		}
 	}
+	fields["error"] = err.Error()
 
 	logging.Error(message, fields)
 }
