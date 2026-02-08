@@ -374,7 +374,7 @@ Legend:
     - `go test ./internal/handlers -count=1`
     - `go test ./...`
 
-- [ ] `B4` Split service: read/write/finalize/completion domains (`L`, `Mechanical`)
+- [x] `B4` Split service: read/write/finalize/completion domains (`L`, `Mechanical`)
   - Scope:
     - Move methods from `internal/services/card.go` into domain files with zero signature changes.
   - Files:
@@ -385,7 +385,7 @@ Legend:
   - Validation:
     - `go test ./internal/services -count=1`
 
-- [ ] `B5` Split service: bulk/import/export/conflict/permissions (`L`, `Mechanical`)
+- [x] `B5` Split service: bulk/import/export/conflict/permissions (`L`, `Mechanical`)
   - Scope:
     - Move remaining card service domains and local helpers.
   - Files:
