@@ -52,7 +52,6 @@ type PageData struct {
 	APIJSPath           string
 	AnonymousCardJSPath string
 	AppJSPath           string
-	AppModuleJSPaths    []string
 	AIWizardJSPath      string
 	GoogleOAuthEnabled  bool
 }
@@ -67,7 +66,6 @@ func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 		APIJSPath:           h.manifest.GetAPIJS(),
 		AnonymousCardJSPath: h.manifest.GetAnonymousCardJS(),
 		AppJSPath:           h.manifest.GetAppJS(),
-		AppModuleJSPaths:    h.manifest.GetAppModuleJSPaths(),
 		AIWizardJSPath:      h.manifest.GetAIWizardJS(),
 		GoogleOAuthEnabled:  h.oauth.GoogleEnabled,
 	}
