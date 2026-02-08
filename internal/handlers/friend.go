@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
@@ -71,7 +70,7 @@ func (h *FriendHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.friendService.SearchUsers(r.Context(), user.ID, query)
 	if err != nil {
-		log.Printf("Error searching users: %v", err)
+		logError("Error searching users", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -112,7 +111,7 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error sending friend request: %v", err)
+		logError("Error sending friend request", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -147,7 +146,7 @@ func (h *FriendHandler) AcceptRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error accepting friend request: %v", err)
+		logError("Error accepting friend request", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -182,7 +181,7 @@ func (h *FriendHandler) RejectRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error rejecting friend request: %v", err)
+		logError("Error rejecting friend request", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -209,7 +208,7 @@ func (h *FriendHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error removing friend: %v", err)
+		logError("Error removing friend", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -240,7 +239,7 @@ func (h *FriendHandler) CancelRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error canceling friend request: %v", err)
+		logError("Error canceling friend request", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -257,21 +256,21 @@ func (h *FriendHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing friends: %v", err)
+		logError("Error listing friends", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	requests, err := h.friendService.ListPendingRequests(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing pending requests: %v", err)
+		logError("Error listing pending requests", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	sent, err := h.friendService.ListSentRequests(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing sent requests: %v", err)
+		logError("Error listing sent requests", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -307,7 +306,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting friend user ID: %v", err)
+		logError("Error getting friend user ID", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -315,7 +314,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 	// Get the friend's cards
 	cards, err := h.cardService.ListByUser(r.Context(), friendUserID)
 	if err != nil {
-		log.Printf("Error listing friend cards: %v", err)
+		logError("Error listing friend cards", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -338,7 +337,7 @@ func (h *FriendHandler) GetFriendCard(w http.ResponseWriter, r *http.Request) {
 	// Get friend's username from the friendship list
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting friends list for cards: %v", err)
+		logError("Error getting friends list for cards", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -387,7 +386,7 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting friend user ID: %v", err)
+		logError("Error getting friend user ID", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -395,7 +394,7 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 	// Get all friend's cards
 	cards, err := h.cardService.ListByUser(r.Context(), friendUserID)
 	if err != nil {
-		log.Printf("Error listing friend cards: %v", err)
+		logError("Error listing friend cards", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -411,7 +410,7 @@ func (h *FriendHandler) GetFriendCards(w http.ResponseWriter, r *http.Request) {
 	// Get friend's username
 	friends, err := h.friendService.ListFriends(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting friends list: %v", err)
+		logError("Error getting friends list", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

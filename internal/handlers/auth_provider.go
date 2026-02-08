@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"path"
@@ -113,7 +112,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 
 	claims, err := provider.ExchangeAndVerify(r.Context(), code, nonceCookie.Value)
 	if err != nil {
-		log.Printf("Provider exchange failed: %v", err)
+		logError("Provider exchange failed", err)
 		h.redirectToLoginError(w, r, "oauth_exchange")
 		return
 	}
@@ -124,7 +123,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 			h.redirectToLoginError(w, r, "oauth_unverified")
 			return
 		}
-		log.Printf("Provider link failed: %v", err)
+		logError("Provider link failed", err)
 		h.redirectToLoginError(w, r, "oauth_link")
 		return
 	}
@@ -135,7 +134,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 	if linkResult.User != nil {
 		token, err := h.authService.CreateSession(r.Context(), linkResult.User.ID)
 		if err != nil {
-			log.Printf("Provider session failed: %v", err)
+			logError("Provider session failed", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
@@ -170,7 +169,7 @@ func (h *ProviderAuthHandler) ProviderCallback(w http.ResponseWriter, r *http.Re
 
 	pendingKey := providerPendingRedisKey(pendingToken)
 	if err := h.redis.Set(r.Context(), pendingKey, string(payload), oauthPendingTTL); err != nil {
-		log.Printf("Provider pending save failed: %v", err)
+		logError("Provider pending save failed", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -239,7 +238,7 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 		case errors.Is(err, services.ErrInvalidProviderPending):
 			writeError(w, http.StatusBadRequest, "Signup session expired. Please restart OAuth login.")
 		default:
-			log.Printf("Provider complete failed: %v", err)
+			logError("Provider complete failed", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 		}
 		return
@@ -247,7 +246,7 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 
 	token, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Provider session failed: %v", err)
+		logError("Provider session failed", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -263,7 +262,7 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 	}
 	payload, err := json.Marshal(response)
 	if err != nil {
-		log.Printf("Provider complete response marshal failed: %v", err)
+		logError("Provider complete response marshal failed", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -273,7 +272,7 @@ func (h *ProviderAuthHandler) ProviderComplete(w http.ResponseWriter, r *http.Re
 	if _, err := w.Write(payload); err != nil {
 		// Best-effort: if the client doesn't receive the response, keep the pending
 		// Redis record so a retry can succeed.
-		log.Printf("Provider complete response write failed: %v", err)
+		logError("Provider complete response write failed", err)
 		return
 	}
 

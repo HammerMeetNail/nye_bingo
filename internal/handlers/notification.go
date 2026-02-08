@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -73,7 +72,7 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 		UnreadOnly: unreadOnly,
 	})
 	if err != nil {
-		log.Printf("Error listing notifications: %v", err)
+		logError("Error listing notifications", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -101,7 +100,7 @@ func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error marking notification read: %v", err)
+		logError("Error marking notification read", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -117,7 +116,7 @@ func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.notificationService.MarkAllRead(r.Context(), user.ID); err != nil {
-		log.Printf("Error marking all notifications read: %v", err)
+		logError("Error marking all notifications read", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -145,7 +144,7 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error deleting notification: %v", err)
+		logError("Error deleting notification", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -161,7 +160,7 @@ func (h *NotificationHandler) DeleteAll(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.notificationService.DeleteAll(r.Context(), user.ID); err != nil {
-		log.Printf("Error deleting notifications: %v", err)
+		logError("Error deleting notifications", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -178,7 +177,7 @@ func (h *NotificationHandler) UnreadCount(w http.ResponseWriter, r *http.Request
 
 	count, err := h.notificationService.UnreadCount(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error counting notifications: %v", err)
+		logError("Error counting notifications", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -195,7 +194,7 @@ func (h *NotificationHandler) GetSettings(w http.ResponseWriter, r *http.Request
 
 	settings, err := h.notificationService.GetSettings(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting notification settings: %v", err)
+		logError("Error getting notification settings", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -222,7 +221,7 @@ func (h *NotificationHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating notification settings: %v", err)
+		logError("Error updating notification settings", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

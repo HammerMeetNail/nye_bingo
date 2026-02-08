@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"mime"
 	"net/http"
 	"strings"
@@ -49,7 +48,7 @@ func (h *AccountHandler) Export(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error building account export: %v", err)
+		logError("Error building account export", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -59,7 +58,7 @@ func (h *AccountHandler) Export(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(data); err != nil {
-		log.Printf("Error writing account export: %v", err)
+		logError("Error writing account export", err)
 	}
 }
 
@@ -91,7 +90,7 @@ func (h *AccountHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.accountService.Delete(r.Context(), user.ID); err != nil {
-		log.Printf("Error deleting account: %v", err)
+		logError("Error deleting account", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -56,7 +55,7 @@ func (h *BillingHandler) CheckoutSubscription(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err != nil {
-		slog.Error("billing: subscription checkout failed", "error", err, "user_id", user.ID)
+		logError("billing: subscription checkout failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
@@ -77,7 +76,7 @@ func (h *BillingHandler) CheckoutLifetime(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
-		slog.Error("billing: lifetime checkout failed", "error", err, "user_id", user.ID)
+		logError("billing: lifetime checkout failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
@@ -110,7 +109,7 @@ func (h *BillingHandler) CheckoutTip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("billing: tip checkout failed", "error", err, "user_id", user.ID)
+		logError("billing: tip checkout failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
@@ -157,7 +156,7 @@ func (h *BillingHandler) Checkout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("billing: checkout failed", "error", err, "user_id", user.ID)
+		logError("billing: checkout failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to start checkout")
 		return
 	}
@@ -178,7 +177,7 @@ func (h *BillingHandler) Portal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("billing: portal session failed", "error", err, "user_id", user.ID)
+		logError("billing: portal session failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to open billing portal")
 		return
 	}
@@ -211,7 +210,7 @@ func (h *BillingHandler) Redeem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		slog.Error("billing: redeem code failed", "error", err, "user_id", user.ID)
+		logError("billing: redeem code failed", err, map[string]interface{}{"user_id": user.ID.String()})
 		writeError(w, http.StatusInternalServerError, "Unable to redeem code")
 		return
 	}
@@ -250,7 +249,7 @@ func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid signature")
 			return
 		}
-		slog.Error("billing: webhook processing failed", "error", err)
+		logError("billing: webhook processing failed", err)
 		writeError(w, http.StatusInternalServerError, "webhook processing failed")
 		return
 	}

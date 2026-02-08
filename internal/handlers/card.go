@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -196,7 +195,7 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Check for existing card for this year/title before attempting create
 	existingCard, err := h.cardService.CheckForConflict(r.Context(), user.ID, req.Year, req.Title)
 	if err != nil && !errors.Is(err, services.ErrCardNotFound) {
-		log.Printf("Error checking for conflict: %v", err)
+		logError("Error checking for conflict", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -257,7 +256,7 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error creating card: %v", err)
+		logError("Error creating card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -274,7 +273,7 @@ func (h *CardHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	cards, err := h.cardService.ListByUser(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing cards: %v", err)
+		logError("Error listing cards", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -305,7 +304,7 @@ func (h *CardHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting card: %v", err)
+		logError("Error getting card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -342,7 +341,7 @@ func (h *CardHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error deleting card: %v", err)
+		logError("Error deleting card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -409,7 +408,7 @@ func (h *CardHandler) AddItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error adding item: %v", err)
+		logError("Error adding item", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -471,7 +470,7 @@ func (h *CardHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating card config: %v", err)
+		logError("Error updating card config", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -562,7 +561,7 @@ func (h *CardHandler) Clone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error cloning card: %v", err)
+		logError("Error cloning card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -648,7 +647,7 @@ func (h *CardHandler) EditFinalized(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("Error creating editable draft from finalized card: %v", err)
+		logError("Error creating editable draft from finalized card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -722,7 +721,7 @@ func (h *CardHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating item: %v", err)
+		logError("Error updating item", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -767,7 +766,7 @@ func (h *CardHandler) RemoveItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error removing item: %v", err)
+		logError("Error removing item", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -802,7 +801,7 @@ func (h *CardHandler) Shuffle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error shuffling card: %v", err)
+		logError("Error shuffling card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -860,7 +859,7 @@ func (h *CardHandler) SwapItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error swapping items: %v", err)
+		logError("Error swapping items", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -904,7 +903,7 @@ func (h *CardHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error finalizing card: %v", err)
+		logError("Error finalizing card", err)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -960,7 +959,7 @@ func (h *CardHandler) CompleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error completing item: %v", err)
+		logError("Error completing item", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1005,7 +1004,7 @@ func (h *CardHandler) UncompleteItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error uncompleting item: %v", err)
+		logError("Error uncompleting item", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1052,7 +1051,7 @@ func (h *CardHandler) UpdateNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating notes: %v", err)
+		logError("Error updating notes", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1093,7 +1092,7 @@ func (h *CardHandler) Archive(w http.ResponseWriter, r *http.Request) {
 
 	cards, err := h.cardService.GetArchive(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting archive: %v", err)
+		logError("Error getting archive", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1128,7 +1127,7 @@ func (h *CardHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting stats: %v", err)
+		logError("Error getting stats", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1186,7 +1185,7 @@ func (h *CardHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating card meta: %v", err)
+		logError("Error updating card meta", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1223,7 +1222,7 @@ func (h *CardHandler) UpdateVisibility(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating visibility: %v", err)
+		logError("Error updating visibility", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1262,7 +1261,7 @@ func (h *CardHandler) BulkUpdateVisibility(w http.ResponseWriter, r *http.Reques
 
 	count, err := h.cardService.BulkUpdateVisibility(r.Context(), user.ID, cardIDs, req.VisibleToFriends)
 	if err != nil {
-		log.Printf("Error bulk updating visibility: %v", err)
+		logError("Error bulk updating visibility", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1301,7 +1300,7 @@ func (h *CardHandler) BulkDelete(w http.ResponseWriter, r *http.Request) {
 
 	count, err := h.cardService.BulkDelete(r.Context(), user.ID, cardIDs)
 	if err != nil {
-		log.Printf("Error bulk deleting cards: %v", err)
+		logError("Error bulk deleting cards", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1340,7 +1339,7 @@ func (h *CardHandler) BulkUpdateArchive(w http.ResponseWriter, r *http.Request) 
 
 	count, err := h.cardService.BulkUpdateArchive(r.Context(), user.ID, cardIDs, req.IsArchived)
 	if err != nil {
-		log.Printf("Error bulk updating archive status: %v", err)
+		logError("Error bulk updating archive status", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1369,7 +1368,7 @@ func (h *CardHandler) ListExportable(w http.ResponseWriter, r *http.Request) {
 	// Get current year cards
 	currentCards, err := h.cardService.ListByUser(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing current cards for export: %v", err)
+		logError("Error listing current cards for export", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1377,7 +1376,7 @@ func (h *CardHandler) ListExportable(w http.ResponseWriter, r *http.Request) {
 	// Get archived cards
 	archivedCards, err := h.cardService.GetArchive(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing archived cards for export: %v", err)
+		logError("Error listing archived cards for export", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1464,7 +1463,7 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 	// Check for existing card for this year/title
 	existingCard, err := h.cardService.CheckForConflict(r.Context(), user.ID, req.Year, req.Title)
 	if err != nil && !errors.Is(err, services.ErrCardNotFound) {
-		log.Printf("Error checking for conflict: %v", err)
+		logError("Error checking for conflict", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -1533,7 +1532,7 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error importing card: %v", err)
+		logError("Error importing card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -57,7 +56,7 @@ func (h *ReminderHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 
 	settings, err := h.reminderService.GetSettings(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting reminder settings: %v", err)
+		logError("Error getting reminder settings", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -84,7 +83,7 @@ func (h *ReminderHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating reminder settings: %v", err)
+		logError("Error updating reminder settings", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -101,7 +100,7 @@ func (h *ReminderHandler) ListCards(w http.ResponseWriter, r *http.Request) {
 
 	cards, err := h.reminderService.ListCardCheckins(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing card reminders: %v", err)
+		logError("Error listing card reminders", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -143,7 +142,7 @@ func (h *ReminderHandler) UpsertCardCheckin(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating card reminder: %v", err)
+		logError("Error updating card reminder", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -169,7 +168,7 @@ func (h *ReminderHandler) DeleteCardCheckin(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "Reminder not found")
 		return
 	} else if err != nil {
-		log.Printf("Error deleting card reminder: %v", err)
+		logError("Error deleting card reminder", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -196,7 +195,7 @@ func (h *ReminderHandler) ListGoals(w http.ResponseWriter, r *http.Request) {
 
 	reminders, err := h.reminderService.ListGoalReminders(r.Context(), user.ID, cardID)
 	if err != nil {
-		log.Printf("Error listing goal reminders: %v", err)
+		logError("Error listing goal reminders", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -239,7 +238,7 @@ func (h *ReminderHandler) UpsertGoalReminder(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if err != nil {
-		log.Printf("Error updating goal reminder: %v", err)
+		logError("Error updating goal reminder", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -265,7 +264,7 @@ func (h *ReminderHandler) DeleteGoalReminder(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusNotFound, "Reminder not found")
 		return
 	} else if err != nil {
-		log.Printf("Error deleting goal reminder: %v", err)
+		logError("Error deleting goal reminder", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -303,7 +302,7 @@ func (h *ReminderHandler) SendTest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Card must be finalized and not archived")
 		return
 	} else if err != nil {
-		log.Printf("Error sending test reminder: %v", err)
+		logError("Error sending test reminder", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
