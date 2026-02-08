@@ -19,7 +19,7 @@ Year of Bingo (yearofbingo.com) is a Go + vanilla JS web app for creating annual
 
 ## HOW (common workflows)
 - Dev: `make local` (or `podman compose up` / `docker compose up`)
-- Dev with billing: `make local-billing` (starts Stripe webhook listener; see Billing Dev below)
+- Dev with premium+billing: `make premium` (starts Stripe webhook listener and enables premium feature switches; see Billing Dev below)
 - Tests (preferred): `make test` (container; wraps `./scripts/test.sh`)
 - Targeted tests: `make test-backend`, `make test-frontend` (or run `./scripts/test.sh` with flags like `--coverage`)
 - Lint: `make lint`
@@ -38,7 +38,7 @@ When testing billing/checkout flows locally:
 
 2. **Development workflow**:
    ```bash
-   make local-billing              # starts app + Stripe webhook listener
+   make premium                    # starts app + Stripe webhook listener + premium feature switches
    # ... test checkout flows ...
    make down                       # stops app and Stripe listener
    ```

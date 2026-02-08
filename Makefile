@@ -1,4 +1,4 @@
-.PHONY: local local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop premium-code premium-code-prod
+.PHONY: local premium local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop premium-code premium-code-prod
 
 # Force Podman to use a Linux compose provider (important in WSL where it may
 # otherwise auto-detect a Windows Docker Desktop docker-compose binary).
@@ -12,23 +12,29 @@ GOLANGCI_LINT_VERSION ?= v2.6.2
 
 # Stripe CLI PID file for background webhook listener
 STRIPE_PID_FILE := .stripe-listen.pid
+PREMIUM_DEV_ENV := BILLING_ENABLED=true FEATURE_TEMPLATES_ENABLED=true FEATURE_EDIT_AFTER_FINALIZE_ENABLED=true FEATURE_AI_ENHANCEMENTS_ENABLED=true
 
 # Run full local rebuild: down, build assets, build container, up in background
 local: down assets build up
 	@echo "Local environment running. Use 'make logs' to view output or 'make down' to stop."
-	@echo "For billing testing, use 'make local-billing' instead."
+	@echo "For premium/billing testing, use 'make premium' instead."
 
-# Run local environment with Stripe webhook listener (for billing development).
+# Run local environment with Stripe webhook listener and premium feature
+# switches enabled.
 # Order matters: Stripe listener must start first so STRIPE_WEBHOOK_SECRET is
 # available to the app container on boot.
-local-billing:
+premium:
 	@$(MAKE) down
 	@$(MAKE) stripe-listen
 	@$(MAKE) assets
 	@$(MAKE) build
-	@$(MAKE) up
-	@echo "Local environment running with Stripe webhook listener."
+	@$(PREMIUM_DEV_ENV) $(MAKE) up
+	@echo "Local environment running with Stripe webhook listener and premium features enabled."
 	@echo "Use 'make logs' to view app output or 'make down' to stop (also stops Stripe listener)."
+
+# Backward-compatible alias.
+local-billing: premium
+	@echo "'make local-billing' is deprecated; use 'make premium'."
 
 # Build hashed assets locally (needed because ./web is volume-mounted)
 assets:

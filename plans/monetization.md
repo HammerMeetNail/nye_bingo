@@ -70,7 +70,7 @@ As of **February 7, 2026**, the billing + entitlement foundation is implemented 
   - Convenience make targets added:
     - `make premium-code` (local)
     - `make premium-code-prod` (via SSH tunnel)
-- Dev tooling: `make local-billing` starts the Stripe webhook listener before the app so `STRIPE_WEBHOOK_SECRET` is available at boot.
+- Dev tooling: `make premium` starts the Stripe webhook listener before the app so `STRIPE_WEBHOOK_SECRET` is available at boot, and forces premium feature switches on for local testing.
 - OpenAPI: billing endpoints and schema updated in `web/static/openapi.yaml` (including the combined checkout endpoint and `BillingStatus.source`).
 
 **Not implemented yet (planned for later / still TODO):**
