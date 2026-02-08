@@ -86,6 +86,7 @@ OIDC_BASE_URL="${OIDC_BASE_URL:-http://oidc:5555}"
 # podman-compose reads .env from the repo by default; isolate E2E from local billing secrets/config.
 E2E_ENV_FILE="$(mktemp -t yearofbingo-e2e.XXXXXX.env)"
 trap 'rm -f "$E2E_ENV_FILE"' EXIT
+COMPOSE_E2E_ARGS=(--env-file "$E2E_ENV_FILE" --profile e2e)
 
 cat >"$E2E_ENV_FILE" <<EOF
 E2E_DEBUG_STRIPE_SIG=1
@@ -130,7 +131,7 @@ echo "Year of Bingo E2E Runner"
 echo "================================"
 echo ""
 echo "Resetting local stack (destructive: volumes will be removed)."
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" down -v
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" down -v
 
 echo ""
 echo "Building assets..."
@@ -164,7 +165,7 @@ export STRIPE_PREMIUM_PRICE_LIFETIME
 export STRIPE_TIP_PRICE_5
 export STRIPE_TIP_PRICE_10
 export STRIPE_TIP_PRICE_20
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" up -d --build oidc stripe-mock
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" up -d --build oidc stripe-mock
 
 echo ""
 echo "Waiting for OIDC mock..."
@@ -199,15 +200,16 @@ STRIPE_MOCK_IP="$(podman inspect -f "{{(index .NetworkSettings.Networks \"${NETW
 if [[ -n "$STRIPE_MOCK_IP" ]]; then
   STRIPE_API_BASE_URL="http://${STRIPE_MOCK_IP}:12111"
   STRIPE_MOCK_PUBLIC_BASE_URL="http://${STRIPE_MOCK_IP}:12111"
-  sed -i "s|^STRIPE_API_BASE_URL=.*|STRIPE_API_BASE_URL=${STRIPE_API_BASE_URL}|" "$E2E_ENV_FILE"
-  sed -i "s|^STRIPE_MOCK_PUBLIC_BASE_URL=.*|STRIPE_MOCK_PUBLIC_BASE_URL=${STRIPE_MOCK_PUBLIC_BASE_URL}|" "$E2E_ENV_FILE"
+  sed -i.bak "s|^STRIPE_API_BASE_URL=.*|STRIPE_API_BASE_URL=${STRIPE_API_BASE_URL}|" "$E2E_ENV_FILE"
+  sed -i.bak "s|^STRIPE_MOCK_PUBLIC_BASE_URL=.*|STRIPE_MOCK_PUBLIC_BASE_URL=${STRIPE_MOCK_PUBLIC_BASE_URL}|" "$E2E_ENV_FILE"
+  rm -f "${E2E_ENV_FILE}.bak"
 else
   echo "Warning: unable to resolve stripe-mock container IP; continuing with STRIPE_API_BASE_URL=$STRIPE_API_BASE_URL" >&2
 fi
 
 echo ""
 echo "Starting containers..."
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" up -d --build app postgres redis mailpit
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" up -d --build app postgres redis mailpit
 
 echo ""
 echo "Waiting for health check at ${BASE_URL}/health ..."
@@ -248,7 +250,7 @@ done
 
 echo ""
 echo "Building Playwright container..."
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" build playwright
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" build playwright
 
 echo ""
 echo "Running Playwright (projects: ${PLAYWRIGHT_BROWSERS}, workers: ${PLAYWRIGHT_WORKERS:-auto})..."

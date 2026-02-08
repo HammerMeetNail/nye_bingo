@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
@@ -246,6 +247,17 @@ func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	sig := r.Header.Get("Stripe-Signature")
 	if err := h.billing.HandleWebhook(r.Context(), payload, sig, time.Now()); err != nil {
 		if errors.Is(err, billing.ErrStripeSignatureInvalid) {
+			fields := map[string]interface{}{
+				"payload_bytes":      len(payload),
+				"signature_present":  strings.TrimSpace(sig) != "",
+				"remote_addr":        r.RemoteAddr,
+				"user_agent":         r.UserAgent(),
+				"stripe_signature_t": stripeSignatureTimestamp(sig),
+			}
+			if eventID := stripeEventIDForLog(payload); eventID != "" {
+				fields["stripe_event_id"] = eventID
+			}
+			logError("billing: webhook signature verification failed", err, fields)
 			writeError(w, http.StatusBadRequest, "invalid signature")
 			return
 		}
@@ -255,4 +267,25 @@ func (h *BillingHandler) Webhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func stripeSignatureTimestamp(signature string) string {
+	parts := strings.Split(signature, ",")
+	for _, part := range parts {
+		kv := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(kv) == 2 && kv[0] == "t" {
+			return kv[1]
+		}
+	}
+	return ""
+}
+
+func stripeEventIDForLog(payload []byte) string {
+	var event struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(event.ID)
 }

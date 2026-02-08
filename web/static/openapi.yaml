@@ -2242,7 +2242,7 @@ paths:
                     type: string
   /cards/{id}/edit:
     post:
-      summary: Create an editable draft from a finalized card (Premium)
+      summary: Re-open and edit a finalized card in place (Premium)
       parameters:
         - in: path
           name: id
@@ -2263,10 +2263,10 @@ paths:
                   default: false
                 reset_progress:
                   type: boolean
-                  default: true
+                  default: false
       responses:
-        '201':
-          description: Editable draft created
+        '200':
+          description: Card re-opened for editing
           content:
             application/json:
               schema:

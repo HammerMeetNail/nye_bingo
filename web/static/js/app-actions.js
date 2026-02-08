@@ -218,6 +218,8 @@ Object.assign(App, {
       case 'edit-card-meta':
         if (this.isAnonymousMode) {
           this.showEditAnonymousCardMetaModal();
+        } else if (this.currentCard?.is_finalized && !this.isSharedView) {
+          this.showEditFinalizedCardModal();
         } else {
           this.showEditCardMetaModal();
         }
