@@ -22,6 +22,8 @@ func (h *CardHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	req.Title = normalizeOptionalString(req.Title)
+	req.Category = normalizeOptionalString(req.Category)
 
 	// Default to current year if not specified
 	if req.Year == 0 {

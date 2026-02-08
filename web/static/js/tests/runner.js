@@ -549,10 +549,25 @@ describe('Module boundaries + action dispatch', () => {
 
   function extractAssignedMethodNames(source) {
     const methods = new Set();
+    const keywords = new Set([
+      'if',
+      'for',
+      'while',
+      'switch',
+      'catch',
+      'return',
+      'else',
+      'do',
+      'try',
+      'with',
+    ]);
     const methodPattern = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/gm;
     let match;
     while ((match = methodPattern.exec(source)) !== null) {
-      methods.add(match[1]);
+      const name = match[1];
+      if (!keywords.has(name)) {
+        methods.add(name);
+      }
     }
     return methods;
   }
@@ -562,6 +577,27 @@ describe('Module boundaries + action dispatch', () => {
       const source = readAppModule(fileName);
       expect(source.includes('Object.assign(App, {')).toBe(true);
     });
+  });
+
+  test('method extraction ignores control-flow keywords', () => {
+    const source = `
+      Object.assign(App, {
+        realMethod() {
+          if (true) {
+            return;
+          }
+          for (let i = 0; i < 2; i += 1) {}
+          while (false) {}
+          try {} catch (error) {}
+        },
+      });
+    `;
+    const names = extractAssignedMethodNames(source);
+    expect(names.has('realMethod')).toBe(true);
+    expect(names.has('if')).toBe(false);
+    expect(names.has('for')).toBe(false);
+    expect(names.has('while')).toBe(false);
+    expect(names.has('catch')).toBe(false);
   });
 
   test('module scaffold files parse and execute in VM context', () => {

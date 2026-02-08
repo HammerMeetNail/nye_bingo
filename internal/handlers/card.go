@@ -135,6 +135,17 @@ func parseCardID(r *http.Request) (uuid.UUID, error) {
 	return uuid.Nil, errors.New("card ID not found in path")
 }
 
+func normalizeOptionalString(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
 func parsePosition(r *http.Request) (int, error) {
 	// Extract position from path: /api/cards/{id}/items/{pos}
 	path := r.URL.Path

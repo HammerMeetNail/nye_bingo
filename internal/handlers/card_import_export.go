@@ -70,6 +70,8 @@ func (h *CardHandler) Import(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	req.Title = normalizeOptionalString(req.Title)
+	req.Category = normalizeOptionalString(req.Category)
 
 	// Validate year
 	currentYear := time.Now().Year()
