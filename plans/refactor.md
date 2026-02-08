@@ -363,7 +363,7 @@ Legend:
   - Validation:
     - `go test ./internal/handlers -count=1`
 
-- [ ] `B3` Split handler: bulk/import/export/conflict (`L`, `Mechanical`)
+- [x] `B3` Split handler: bulk/import/export/conflict (`L`, `Mechanical`)
   - Scope:
     - Move bulk/archive/export/import/conflict handling methods and helpers.
   - Files:
