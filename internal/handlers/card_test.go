@@ -1184,7 +1184,6 @@ func TestCardHandler_EditFinalized_GlobalFeatureDisabled(t *testing.T) {
 func TestCardHandler_EditFinalized_Success(t *testing.T) {
 	user := &models.User{ID: uuid.New(), BillingPlan: "premium"}
 	cardID := uuid.New()
-	newCardID := uuid.New()
 
 	handler := NewCardHandler(&mockCardService{
 		EditFinalizedFunc: func(ctx context.Context, userID, gotCardID uuid.UUID, params services.EditFinalizedCardParams) (*models.BingoCard, error) {
@@ -1200,10 +1199,10 @@ func TestCardHandler_EditFinalized_Success(t *testing.T) {
 			if !params.ShuffleLayout {
 				t.Fatal("expected shuffle_layout=true")
 			}
-			if !params.ResetProgress {
-				t.Fatal("expected reset_progress to default true")
+			if params.ResetProgress {
+				t.Fatal("expected reset_progress to default false")
 			}
-			return &models.BingoCard{ID: newCardID, UserID: userID}, nil
+			return &models.BingoCard{ID: cardID, UserID: userID}, nil
 		},
 	})
 
@@ -1214,16 +1213,16 @@ func TestCardHandler_EditFinalized_Success(t *testing.T) {
 
 	handler.EditFinalized(rr, req)
 
-	if rr.Code != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d body=%s", rr.Code, rr.Body.String())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d body=%s", rr.Code, rr.Body.String())
 	}
 
 	var resp CardResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
 	}
-	if resp.Card == nil || resp.Card.ID != newCardID {
-		t.Fatalf("expected card %s, got %#v", newCardID, resp.Card)
+	if resp.Card == nil || resp.Card.ID != cardID {
+		t.Fatalf("expected card %s, got %#v", cardID, resp.Card)
 	}
 }
 

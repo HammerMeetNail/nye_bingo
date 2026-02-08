@@ -74,6 +74,6 @@ test('finalized edit action is gated for free users', async ({ page }, testInfo)
   await fillCardWithSuggestions(page);
   await finalizeCard(page);
 
-  await page.locator('[data-action="show-edit-finalized-card-modal"]').click();
+  await page.locator('[data-action="edit-card-meta"]').click();
   await expect(page.locator('#modal-title')).toHaveText('Upgrade to Premium');
 });

@@ -90,54 +90,58 @@ func (s *CardService) EditFinalized(ctx context.Context, userID, sourceCardID uu
 		return nil, ErrCardNotFinalized
 	}
 
-	title := ""
+	title := source.Title
 	if params.Title != nil {
-		title = strings.TrimSpace(*params.Title)
-	}
-	if title == "" {
-		title = withEditSuffix(source.DisplayName(), 1)
-	}
-	if utf8.RuneCountInString(title) > 100 {
-		return nil, ErrTitleTooLong
-	}
-	titlePtr := &title
-
-	existing, err := s.CheckForConflict(ctx, userID, source.Year, titlePtr)
-	if err != nil && !errors.Is(err, ErrCardNotFound) {
-		return nil, fmt.Errorf("checking for conflict: %w", err)
-	}
-	if existing != nil {
-		suggested, err := s.suggestEditTitle(ctx, userID, source.Year, title)
-		if err != nil {
-			return nil, err
+		trimmed := strings.TrimSpace(*params.Title)
+		requestedTitle := ""
+		if trimmed == "" {
+			title = nil
+			requestedTitle = fmt.Sprintf("%d Bingo Card", source.Year)
+		} else {
+			if utf8.RuneCountInString(trimmed) > 100 {
+				return nil, ErrTitleTooLong
+			}
+			title = &trimmed
+			requestedTitle = trimmed
 		}
-		return nil, &CardConflictError{
-			Year:           source.Year,
-			Title:          title,
-			SuggestedTitle: suggested,
+
+		existing, err := s.CheckForConflict(ctx, userID, source.Year, title)
+		if err != nil && !errors.Is(err, ErrCardNotFound) {
+			return nil, fmt.Errorf("checking for conflict: %w", err)
+		}
+		if existing != nil && existing.ID != sourceCardID {
+			suggested, err := s.suggestEditTitle(ctx, userID, source.Year, requestedTitle)
+			if err != nil {
+				return nil, err
+			}
+			return nil, &CardConflictError{
+				Year:           source.Year,
+				Title:          requestedTitle,
+				SuggestedTitle: suggested,
+			}
 		}
 	}
 
-	itemsToCopy := make([]models.BingoItem, len(source.Items))
-	copy(itemsToCopy, source.Items)
+	itemsToUpdate := make([]models.BingoItem, len(source.Items))
+	copy(itemsToUpdate, source.Items)
 
 	if params.ShuffleLayout {
-		total := source.GridSize * source.GridSize
-		positions := make([]int, 0, len(itemsToCopy))
+		total := source.TotalSquares()
+		positions := make([]int, 0, len(itemsToUpdate))
 		for p := 0; p < total; p++ {
 			if source.FreeSpacePos != nil && p == *source.FreeSpacePos {
 				continue
 			}
 			positions = append(positions, p)
 		}
-		if len(itemsToCopy) > len(positions) {
-			return nil, fmt.Errorf("source card has %d items but only %d positions are available", len(itemsToCopy), len(positions))
+		if len(itemsToUpdate) > len(positions) {
+			return nil, fmt.Errorf("source card has %d items but only %d positions are available", len(itemsToUpdate), len(positions))
 		}
 		rand.Shuffle(len(positions), func(i, j int) {
 			positions[i], positions[j] = positions[j], positions[i]
 		})
-		for i := range itemsToCopy {
-			itemsToCopy[i].Position = positions[i]
+		for i := range itemsToUpdate {
+			itemsToUpdate[i].Position = positions[i]
 		}
 	}
 
@@ -147,52 +151,79 @@ func (s *CardService) EditFinalized(ctx context.Context, userID, sourceCardID uu
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // Rollback is a no-op after commit
 
-	newCard := &models.BingoCard{}
+	updatedCard := &models.BingoCard{}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO bingo_cards (user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position, is_finalized, visible_to_friends)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, false, $9)
+		`UPDATE bingo_cards
+		    SET title = $2,
+		        is_finalized = false
+		  WHERE id = $1
 		 RETURNING id, user_id, year, category, title, grid_size, header_text, has_free_space, free_space_position,
 		           is_active, is_finalized, visible_to_friends, is_archived, created_at, updated_at`,
-		userID, source.Year, source.Category, titlePtr, source.GridSize, source.HeaderText, source.HasFreeSpace, source.FreeSpacePos, source.VisibleToFriends,
+		sourceCardID, title,
 	).Scan(
-		&newCard.ID, &newCard.UserID, &newCard.Year, &newCard.Category, &newCard.Title,
-		&newCard.GridSize, &newCard.HeaderText, &newCard.HasFreeSpace, &newCard.FreeSpacePos,
-		&newCard.IsActive, &newCard.IsFinalized, &newCard.VisibleToFriends, &newCard.IsArchived, &newCard.CreatedAt, &newCard.UpdatedAt,
+		&updatedCard.ID, &updatedCard.UserID, &updatedCard.Year, &updatedCard.Category, &updatedCard.Title,
+		&updatedCard.GridSize, &updatedCard.HeaderText, &updatedCard.HasFreeSpace, &updatedCard.FreeSpacePos,
+		&updatedCard.IsActive, &updatedCard.IsFinalized, &updatedCard.VisibleToFriends, &updatedCard.IsArchived, &updatedCard.CreatedAt, &updatedCard.UpdatedAt,
 	)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
-			if mapped := mapBingoCardsUniqueViolationToCardExistsError(pgErr, titlePtr); mapped != nil {
-				suggested, suggestErr := s.suggestEditTitle(ctx, userID, source.Year, title)
-				if suggestErr != nil {
-					return nil, suggestErr
-				}
-				return nil, &CardConflictError{
-					Year:           source.Year,
-					Title:          title,
-					SuggestedTitle: suggested,
-				}
+			if mapped := mapBingoCardsUniqueViolationToCardExistsError(pgErr, title); mapped != nil {
+				return nil, mapped
 			}
 		}
-		return nil, fmt.Errorf("creating editable card: %w", err)
+		return nil, fmt.Errorf("updating finalized card: %w", err)
 	}
 
-	for _, it := range itemsToCopy {
-		if params.ResetProgress {
+	if params.ShuffleLayout {
+		_, err = tx.Exec(ctx,
+			`UPDATE bingo_items
+			    SET position = position + $2
+			  WHERE card_id = $1`,
+			sourceCardID, source.TotalSquares(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("shifting existing item positions: %w", err)
+		}
+	}
+
+	for _, it := range itemsToUpdate {
+		if params.ShuffleLayout && params.ResetProgress {
 			_, err = tx.Exec(ctx,
-				`INSERT INTO bingo_items (card_id, position, content)
-				 VALUES ($1, $2, $3)`,
-				newCard.ID, it.Position, it.Content,
+				`UPDATE bingo_items
+				    SET position = $3,
+				        is_completed = false,
+				        completed_at = NULL,
+				        notes = NULL,
+				        proof_url = NULL
+				  WHERE id = $1 AND card_id = $2`,
+				it.ID, sourceCardID, it.Position,
 			)
-		} else {
+		} else if params.ShuffleLayout {
 			_, err = tx.Exec(ctx,
-				`INSERT INTO bingo_items (card_id, position, content, is_completed, completed_at, notes, proof_url)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-				newCard.ID, it.Position, it.Content, it.IsCompleted, it.CompletedAt, it.Notes, it.ProofURL,
+				`UPDATE bingo_items
+				    SET position = $3
+				  WHERE id = $1 AND card_id = $2`,
+				it.ID, sourceCardID, it.Position,
 			)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("copying item: %w", err)
+			return nil, fmt.Errorf("updating item: %w", err)
+		}
+	}
+
+	if params.ResetProgress && !params.ShuffleLayout {
+		_, err = tx.Exec(ctx,
+			`UPDATE bingo_items
+			    SET is_completed = false,
+			        completed_at = NULL,
+			        notes = NULL,
+			        proof_url = NULL
+			  WHERE card_id = $1`,
+			sourceCardID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("resetting item progress: %w", err)
 		}
 	}
 
@@ -200,5 +231,5 @@ func (s *CardService) EditFinalized(ctx context.Context, userID, sourceCardID uu
 		return nil, fmt.Errorf("committing transaction: %w", err)
 	}
 
-	return s.GetByID(ctx, newCard.ID)
+	return s.GetByID(ctx, sourceCardID)
 }

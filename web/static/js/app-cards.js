@@ -1305,10 +1305,10 @@ Object.assign(App, {
     if (showActions) {
       const visibilityIcon = this.currentCard.visible_to_friends ? 'eye' : 'eye-slash';
       const visibilityLabel = this.currentCard.visible_to_friends ? 'Visible to friends' : 'Private';
+      const editTitle = this.hasFeature('edit_after_finalize') ? 'Edit card' : 'Edit card (Premium)';
       actionsHtml = `
-        <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="Edit card name">✏️</button>
+        <button class="btn btn-ghost btn-sm" data-action="edit-card-meta" title="${editTitle}" aria-label="${editTitle}">✏️</button>
         <button class="btn btn-ghost btn-sm" data-action="show-clone-card-modal" title="Clone card">📄</button>
-        <button class="btn btn-ghost btn-sm" data-action="show-edit-finalized-card-modal" title="Edit finalized card (Premium)">📝</button>
         <button class="btn btn-ghost btn-sm" data-action="save-template-from-card" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="Save as template">⭐</button>
         <button class="btn btn-ghost btn-sm" data-action="show-rollover-card-modal" data-card-id="${this.escapeHtml(this.currentCard.id)}" title="New Year rollover">📅</button>
         <button class="btn btn-ghost btn-sm" data-action="open-share-modal" title="Share card">🔗</button>
@@ -2984,17 +2984,27 @@ Object.assign(App, {
       return;
     }
 
-    const displayName = this.getCardDisplayName(this.currentCard);
-    const defaultTitle = `${displayName} (Edit)`;
+    const defaultTitle = this.currentCard.title || '';
 
-    this.openModal('Edit Finalized Card', `
+    this.openModal('Edit Card', `
       <form data-action="edit-finalized-card">
         <div class="form-group">
           <label for="edit-finalized-card-title">
             Title <span class="text-muted fw-normal">(optional)</span>
           </label>
           <input type="text" id="edit-finalized-card-title" class="form-input" maxlength="100">
-          <small class="text-muted">Defaults to "${this.escapeHtml(defaultTitle)}".</small>
+          <small class="text-muted">Leave blank to use "${this.currentCard.year} Bingo Card".</small>
+        </div>
+
+        <p class="text-muted mb-md">
+          This will re-open your finalized card so you can edit it in place.
+        </p>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="edit-finalized-card-reset">
+            <span>Reset completion progress</span>
+          </label>
         </div>
 
         <div class="form-group">
@@ -3004,19 +3014,11 @@ Object.assign(App, {
           </label>
         </div>
 
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input type="checkbox" id="edit-finalized-card-reset" checked>
-            <span>Reset completion progress</span>
-          </label>
-          <small class="text-muted">Recommended for a fresh draft.</small>
-        </div>
-
         <div class="form-error hidden" id="edit-finalized-card-error" role="alert"></div>
 
         <div class="flex gap-sm mt-lg">
           <button type="button" class="btn btn-ghost flex-1" data-action="close-modal">Cancel</button>
-          <button type="submit" class="btn btn-primary flex-1">Create Edit Draft</button>
+          <button type="submit" class="btn btn-primary flex-1">Edit In Place</button>
         </div>
       </form>
     `);
@@ -3039,22 +3041,26 @@ Object.assign(App, {
       errorEl.textContent = '';
     }
 
-    const title = titleEl?.value?.trim() || null;
+    const currentTitle = (this.currentCard.title || '').trim();
+    const title = titleEl?.value?.trim() || '';
     const shuffleLayout = !!shuffleEl?.checked;
-    const resetProgress = resetEl?.checked !== false;
+    const resetProgress = !!resetEl?.checked;
+    const params = {
+      shuffle_layout: shuffleLayout,
+      reset_progress: resetProgress,
+    };
+    if (title !== currentTitle) {
+      params.title = title;
+    }
 
     try {
-      const response = await API.cards.editFinalized(this.currentCard.id, {
-        title,
-        shuffle_layout: shuffleLayout,
-        reset_progress: resetProgress,
-      });
+      const response = await API.cards.editFinalized(this.currentCard.id, params);
 
       if (response?.card) {
         this.closeModal();
         this.currentCard = response.card;
         this.navigate(`/card/${response.card.id}`);
-        this.toast('Editable draft created', 'success');
+        this.toast('Card is now editable', 'success');
         return;
       }
 
@@ -3071,7 +3077,7 @@ Object.assign(App, {
         return;
       }
 
-      throw new Error(response?.error || 'Unable to create editable draft.');
+      throw new Error(response?.error || 'Unable to edit card.');
     } catch (error) {
       if (error?.status === 403 && /premium required/i.test(error?.message || '')) {
         this.closeModal();
@@ -3080,10 +3086,10 @@ Object.assign(App, {
       }
 
       if (errorEl) {
-        errorEl.textContent = error?.message || 'Unable to create editable draft.';
+        errorEl.textContent = error?.message || 'Unable to edit card.';
         errorEl.classList.remove('hidden');
       } else {
-        this.toast(error?.message || 'Unable to create editable draft.', 'error');
+        this.toast(error?.message || 'Unable to edit card.', 'error');
       }
     }
   },

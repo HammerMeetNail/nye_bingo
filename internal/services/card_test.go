@@ -3518,6 +3518,7 @@ func TestCardService_EditFinalized_ConflictReturnsSuggestedTitle(t *testing.T) {
 	sourceCardID := uuid.New()
 	existingCardID := uuid.New()
 	free := 12
+	requestedTitle := "My Goals"
 
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
@@ -3526,7 +3527,7 @@ func TestCardService_EditFinalized_ConflictReturnsSuggestedTitle(t *testing.T) {
 			}
 			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
 				title, _ := args[2].(string)
-				if title == "2024 Bingo Card (Edit)" {
+				if title == requestedTitle {
 					row := cardRowValues(existingCardID, userID, 5, true, &free, false)
 					row[4] = &title
 					return rowFromValues(row...)
@@ -3550,56 +3551,43 @@ func TestCardService_EditFinalized_ConflictReturnsSuggestedTitle(t *testing.T) {
 	}
 
 	svc := NewCardService(db)
-	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ResetProgress: true})
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		Title: &requestedTitle,
+	})
 	var conflict *CardConflictError
 	if !errors.As(err, &conflict) {
 		t.Fatalf("expected CardConflictError, got %v", err)
 	}
-	if conflict.SuggestedTitle != "2024 Bingo Card (Edit 2)" {
-		t.Fatalf("expected suggested title to increment, got %q", conflict.SuggestedTitle)
+	if conflict.SuggestedTitle != "My Goals (Edit)" {
+		t.Fatalf("expected suggested title, got %q", conflict.SuggestedTitle)
 	}
 }
 
 func TestCardService_EditFinalized_SuccessPreservesLayoutAndResetsProgress(t *testing.T) {
 	userID := uuid.New()
 	sourceCardID := uuid.New()
-	newCardID := uuid.New()
 	free := 4
-	newTitle := "2024 Bingo Card (Edit)"
 	sourceCreated := time.Now()
-	newCreated := sourceCreated.Add(1 * time.Minute)
-	note1 := "n1"
-	proof1 := "p1"
-	note3 := "n3"
+	note := "n1"
+	proof := "p1"
+	cardFetches := 0
+	sawCardUpdate := false
+	sawReset := false
 
 	sourceItems := [][]any{
-		{uuid.New(), sourceCardID, 0, "A", true, &sourceCreated, &note1, &proof1, sourceCreated},
+		{uuid.New(), sourceCardID, 0, "A", true, &sourceCreated, &note, &proof, sourceCreated},
 		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, sourceCreated},
-		{uuid.New(), sourceCardID, 2, "C", true, &sourceCreated, &note3, nil, sourceCreated},
+		{uuid.New(), sourceCardID, 2, "C", true, &sourceCreated, nil, nil, sourceCreated},
 	}
-	newItems := [][]any{
-		{uuid.New(), newCardID, 0, "A", false, nil, nil, nil, newCreated},
-		{uuid.New(), newCardID, 1, "B", false, nil, nil, nil, newCreated},
-		{uuid.New(), newCardID, 2, "C", false, nil, nil, nil, newCreated},
-	}
-
-	insertedPositions := []int{}
-	insertArgCounts := []int{}
 
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
 			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
 				if len(args) > 0 && args[0] == sourceCardID {
-					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, true)...)
+					cardFetches++
+					finalized := cardFetches == 1
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, finalized)...)
 				}
-				if len(args) > 0 && args[0] == newCardID {
-					row := cardRowValues(newCardID, userID, 3, true, &free, false)
-					row[4] = &newTitle
-					return rowFromValues(row...)
-				}
-			}
-			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
-				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
 			}
 			return fakeRow{scanFunc: func(dest ...any) error {
 				return errors.New("unexpected query")
@@ -3610,27 +3598,29 @@ func TestCardService_EditFinalized_SuccessPreservesLayoutAndResetsProgress(t *te
 				if len(args) > 0 && args[0] == sourceCardID {
 					return &fakeRows{rows: sourceItems}, nil
 				}
-				if len(args) > 0 && args[0] == newCardID {
-					return &fakeRows{rows: newItems}, nil
-				}
 			}
 			return &fakeRows{}, nil
 		},
 		BeginFunc: func(ctx context.Context) (Tx, error) {
 			return &fakeTx{
 				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-					row := cardRowValues(newCardID, userID, 3, true, &free, false)
-					row[4] = &newTitle
-					return rowFromValues(row...)
+					if strings.Contains(sql, "UPDATE bingo_cards") {
+						sawCardUpdate = true
+						return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, false)...)
+					}
+					return fakeRow{scanFunc: func(dest ...any) error {
+						return errors.New("unexpected query")
+					}}
 				},
 				ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
-					if strings.Contains(sql, "INSERT INTO bingo_items") {
-						insertArgCounts = append(insertArgCounts, len(args))
-						pos, ok := args[1].(int)
-						if !ok {
-							t.Fatalf("expected position int, got %T", args[1])
+					if strings.Contains(sql, "SET is_completed = false") {
+						sawReset = true
+						if len(args) != 1 {
+							t.Fatalf("expected reset query to use one arg, got %d", len(args))
 						}
-						insertedPositions = append(insertedPositions, pos)
+						if got, ok := args[0].(uuid.UUID); !ok || got != sourceCardID {
+							t.Fatalf("expected reset query for source card, got %#v", args)
+						}
 					}
 					return fakeCommandTag{rowsAffected: 1}, nil
 				},
@@ -3646,69 +3636,47 @@ func TestCardService_EditFinalized_SuccessPreservesLayoutAndResetsProgress(t *te
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if card == nil || card.ID != newCardID {
-		t.Fatalf("expected new card %s, got %#v", newCardID, card)
+	if card == nil || card.ID != sourceCardID {
+		t.Fatalf("expected source card %s, got %#v", sourceCardID, card)
 	}
-	if len(insertedPositions) != 3 {
-		t.Fatalf("expected 3 inserted items, got %d", len(insertedPositions))
+	if !sawCardUpdate {
+		t.Fatal("expected finalized card update query")
 	}
-	for _, n := range insertArgCounts {
-		if n != 3 {
-			t.Fatalf("expected reset insert to use 3 args, got %d", n)
-		}
-	}
-	expected := []int{0, 1, 2}
-	for i, pos := range expected {
-		if insertedPositions[i] != pos {
-			t.Fatalf("expected preserved position %d at index %d, got %d", pos, i, insertedPositions[i])
-		}
+	if !sawReset {
+		t.Fatal("expected reset-progress update query")
 	}
 }
 
 func TestCardService_EditFinalized_ShuffleAndKeepProgress(t *testing.T) {
 	userID := uuid.New()
 	sourceCardID := uuid.New()
-	newCardID := uuid.New()
 	free := 4
-	newTitle := "2024 Bingo Card (Edit)"
 	now := time.Now()
 	noteA := "note-a"
 	proofA := "proof-a"
+	cardFetches := 0
+	sawCardUpdate := false
+	sawShift := false
+	sawReset := false
 
+	itemA := uuid.New()
+	itemB := uuid.New()
+	itemC := uuid.New()
 	sourceItems := [][]any{
-		{uuid.New(), sourceCardID, 0, "A", true, &now, &noteA, &proofA, now},
-		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, now},
-		{uuid.New(), sourceCardID, 2, "C", true, &now, nil, nil, now},
+		{itemA, sourceCardID, 0, "A", true, &now, &noteA, &proofA, now},
+		{itemB, sourceCardID, 1, "B", false, nil, nil, nil, now},
+		{itemC, sourceCardID, 2, "C", true, &now, nil, nil, now},
 	}
-	newItems := [][]any{
-		{uuid.New(), newCardID, 0, "A", true, &now, &noteA, &proofA, now},
-		{uuid.New(), newCardID, 1, "B", false, nil, nil, nil, now},
-		{uuid.New(), newCardID, 2, "C", true, &now, nil, nil, now},
-	}
-
-	type insertedRow struct {
-		position    int
-		content     string
-		isCompleted bool
-		notes       *string
-		argCount    int
-	}
-	inserted := []insertedRow{}
+	positionUpdates := map[uuid.UUID]int{}
 
 	db := &fakeDB{
 		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
 			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
 				if len(args) > 0 && args[0] == sourceCardID {
-					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, true)...)
+					cardFetches++
+					finalized := cardFetches == 1
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, finalized)...)
 				}
-				if len(args) > 0 && args[0] == newCardID {
-					row := cardRowValues(newCardID, userID, 3, true, &free, false)
-					row[4] = &newTitle
-					return rowFromValues(row...)
-				}
-			}
-			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
-				return fakeRow{scanFunc: func(dest ...any) error { return pgx.ErrNoRows }}
 			}
 			return fakeRow{scanFunc: func(dest ...any) error {
 				return errors.New("unexpected query")
@@ -3719,41 +3687,45 @@ func TestCardService_EditFinalized_ShuffleAndKeepProgress(t *testing.T) {
 				if len(args) > 0 && args[0] == sourceCardID {
 					return &fakeRows{rows: sourceItems}, nil
 				}
-				if len(args) > 0 && args[0] == newCardID {
-					return &fakeRows{rows: newItems}, nil
-				}
 			}
 			return &fakeRows{}, nil
 		},
 		BeginFunc: func(ctx context.Context) (Tx, error) {
 			return &fakeTx{
 				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
-					row := cardRowValues(newCardID, userID, 3, true, &free, false)
-					row[4] = &newTitle
-					return rowFromValues(row...)
+					if strings.Contains(sql, "UPDATE bingo_cards") {
+						sawCardUpdate = true
+						return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, false)...)
+					}
+					return fakeRow{scanFunc: func(dest ...any) error {
+						return errors.New("unexpected query")
+					}}
 				},
 				ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
-					if strings.Contains(sql, "INSERT INTO bingo_items") {
-						pos, ok := args[1].(int)
+					if strings.Contains(sql, "SET position = position + $2") {
+						sawShift = true
+						if len(args) != 2 {
+							t.Fatalf("expected shift query args, got %d", len(args))
+						}
+						offset, ok := args[1].(int)
+						if !ok || offset != 9 {
+							t.Fatalf("expected shift offset 9, got %#v", args[1])
+						}
+					} else if strings.Contains(sql, "SET position = $3") {
+						if len(args) != 3 {
+							t.Fatalf("expected position update args, got %d", len(args))
+						}
+						itemID, ok := args[0].(uuid.UUID)
 						if !ok {
-							t.Fatalf("expected position int, got %T", args[1])
+							t.Fatalf("expected item id uuid, got %T", args[0])
 						}
-						content, _ := args[2].(string)
-						completed, _ := args[3].(bool)
-						var notes *string
-						if args[5] != nil {
-							n, ok := args[5].(*string)
-							if ok {
-								notes = n
-							}
+						pos, ok := args[2].(int)
+						if !ok {
+							t.Fatalf("expected position int, got %T", args[2])
 						}
-						inserted = append(inserted, insertedRow{
-							position:    pos,
-							content:     content,
-							isCompleted: completed,
-							notes:       notes,
-							argCount:    len(args),
-						})
+						positionUpdates[itemID] = pos
+					} else if strings.Contains(sql, "SET is_completed = false") {
+						sawReset = true
 					}
 					return fakeCommandTag{rowsAffected: 1}, nil
 				},
@@ -3770,41 +3742,40 @@ func TestCardService_EditFinalized_ShuffleAndKeepProgress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(inserted) != 3 {
-		t.Fatalf("expected 3 inserted items, got %d", len(inserted))
+	if !sawCardUpdate {
+		t.Fatal("expected finalized card update query")
+	}
+	if !sawShift {
+		t.Fatal("expected position shift query before shuffle updates")
+	}
+	if sawReset {
+		t.Fatal("did not expect reset-progress query when reset_progress=false")
+	}
+	if len(positionUpdates) != 3 {
+		t.Fatalf("expected 3 position updates, got %d", len(positionUpdates))
 	}
 
 	seen := map[int]bool{}
-	for _, row := range inserted {
-		if row.argCount != 7 {
-			t.Fatalf("expected keep-progress insert to use 7 args, got %d", row.argCount)
+	for _, pos := range positionUpdates {
+		if pos < 0 || pos >= 9 {
+			t.Fatalf("position out of range: %d", pos)
 		}
-		if row.position < 0 || row.position >= 9 {
-			t.Fatalf("position out of range: %d", row.position)
-		}
-		if row.position == free {
+		if pos == free {
 			t.Fatalf("shuffle should never use free-space position %d", free)
 		}
-		if seen[row.position] {
-			t.Fatalf("duplicate shuffled position: %d", row.position)
+		if seen[pos] {
+			t.Fatalf("duplicate shuffled position: %d", pos)
 		}
-		seen[row.position] = true
+		seen[pos] = true
 	}
-
-	foundA := false
-	for _, row := range inserted {
-		if row.content == "A" {
-			foundA = true
-			if !row.isCompleted {
-				t.Fatalf("expected completion state to be preserved for A")
-			}
-			if row.notes == nil || *row.notes != noteA {
-				t.Fatalf("expected notes to be preserved for A")
-			}
-		}
+	if _, ok := positionUpdates[itemA]; !ok {
+		t.Fatalf("expected shuffled position for item %s", itemA)
 	}
-	if !foundA {
-		t.Fatalf("expected copied row for content A")
+	if _, ok := positionUpdates[itemB]; !ok {
+		t.Fatalf("expected shuffled position for item %s", itemB)
+	}
+	if _, ok := positionUpdates[itemC]; !ok {
+		t.Fatalf("expected shuffled position for item %s", itemC)
 	}
 }
 

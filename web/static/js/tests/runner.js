@@ -463,7 +463,7 @@ describe('Premium navigation + page wiring', () => {
     };
 
     App.showEditFinalizedCardModal();
-    expect(modalTitle).toBe('Edit Finalized Card');
+    expect(modalTitle).toBe('Edit Card');
     expect(modalHTML.includes('data-action="edit-finalized-card"')).toBe(true);
     expect(modalHTML.includes('id="edit-finalized-card-reset"')).toBe(true);
   });

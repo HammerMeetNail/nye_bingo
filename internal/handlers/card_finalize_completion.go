@@ -44,7 +44,7 @@ func (h *CardHandler) EditFinalized(w http.ResponseWriter, r *http.Request) {
 	params := services.EditFinalizedCardParams{
 		Title:         req.Title,
 		ShuffleLayout: req.ShuffleLayout != nil && *req.ShuffleLayout,
-		ResetProgress: true,
+		ResetProgress: false,
 	}
 	if req.ResetProgress != nil {
 		params.ResetProgress = *req.ResetProgress
@@ -86,12 +86,12 @@ func (h *CardHandler) EditFinalized(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		logError("Error creating editable draft from finalized card", err)
+		logError("Error editing finalized card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, CardResponse{Card: card})
+	writeJSON(w, http.StatusOK, CardResponse{Card: card})
 }
 
 func (h *CardHandler) Finalize(w http.ResponseWriter, r *http.Request) {
