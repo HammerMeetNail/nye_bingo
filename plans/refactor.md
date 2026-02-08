@@ -434,7 +434,7 @@ Legend:
     - `node web/static/js/tests/runner.js`
     - targeted E2E: notifications/reminders specs
 
-- [ ] `A4` Extract friends/invites/blocks modules (`L`, `Behavioral`)
+- [x] `A4` Extract friends/invites/blocks modules (`L`, `Behavioral`)
   - Files:
     - `web/static/js/app-friends.js` (new)
   - Validation:
