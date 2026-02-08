@@ -46,7 +46,7 @@
 
 **Middleware Chain**: Requests flow through `requestLogger → securityHeaders → compress → cacheControl → csrfMiddleware → authMiddleware → handler`
 
-**Rate Limiting**: Not implemented at the application level. Rate limiting should be handled by upstream infrastructure (load balancer, API gateway, CDN) in production environments.
+**Rate Limiting**: Implemented at the application level for selected abuse/cost-sensitive paths. Auth endpoints use Redis-backed per-IP and per-email limits (with relaxed values in `APP_ENV=development` for E2E), AI endpoints and billing code redemption are rate-limited via middleware, and support form submissions have an IP-based Redis limiter. Upstream rate limiting (CDN/gateway) is still recommended as a second layer.
 
 **Session Management**: Sessions stored in Redis first with PostgreSQL fallback. Token stored in HttpOnly cookie, hash stored in database.
 

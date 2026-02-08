@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -103,15 +102,7 @@ func (h *ApiTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract token ID from path
-	path := r.URL.Path
-	parts := strings.Split(path, "/")
-	// /api/tokens/{id}
-	if len(parts) < 4 {
-		writeError(w, http.StatusBadRequest, "Invalid token ID")
-		return
-	}
-	tokenID, err := uuid.Parse(parts[3])
+	tokenID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid token ID")
 		return
