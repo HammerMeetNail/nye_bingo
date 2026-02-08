@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -104,6 +105,11 @@ func (noopTx) Query(ctx context.Context, sql string, args ...any) (services.Rows
 func (noopTx) QueryRow(ctx context.Context, sql string, args ...any) services.Row { return nil }
 func (noopTx) Commit(ctx context.Context) error                                   { return nil }
 func (noopTx) Rollback(ctx context.Context) error                                 { return nil }
+
+type errReadCloser struct{}
+
+func (errReadCloser) Read(_ []byte) (int, error) { return 0, errors.New("read error") }
+func (errReadCloser) Close() error               { return nil }
 
 func withUser(req *http.Request, user *models.User) *http.Request {
 	return req.WithContext(SetUserInContext(req.Context(), user))
@@ -335,6 +341,41 @@ func TestBillingHandler_Checkout_Success_SubscriptionPlusTip(t *testing.T) {
 	}
 }
 
+func TestBillingHandler_Checkout_Unauthorized(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "month",
+		"tip_amount":   0,
+	})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusUnauthorized)
+}
+
+func TestBillingHandler_Checkout_InternalError(t *testing.T) {
+	store := &handlerStore{
+		ensureFn: func(ctx context.Context, userID uuid.UUID, createFn func(context.Context) (string, error)) (string, error) {
+			return "", fmt.Errorf("db error")
+		},
+	}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := testutil.NewTestRequestWithJSON(t, http.MethodPost, "/api/billing/checkout", map[string]any{
+		"premium_kind": "subscription",
+		"interval":     "month",
+		"tip_amount":   0,
+	})
+	req = withUser(req, &models.User{ID: uuid.New(), Email: "u@example.com"})
+	rr := httptest.NewRecorder()
+
+	handler.Checkout(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusInternalServerError)
+}
+
 func TestBillingHandler_Portal_Disabled(t *testing.T) {
 	store := &handlerStore{}
 	handler := NewBillingHandler(newBillingService(false, store, handlerStripe{}))
@@ -428,6 +469,18 @@ func TestBillingHandler_Webhook_InvalidSignature(t *testing.T) {
 	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
 }
 
+func TestBillingHandler_Webhook_InvalidBody(t *testing.T) {
+	store := &handlerStore{}
+	handler := NewBillingHandler(newBillingService(true, store, handlerStripe{}))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/billing/webhook", http.NoBody)
+	req.Body = errReadCloser{}
+	rr := httptest.NewRecorder()
+
+	handler.Webhook(rr, req)
+	testutil.AssertStatusCode(t, rr, http.StatusBadRequest)
+}
+
 func TestBillingHandler_Webhook_Error(t *testing.T) {
 	store := &handlerStore{
 		withWebhookFn: func(ctx context.Context, meta billing.WebhookEventMeta, fn func(context.Context, services.Tx) error) (bool, error) {
@@ -472,6 +525,48 @@ func TestBillingHandler_Webhook_Disabled(t *testing.T) {
 
 	handler.Webhook(rr, req)
 	testutil.AssertStatusCode(t, rr, http.StatusNotFound)
+}
+
+func TestStripeSignatureTimestamp(t *testing.T) {
+	tests := []struct {
+		name      string
+		signature string
+		want      string
+	}{
+		{name: "first", signature: "t=1700000000,v1=abc", want: "1700000000"},
+		{name: "after whitespace", signature: "v1=abc, t=1700000001, v0=legacy", want: "1700000001"},
+		{name: "missing", signature: "v1=abc", want: ""},
+		{name: "empty", signature: "", want: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripeSignatureTimestamp(tc.signature); got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestStripeEventIDForLog(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload []byte
+		want    string
+	}{
+		{name: "valid", payload: []byte(`{"id":"evt_123"}`), want: "evt_123"},
+		{name: "trimmed", payload: []byte(`{"id":"  evt_trim  "}`), want: "evt_trim"},
+		{name: "missing", payload: []byte(`{"type":"invoice.created"}`), want: ""},
+		{name: "invalid json", payload: []byte(`{"id"`), want: ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripeEventIDForLog(tc.payload); got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
 }
 
 func TestBillingHandler_CheckoutSubscription_Unauthorized(t *testing.T) {

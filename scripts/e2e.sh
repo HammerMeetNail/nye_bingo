@@ -131,7 +131,7 @@ echo "Year of Bingo E2E Runner"
 echo "================================"
 echo ""
 echo "Resetting local stack (destructive: volumes will be removed)."
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" down -v
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" down -v
 
 echo ""
 echo "Building assets..."
@@ -209,7 +209,7 @@ fi
 
 echo ""
 echo "Starting containers..."
-"${PROJECT_DIR}/scripts/podman-compose.sh" --env-file "$E2E_ENV_FILE" up -d --build app postgres redis mailpit
+"${PROJECT_DIR}/scripts/podman-compose.sh" "${COMPOSE_E2E_ARGS[@]}" up -d --build app postgres redis mailpit
 
 echo ""
 echo "Waiting for health check at ${BASE_URL}/health ..."

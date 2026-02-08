@@ -2118,6 +2118,22 @@ func TestCardService_Finalize_NotOwner(t *testing.T) {
 	}
 }
 
+func TestCardService_Finalize_GetByIDError(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("get card failed")
+			}}
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.Finalize(context.Background(), uuid.New(), uuid.New(), nil)
+	if err == nil || !strings.Contains(err.Error(), "getting card") {
+		t.Fatalf("expected load-card error, got %v", err)
+	}
+}
+
 func TestCardService_Finalize_UpdateError(t *testing.T) {
 	userID := uuid.New()
 	cardID := uuid.New()
@@ -3776,6 +3792,533 @@ func TestCardService_EditFinalized_ShuffleAndKeepProgress(t *testing.T) {
 	}
 	if _, ok := positionUpdates[itemC]; !ok {
 		t.Fatalf("expected shuffled position for item %s", itemC)
+	}
+}
+
+func TestCardService_EditFinalized_ShuffleAndResetProgress(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 4
+	now := time.Now()
+	cardFetches := 0
+	sawShift := false
+	itemResetUpdates := 0
+	sawBulkReset := false
+
+	sourceItems := [][]any{
+		{uuid.New(), sourceCardID, 0, "A", true, &now, nil, nil, now},
+		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, now},
+		{uuid.New(), sourceCardID, 2, "C", true, &now, nil, nil, now},
+	}
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				if len(args) > 0 && args[0] == sourceCardID {
+					cardFetches++
+					finalized := cardFetches == 1
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, finalized)...)
+				}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") && len(args) > 0 && args[0] == sourceCardID {
+				return &fakeRows{rows: sourceItems}, nil
+			}
+			return &fakeRows{}, nil
+		},
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return &fakeTx{
+				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+					if strings.Contains(sql, "UPDATE bingo_cards") {
+						return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, false)...)
+					}
+					return fakeRow{scanFunc: func(dest ...any) error {
+						return errors.New("unexpected query")
+					}}
+				},
+				ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+					if strings.Contains(sql, "SET position = position + $2") {
+						sawShift = true
+					} else if strings.Contains(sql, "SET position = $3,") {
+						itemResetUpdates++
+					} else if strings.Contains(sql, "SET is_completed = false") {
+						sawBulkReset = true
+					}
+					return fakeCommandTag{rowsAffected: 1}, nil
+				},
+				CommitFunc: func(ctx context.Context) error { return nil },
+			}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		ShuffleLayout: true,
+		ResetProgress: true,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !sawShift {
+		t.Fatal("expected position shift query")
+	}
+	if itemResetUpdates != len(sourceItems) {
+		t.Fatalf("expected %d per-item reset updates, got %d", len(sourceItems), itemResetUpdates)
+	}
+	if sawBulkReset {
+		t.Fatal("did not expect bulk reset query when shuffle_layout=true")
+	}
+}
+
+func TestCardService_EditFinalized_BeginError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return nil, errors.New("begin failed")
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{})
+	if err == nil || !strings.Contains(err.Error(), "starting transaction") {
+		t.Fatalf("expected starting transaction error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_CommitError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 4
+
+	db := newCardDB(sourceCardID, userID, 3, true, &free, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				if strings.Contains(sql, "UPDATE bingo_cards") {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 3, true, &free, false)...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("unexpected query")
+				}}
+			},
+			CommitFunc: func(ctx context.Context) error { return errors.New("commit failed") },
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{})
+	if err == nil || !strings.Contains(err.Error(), "committing transaction") {
+		t.Fatalf("expected committing transaction error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_ShuffleTooManyItems(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+		{uuid.New(), sourceCardID, 1, "B", false, nil, nil, nil, time.Now()},
+		{uuid.New(), sourceCardID, 2, "C", false, nil, nil, nil, time.Now()},
+		{uuid.New(), sourceCardID, 3, "D", false, nil, nil, nil, time.Now()},
+		{uuid.New(), sourceCardID, 4, "E", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		t.Fatal("did not expect transaction begin for invalid source layout")
+		return nil, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ShuffleLayout: true})
+	if err == nil || !strings.Contains(err.Error(), "only 4 positions are available") {
+		t.Fatalf("expected shuffle capacity error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_TitleConflictCheckError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	free := 12
+	newTitle := "Renamed"
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				return rowFromValues(cardRowValues(sourceCardID, userID, 5, true, &free, true)...)
+			}
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("db down")
+				}}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				return &fakeRows{rows: [][]any{
+					{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+				}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{
+		Title: &newTitle,
+	})
+	if err == nil || !strings.Contains(err.Error(), "checking for conflict") {
+		t.Fatalf("expected conflict-check error, got %v", err)
+	}
+}
+
+func TestCardService_SuggestEditTitle_ConflictCheckError(t *testing.T) {
+	userID := uuid.New()
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("db down")
+			}}
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.suggestEditTitle(context.Background(), userID, 2026, "My Goals")
+	if err == nil || !strings.Contains(err.Error(), "checking suggested title conflict") {
+		t.Fatalf("expected suggested title conflict error, got %v", err)
+	}
+}
+
+func TestCardService_SuggestEditTitle_FallbackAfterConflicts(t *testing.T) {
+	userID := uuid.New()
+	existingCardID := uuid.New()
+	conflictTitle := "Taken"
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				row := cardRowValues(existingCardID, userID, 5, true, nil, false)
+				row[4] = &conflictTitle
+				return rowFromValues(row...)
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				return &fakeRows{rows: [][]any{}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	got, err := svc.suggestEditTitle(context.Background(), userID, 2026, "   ")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.HasPrefix(got, "2026 Bingo Card (Edit ") {
+		t.Fatalf("expected fallback title based on default title, got %q", got)
+	}
+}
+
+func TestCardService_EditFinalized_GetByIDError(t *testing.T) {
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("get card failed")
+			}}
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), uuid.New(), uuid.New(), EditFinalizedCardParams{})
+	if err == nil || !strings.Contains(err.Error(), "getting card") {
+		t.Fatalf("expected load-card error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_BlankTitleClearsTitle(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	cardFetches := 0
+	sawNilTitleUpdate := false
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				cardFetches++
+				return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, cardFetches == 1)...)
+			}
+			if strings.Contains(sql, "title IS NULL") {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return pgx.ErrNoRows
+				}}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				return &fakeRows{rows: [][]any{
+					{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+				}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+		BeginFunc: func(ctx context.Context) (Tx, error) {
+			return &fakeTx{
+				QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+					if strings.Contains(sql, "UPDATE bingo_cards") {
+						if len(args) != 2 {
+							t.Fatalf("expected 2 args for card update, got %d", len(args))
+						}
+						titleArg, ok := args[1].(*string)
+						if !ok || titleArg != nil {
+							t.Fatalf("expected typed nil *string title update, got %#v", args[1])
+						}
+						sawNilTitleUpdate = true
+						return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, false)...)
+					}
+					return fakeRow{scanFunc: func(dest ...any) error {
+						return errors.New("unexpected query")
+					}}
+				},
+				CommitFunc: func(ctx context.Context) error { return nil },
+			}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	blankTitle := "   "
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{Title: &blankTitle})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !sawNilTitleUpdate {
+		t.Fatal("expected nil title update for blank title input")
+	}
+}
+
+func TestCardService_EditFinalized_ConflictSuggestionError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	existingCardID := uuid.New()
+	free := 12
+	requestedTitle := "Taken"
+
+	db := &fakeDB{
+		QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+			if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+				return rowFromValues(cardRowValues(sourceCardID, userID, 5, true, &free, true)...)
+			}
+			if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+				title, _ := args[2].(string)
+				if title == requestedTitle {
+					row := cardRowValues(existingCardID, userID, 5, true, &free, false)
+					row[4] = &title
+					return rowFromValues(row...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("db down")
+				}}
+			}
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return errors.New("unexpected query")
+			}}
+		},
+		QueryFunc: func(ctx context.Context, sql string, args ...any) (Rows, error) {
+			if strings.Contains(sql, "FROM bingo_items") {
+				return &fakeRows{rows: [][]any{}}, nil
+			}
+			return &fakeRows{}, nil
+		},
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{Title: &requestedTitle})
+	if err == nil || !strings.Contains(err.Error(), "checking suggested title conflict") {
+		t.Fatalf("expected suggested-title conflict error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_UpdateCardMapsUniqueViolation(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+	newTitle := "Duplicate"
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.QueryRowFunc = func(ctx context.Context, sql string, args ...any) Row {
+		if strings.Contains(sql, "FROM bingo_cards WHERE id = $1") {
+			return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, true)...)
+		}
+		if strings.Contains(sql, "FROM bingo_cards WHERE user_id = $1 AND year = $2 AND title = $3") {
+			return fakeRow{scanFunc: func(dest ...any) error {
+				return pgx.ErrNoRows
+			}}
+		}
+		return fakeRow{scanFunc: func(dest ...any) error {
+			return errors.New("unexpected query")
+		}}
+	}
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return &pgconn.PgError{
+						Code:           "23505",
+						ConstraintName: "idx_bingo_cards_user_year_title",
+					}
+				}}
+			},
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{Title: &newTitle})
+	if !errors.Is(err, ErrCardTitleExists) {
+		t.Fatalf("expected ErrCardTitleExists, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_UpdateCardError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("update failed")
+				}}
+			},
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{})
+	if err == nil || !strings.Contains(err.Error(), "updating finalized card") {
+		t.Fatalf("expected update-card error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_ShiftError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				if strings.Contains(sql, "UPDATE bingo_cards") {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, false)...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("unexpected query")
+				}}
+			},
+			ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+				if strings.Contains(sql, "SET position = position + $2") {
+					return fakeCommandTag{}, errors.New("shift failed")
+				}
+				return fakeCommandTag{rowsAffected: 1}, nil
+			},
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ShuffleLayout: true})
+	if err == nil || !strings.Contains(err.Error(), "shifting existing item positions") {
+		t.Fatalf("expected shift error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_UpdateItemError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", false, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				if strings.Contains(sql, "UPDATE bingo_cards") {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, false)...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("unexpected query")
+				}}
+			},
+			ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+				if strings.Contains(sql, "SET position = position + $2") {
+					return fakeCommandTag{rowsAffected: 1}, nil
+				}
+				if strings.Contains(sql, "SET position = $3") {
+					return fakeCommandTag{}, errors.New("item update failed")
+				}
+				return fakeCommandTag{rowsAffected: 1}, nil
+			},
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ShuffleLayout: true})
+	if err == nil || !strings.Contains(err.Error(), "updating item") {
+		t.Fatalf("expected item update error, got %v", err)
+	}
+}
+
+func TestCardService_EditFinalized_ResetProgressError(t *testing.T) {
+	userID := uuid.New()
+	sourceCardID := uuid.New()
+
+	db := newCardDB(sourceCardID, userID, 2, false, nil, true, [][]any{
+		{uuid.New(), sourceCardID, 0, "A", true, nil, nil, nil, time.Now()},
+	})
+	db.BeginFunc = func(ctx context.Context) (Tx, error) {
+		return &fakeTx{
+			QueryRowFunc: func(ctx context.Context, sql string, args ...any) Row {
+				if strings.Contains(sql, "UPDATE bingo_cards") {
+					return rowFromValues(cardRowValues(sourceCardID, userID, 2, false, nil, false)...)
+				}
+				return fakeRow{scanFunc: func(dest ...any) error {
+					return errors.New("unexpected query")
+				}}
+			},
+			ExecFunc: func(ctx context.Context, sql string, args ...any) (CommandTag, error) {
+				if strings.Contains(sql, "SET is_completed = false") {
+					return fakeCommandTag{}, errors.New("reset failed")
+				}
+				return fakeCommandTag{rowsAffected: 1}, nil
+			},
+		}, nil
+	}
+
+	svc := NewCardService(db)
+	_, err := svc.EditFinalized(context.Background(), userID, sourceCardID, EditFinalizedCardParams{ResetProgress: true})
+	if err == nil || !strings.Contains(err.Error(), "resetting item progress") {
+		t.Fatalf("expected reset-progress error, got %v", err)
 	}
 }
 
