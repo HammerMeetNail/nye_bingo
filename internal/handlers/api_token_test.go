@@ -257,6 +257,7 @@ func TestApiTokenHandler_Delete_InvalidTokenID(t *testing.T) {
 	handler := NewApiTokenHandler(&mockApiTokenService{})
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/not-a-uuid", nil)
+	req.SetPathValue("id", "not-a-uuid")
 	req = req.WithContext(SetUserInContext(req.Context(), user))
 	rr := httptest.NewRecorder()
 
@@ -269,6 +270,7 @@ func TestApiTokenHandler_Delete_InvalidTokenID(t *testing.T) {
 
 func TestApiTokenHandler_Delete_NotFound(t *testing.T) {
 	user := &models.User{ID: uuid.New()}
+	tokenID := uuid.New()
 	mockSvc := &mockApiTokenService{
 		DeleteFunc: func(ctx context.Context, userID uuid.UUID, tokenID uuid.UUID) error {
 			return services.ErrTokenNotFound
@@ -276,7 +278,8 @@ func TestApiTokenHandler_Delete_NotFound(t *testing.T) {
 	}
 	handler := NewApiTokenHandler(mockSvc)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+tokenID.String(), nil)
+	req.SetPathValue("id", tokenID.String())
 	req = req.WithContext(SetUserInContext(req.Context(), user))
 	rr := httptest.NewRecorder()
 
@@ -289,14 +292,19 @@ func TestApiTokenHandler_Delete_NotFound(t *testing.T) {
 
 func TestApiTokenHandler_Delete_Success(t *testing.T) {
 	user := &models.User{ID: uuid.New()}
+	tokenID := uuid.New()
 	mockSvc := &mockApiTokenService{
-		DeleteFunc: func(ctx context.Context, userID uuid.UUID, tokenID uuid.UUID) error {
+		DeleteFunc: func(ctx context.Context, userID uuid.UUID, gotTokenID uuid.UUID) error {
+			if gotTokenID != tokenID {
+				t.Fatalf("unexpected token id: %s", gotTokenID)
+			}
 			return nil
 		},
 	}
 	handler := NewApiTokenHandler(mockSvc)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+tokenID.String(), nil)
+	req.SetPathValue("id", tokenID.String())
 	req = req.WithContext(SetUserInContext(req.Context(), user))
 	rr := httptest.NewRecorder()
 
@@ -309,14 +317,19 @@ func TestApiTokenHandler_Delete_Success(t *testing.T) {
 
 func TestApiTokenHandler_Delete_Error(t *testing.T) {
 	user := &models.User{ID: uuid.New()}
+	tokenID := uuid.New()
 	mockSvc := &mockApiTokenService{
-		DeleteFunc: func(ctx context.Context, userID uuid.UUID, tokenID uuid.UUID) error {
+		DeleteFunc: func(ctx context.Context, userID uuid.UUID, gotTokenID uuid.UUID) error {
+			if gotTokenID != tokenID {
+				t.Fatalf("unexpected token id: %s", gotTokenID)
+			}
 			return errors.New("delete error")
 		},
 	}
 	handler := NewApiTokenHandler(mockSvc)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+uuid.New().String(), nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/tokens/"+tokenID.String(), nil)
+	req.SetPathValue("id", tokenID.String())
 	req = req.WithContext(SetUserInContext(req.Context(), user))
 	rr := httptest.NewRecorder()
 

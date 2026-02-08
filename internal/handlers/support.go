@@ -98,8 +98,7 @@ func (h *SupportHandler) Submit(w http.ResponseWriter, r *http.Request) {
 
 	// Send the support email
 	if err := h.emailService.SendSupportEmail(r.Context(), req.Email, req.Category, req.Message, userID); err != nil {
-		logging.Error("Failed to send support email", map[string]interface{}{
-			"error":    err.Error(),
+		logError("Failed to send support email", err, map[string]interface{}{
 			"email":    req.Email,
 			"category": req.Category,
 		})
@@ -150,7 +149,7 @@ func (h *SupportHandler) checkRateLimit(r *http.Request, clientIP string) bool {
 	// Increment counter
 	count, err := h.rateLimiter.Incr(ctx, key)
 	if err != nil {
-		logging.Error("Rate limit Redis error", map[string]interface{}{"error": err.Error()})
+		logError("Rate limit Redis error", err)
 		return true // allow request on Redis error
 	}
 

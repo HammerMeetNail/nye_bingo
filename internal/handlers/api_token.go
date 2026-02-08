@@ -3,9 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 
@@ -63,7 +61,7 @@ func (h *ApiTokenHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	token, rawToken, err := h.apiTokenService.Create(r.Context(), user.ID, req.Name, req.Scope, req.ExpiresInDays)
 	if err != nil {
-		log.Printf("Error creating api token: %v", err)
+		logError("Error creating api token", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -84,7 +82,7 @@ func (h *ApiTokenHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	tokens, err := h.apiTokenService.List(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing api tokens: %v", err)
+		logError("Error listing api tokens", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -103,15 +101,7 @@ func (h *ApiTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract token ID from path
-	path := r.URL.Path
-	parts := strings.Split(path, "/")
-	// /api/tokens/{id}
-	if len(parts) < 4 {
-		writeError(w, http.StatusBadRequest, "Invalid token ID")
-		return
-	}
-	tokenID, err := uuid.Parse(parts[3])
+	tokenID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid token ID")
 		return
@@ -123,7 +113,7 @@ func (h *ApiTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error deleting api token: %v", err)
+		logError("Error deleting api token", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -140,7 +130,7 @@ func (h *ApiTokenHandler) DeleteAll(w http.ResponseWriter, r *http.Request) {
 
 	err := h.apiTokenService.DeleteAll(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error deleting all api tokens: %v", err)
+		logError("Error deleting all api tokens", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

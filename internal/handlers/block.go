@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -62,7 +61,7 @@ func (h *BlockHandler) Block(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error blocking user: %v", err)
+		logError("Error blocking user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -90,7 +89,7 @@ func (h *BlockHandler) Unblock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error unblocking user: %v", err)
+		logError("Error unblocking user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -107,7 +106,7 @@ func (h *BlockHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	blocked, err := h.blockService.ListBlocked(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing blocked users: %v", err)
+		logError("Error listing blocked users", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

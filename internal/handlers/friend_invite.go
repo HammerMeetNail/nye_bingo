@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -76,7 +75,7 @@ func (h *FriendInviteHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error creating invite: %v", err)
+		logError("Error creating invite", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -94,7 +93,7 @@ func (h *FriendInviteHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	invites, err := h.inviteService.ListInvites(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error listing invites: %v", err)
+		logError("Error listing invites", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -122,7 +121,7 @@ func (h *FriendInviteHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error revoking invite: %v", err)
+		logError("Error revoking invite", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -161,7 +160,7 @@ func (h *FriendInviteHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error accepting invite: %v", err)
+		logError("Error accepting invite", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

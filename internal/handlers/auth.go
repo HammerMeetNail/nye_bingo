@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -106,7 +105,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Password is too long")
 			return
 		}
-		log.Printf("Error hashing password: %v", err)
+		logError("Error hashing password", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -127,7 +126,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error creating user: %v", err)
+		logError("Error creating user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -135,7 +134,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	token, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error creating session: %v", err)
+		logError("Error creating session", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -145,7 +144,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if h.emailService != nil {
 		go func() {
 			if err := h.emailService.SendVerificationEmail(context.Background(), user.ID, user.Email); err != nil {
-				log.Printf("Error sending verification email: %v", err)
+				logError("Error sending verification email", err)
 			}
 		}()
 	}
@@ -170,7 +169,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logError("Error getting user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -189,7 +188,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	token, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error creating session: %v", err)
+		logError("Error creating session", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -258,14 +257,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Password is too long")
 			return
 		}
-		log.Printf("Error hashing password: %v", err)
+		logError("Error hashing password", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// Update password
 	if err := h.userService.UpdatePassword(r.Context(), user.ID, newHash); err != nil {
-		log.Printf("Error updating password: %v", err)
+		logError("Error updating password", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -276,7 +275,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	// Create new session
 	token, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error creating session: %v", err)
+		logError("Error creating session", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -322,7 +321,7 @@ func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.emailService.SendVerificationEmail(r.Context(), user.ID, user.Email); err != nil {
-		log.Printf("Error sending verification email: %v", err)
+		logError("Error sending verification email", err)
 		writeError(w, http.StatusInternalServerError, "Failed to send verification email")
 		return
 	}
@@ -351,7 +350,7 @@ func (h *AuthHandler) MagicLink(w http.ResponseWriter, r *http.Request) {
 	if err == nil && user != nil {
 		// User exists, send magic link
 		if err := h.emailService.SendMagicLinkEmail(r.Context(), req.Email); err != nil {
-			log.Printf("Error sending magic link email: %v", err)
+			logError("Error sending magic link email", err)
 		}
 	}
 
@@ -383,7 +382,7 @@ func (h *AuthHandler) MagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 	// Mark email as verified since they clicked a link sent to their email
 	if !user.EmailVerified {
 		if err := h.userService.MarkEmailVerified(r.Context(), user.ID); err != nil {
-			log.Printf("Error marking email verified: %v", err)
+			logError("Error marking email verified", err)
 		} else {
 			// Re-fetch user to get updated verification status
 			user, _ = h.userService.GetByID(r.Context(), user.ID)
@@ -393,7 +392,7 @@ func (h *AuthHandler) MagicLinkVerify(w http.ResponseWriter, r *http.Request) {
 	// Create session
 	sessionToken, err := h.authService.CreateSession(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error creating session: %v", err)
+		logError("Error creating session", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -423,7 +422,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	if err == nil && user != nil {
 		// User exists, send reset email
 		if err := h.emailService.SendPasswordResetEmail(r.Context(), user.ID, user.Email); err != nil {
-			log.Printf("Error sending password reset email: %v", err)
+			logError("Error sending password reset email", err)
 		}
 	}
 
@@ -467,21 +466,21 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Password is too long")
 			return
 		}
-		log.Printf("Error hashing password: %v", err)
+		logError("Error hashing password", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// Update password
 	if err := h.userService.UpdatePassword(r.Context(), userID, passwordHash); err != nil {
-		log.Printf("Error updating password: %v", err)
+		logError("Error updating password", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// Mark token as used
 	if err := h.emailService.MarkPasswordResetUsed(r.Context(), req.Token); err != nil {
-		log.Printf("Error marking reset token as used: %v", err)
+		logError("Error marking reset token as used", err)
 	}
 
 	// Invalidate all sessions
@@ -489,13 +488,13 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Mark email as verified since they clicked a link sent to their email
 	if err := h.userService.MarkEmailVerified(r.Context(), userID); err != nil {
-		log.Printf("Error marking email verified: %v", err)
+		logError("Error marking email verified", err)
 	}
 
 	// Get user for response
 	user, err := h.userService.GetByID(r.Context(), userID)
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logError("Error getting user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -503,7 +502,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	// Create new session
 	sessionToken, err := h.authService.CreateSession(r.Context(), userID)
 	if err != nil {
-		log.Printf("Error creating session: %v", err)
+		logError("Error creating session", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -530,7 +529,7 @@ func (h *AuthHandler) UpdateSearchable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.userService.UpdateSearchable(r.Context(), user.ID, req.Searchable); err != nil {
-		log.Printf("Error updating searchable: %v", err)
+		logError("Error updating searchable", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -538,7 +537,7 @@ func (h *AuthHandler) UpdateSearchable(w http.ResponseWriter, r *http.Request) {
 	// Fetch updated user
 	updatedUser, err := h.userService.GetByID(r.Context(), user.ID)
 	if err != nil {
-		log.Printf("Error getting user: %v", err)
+		logError("Error getting user", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

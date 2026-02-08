@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"strings"
 
@@ -77,7 +76,7 @@ func (h *ReactionHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error adding reaction: %v", err)
+		logError("Error adding reaction", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -104,7 +103,7 @@ func (h *ReactionHandler) RemoveReaction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err != nil {
-		log.Printf("Error removing reaction: %v", err)
+		logError("Error removing reaction", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -127,14 +126,14 @@ func (h *ReactionHandler) GetReactions(w http.ResponseWriter, r *http.Request) {
 
 	reactions, err := h.reactionService.GetReactionsForItem(r.Context(), itemID)
 	if err != nil {
-		log.Printf("Error getting reactions: %v", err)
+		logError("Error getting reactions", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	summary, err := h.reactionService.GetReactionSummaryForItem(r.Context(), itemID)
 	if err != nil {
-		log.Printf("Error getting reaction summary: %v", err)
+		logError("Error getting reaction summary", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

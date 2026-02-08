@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
@@ -30,7 +29,7 @@ func (h *SuggestionHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	if grouped {
 		groupedSuggestions, err := h.suggestionService.GetGroupedByCategory(r.Context())
 		if err != nil {
-			log.Printf("Error getting grouped suggestions: %v", err)
+			logError("Error getting grouped suggestions", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
@@ -42,7 +41,7 @@ func (h *SuggestionHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 	if category != "" {
 		suggestions, err := h.suggestionService.GetByCategory(r.Context(), category)
 		if err != nil {
-			log.Printf("Error getting suggestions by category: %v", err)
+			logError("Error getting suggestions by category", err)
 			writeError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
@@ -53,7 +52,7 @@ func (h *SuggestionHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 
 	suggestions, err := h.suggestionService.GetAll(r.Context())
 	if err != nil {
-		log.Printf("Error getting suggestions: %v", err)
+		logError("Error getting suggestions", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -64,7 +63,7 @@ func (h *SuggestionHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 func (h *SuggestionHandler) GetCategories(w http.ResponseWriter, r *http.Request) {
 	categories, err := h.suggestionService.GetCategories(r.Context())
 	if err != nil {
-		log.Printf("Error getting categories: %v", err)
+		logError("Error getting categories", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

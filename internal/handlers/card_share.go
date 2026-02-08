@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
@@ -76,7 +75,7 @@ func (h *CardHandler) CreateShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error creating share: %v", err)
+		logError("Error creating share", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -119,7 +118,7 @@ func (h *CardHandler) GetShareStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error loading share status: %v", err)
+		logError("Error loading share status", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -164,7 +163,7 @@ func (h *CardHandler) RevokeShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error revoking share: %v", err)
+		logError("Error revoking share", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -188,7 +187,7 @@ func (h *CardHandler) GetSharedCard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		log.Printf("Error loading shared card: %v", err)
+		logError("Error loading shared card", err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
