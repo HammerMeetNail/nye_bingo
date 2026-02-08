@@ -5,12 +5,29 @@ import (
 	"time"
 
 	"github.com/HammerMeetNail/yearofbingo/internal/logging"
-	"github.com/HammerMeetNail/yearofbingo/internal/services"
 )
 
+type notificationJobRunner interface {
+	CleanupOld(ctx context.Context) error
+	SetAsyncContext(ctx context.Context)
+}
+
+type reminderJobRunner interface {
+	CleanupOld(ctx context.Context) error
+	RunDue(ctx context.Context, now time.Time, limit int) (int, error)
+}
+
 func startNotificationBackgroundJobs(
-	notificationService *services.NotificationService,
+	notificationService notificationJobRunner,
 	logger *logging.Logger,
+) context.CancelFunc {
+	return startNotificationBackgroundJobsWithInterval(notificationService, logger, 24*time.Hour)
+}
+
+func startNotificationBackgroundJobsWithInterval(
+	notificationService notificationJobRunner,
+	logger *logging.Logger,
+	interval time.Duration,
 ) context.CancelFunc {
 	if err := notificationService.CleanupOld(context.Background()); err != nil {
 		logger.Warn("Notification cleanup failed", map[string]interface{}{"error": err.Error()})
@@ -20,7 +37,7 @@ func startNotificationBackgroundJobs(
 	notificationService.SetAsyncContext(cleanupCtx)
 
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
@@ -38,9 +55,18 @@ func startNotificationBackgroundJobs(
 }
 
 func startReminderBackgroundJobs(
-	reminderService *services.ReminderService,
+	reminderService reminderJobRunner,
 	logger *logging.Logger,
 	lookupEnv func(string) (string, bool),
+) context.CancelFunc {
+	return startReminderBackgroundJobsWithCleanupInterval(reminderService, logger, lookupEnv, 24*time.Hour)
+}
+
+func startReminderBackgroundJobsWithCleanupInterval(
+	reminderService reminderJobRunner,
+	logger *logging.Logger,
+	lookupEnv func(string) (string, bool),
+	cleanupInterval time.Duration,
 ) context.CancelFunc {
 	if err := reminderService.CleanupOld(context.Background()); err != nil {
 		logger.Warn("Reminder cleanup failed", map[string]interface{}{"error": err.Error()})
@@ -63,7 +89,7 @@ func startReminderBackgroundJobs(
 		}
 	}()
 	go func() {
-		ticker := time.NewTicker(24 * time.Hour)
+		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
