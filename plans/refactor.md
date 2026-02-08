@@ -288,7 +288,7 @@ Legend:
 
 ### Track C: Server Composition (`cmd/server`)
 
-- [ ] `C1` Extract API route registration into domain functions (`M`, `Mechanical`)
+- [x] `C1` Extract API route registration into domain functions (`M`, `Mechanical`)
   - Scope:
     - Move route wiring from `run()` into `registerAuthRoutes`, `registerCardRoutes`, etc.
     - Keep wrappers and middleware application exactly as-is.
@@ -299,7 +299,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C2` Extract web/static/share/docs route registration (`S`, `Mechanical`)
+- [x] `C2` Extract web/static/share/docs route registration (`S`, `Mechanical`)
   - Scope:
     - Move static/page/share/OG/docs route wiring to `registerWebRoutes`.
   - Files:
