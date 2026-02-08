@@ -64,6 +64,10 @@ Files: `scripts/stripe-setup.sh`, `internal/services/billing/*`, `internal/handl
 - For values used in routing decisions, class names, or `data-*` attributes, prefer whitelists/mappings over "escaping".
 - Preserve strict CSP (no `unsafe-inline` / `unsafe-hashes`); if CSP changes, update/add tests accordingly.
 - When rendering user-controlled content, add/extend Playwright XSS regression coverage (assert payload is rendered as text, no DOM nodes created).
+- Logging must be structured and centralized:
+  - In handlers, use `logError(...)` from `internal/handlers/logging.go` for error paths (with contextual fields when useful).
+  - In middleware/services, use `internal/logging` (`logging.Info/Warn/Error` with structured fields).
+  - Do not introduce one-off `fmt.Print*`, `log.Print*`, or `slog.*` in app/runtime code paths.
 - Keep tests passing and don't reduce coverage.
 - Never commit secrets; explain destructive shell commands before running them.
 
