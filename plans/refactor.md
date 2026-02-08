@@ -405,7 +405,7 @@ Legend:
 
 ### Track A: Frontend Decomposition (`web/static/js/app.js`)
 
-- [ ] `A1` Add composition scaffold (`M`, `Mechanical`)
+- [x] `A1` Add composition scaffold (`M`, `Mechanical`)
   - Scope:
     - Introduce `app-core.js` + module composition pattern with no behavior changes.
     - Keep `app.js` as active source, scaffold only.
@@ -415,7 +415,7 @@ Legend:
   - Validation:
     - `node web/static/js/tests/runner.js`
 
-- [ ] `A2` Extract shared helpers + action routing shell (`M`, `Mechanical`)
+- [x] `A2` Extract shared helpers + action routing shell (`M`, `Mechanical`)
   - Scope:
     - Move helper utilities and action delegation maps.
   - Files:

@@ -1,6 +1,9 @@
 // Year of Bingo - Main Application
 
-const App = {
+window.App = window.App || {};
+const App = window.App;
+
+Object.assign(App, {
   user: null,
   isPremium: false,
   entitlements: {},
@@ -10325,7 +10328,7 @@ const App = {
       }
     });
   },
-};
+});
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
