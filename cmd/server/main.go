@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 	"time"
 
@@ -238,70 +237,7 @@ func run() error {
 	trustedProxyHeaders := middleware.NewTrustedProxyHeaders(trustedProxyChecker)
 	maxBodySize := middleware.NewMaxBodySize(1 << 20) // 1MiB for JSON APIs
 
-	// AI Rate Limit configuration
-	aiRateLimit := resolveAIRateLimit(cfg, logger, os.LookupEnv)
-	aiPremiumRateLimit := resolveAIPremiumRateLimit(cfg, logger, os.LookupEnv)
-
-	aiRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiRateLimit, 1*time.Hour, "ratelimit:ai:", func(r *http.Request) string {
-		user := handlers.GetUserFromContext(r.Context())
-		if user != nil {
-			return user.ID.String()
-		}
-		return ""
-	}, false)
-	aiPremiumRateLimiter := middleware.NewRateLimiter(redisDB.Client, aiPremiumRateLimit, 1*time.Hour, "ratelimit:ai-premium:", func(r *http.Request) string {
-		user := handlers.GetUserFromContext(r.Context())
-		if user != nil {
-			return user.ID.String()
-		}
-		return ""
-	}, false)
-
-	redeemLimiter := middleware.NewRateLimiter(redisDB.Client, 10, 1*time.Hour, "ratelimit:redeem:", func(r *http.Request) string {
-		user := handlers.GetUserFromContext(r.Context())
-		if user != nil {
-			return user.ID.String()
-		}
-		return ""
-	}, false)
-
-	// Auth rate limiting (per-IP + per-email where available).
-	// Use relaxed limits in development to avoid breaking e2e tests.
-	authLimits := resolveAuthRateLimits(cfg)
-
-	authLoginIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.loginIP, 15*time.Minute, "ratelimit:auth:login:ip:", func(r *http.Request) string {
-		return ""
-	}, false)
-	authLoginEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.loginEmail, 15*time.Minute, "ratelimit:auth:login:email:", func(r *http.Request) string {
-		if email := middleware.RateLimitEmailKey(r); email != "" {
-			return email
-		}
-		return "no_email:" + httpx.ClientIP(r)
-	}, false)
-
-	authRegisterIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.registerIP, 1*time.Hour, "ratelimit:auth:register:ip:", func(r *http.Request) string {
-		return ""
-	}, false)
-	authRegisterEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.registerEmail, 1*time.Hour, "ratelimit:auth:register:email:", func(r *http.Request) string {
-		if email := middleware.RateLimitEmailKey(r); email != "" {
-			return email
-		}
-		return "no_email:" + httpx.ClientIP(r)
-	}, false)
-
-	authEmailFlowIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.emailFlowIP, 1*time.Hour, "ratelimit:auth:emailflow:ip:", func(r *http.Request) string {
-		return ""
-	}, false)
-	authEmailFlowEmailLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.emailFlowEmail, 1*time.Hour, "ratelimit:auth:emailflow:email:", func(r *http.Request) string {
-		if email := middleware.RateLimitEmailKey(r); email != "" {
-			return email
-		}
-		return "no_email:" + httpx.ClientIP(r)
-	}, false)
-
-	authResetPasswordIPLimiter := middleware.NewRateLimiter(redisDB.Client, authLimits.resetPasswordIP, 1*time.Hour, "ratelimit:auth:reset:ip:", func(r *http.Request) string {
-		return ""
-	}, false)
+	rateLimiters := buildRouteRateLimiters(cfg, logger, redisDB.Client, os.LookupEnv)
 
 	// Helper middlewares for API token scope enforcement
 	requireRead := authMiddleware.RequireScope(models.ScopeRead)
@@ -333,16 +269,16 @@ func run() error {
 		requireRead:                requireRead,
 		requireWrite:               requireWrite,
 		requireSession:             requireSession,
-		authLoginIPLimiter:         authLoginIPLimiter,
-		authLoginEmailLimiter:      authLoginEmailLimiter,
-		authRegisterIPLimiter:      authRegisterIPLimiter,
-		authRegisterEmailLimiter:   authRegisterEmailLimiter,
-		authEmailFlowIPLimiter:     authEmailFlowIPLimiter,
-		authEmailFlowEmailLimiter:  authEmailFlowEmailLimiter,
-		authResetPasswordIPLimiter: authResetPasswordIPLimiter,
-		aiRateLimiter:              aiRateLimiter,
-		aiPremiumRateLimiter:       aiPremiumRateLimiter,
-		redeemLimiter:              redeemLimiter,
+		authLoginIPLimiter:         rateLimiters.authLoginIPLimiter,
+		authLoginEmailLimiter:      rateLimiters.authLoginEmailLimiter,
+		authRegisterIPLimiter:      rateLimiters.authRegisterIPLimiter,
+		authRegisterEmailLimiter:   rateLimiters.authRegisterEmailLimiter,
+		authEmailFlowIPLimiter:     rateLimiters.authEmailFlowIPLimiter,
+		authEmailFlowEmailLimiter:  rateLimiters.authEmailFlowEmailLimiter,
+		authResetPasswordIPLimiter: rateLimiters.authResetPasswordIPLimiter,
+		aiRateLimiter:              rateLimiters.aiRateLimiter,
+		aiPremiumRateLimiter:       rateLimiters.aiPremiumRateLimiter,
+		redeemLimiter:              rateLimiters.redeemLimiter,
 	})
 
 	registerWebRoutes(mux, &webRouteHandlers{
@@ -353,16 +289,16 @@ func run() error {
 		sharePublicHandler:    sharePublicHandler,
 	}, requireSession)
 
-	// Build middleware chain (order matters: outermost first)
-	var handler http.Handler = mux
-	handler = authMiddleware.Authenticate(handler)
-	handler = maxBodySize.Apply(handler)
-	handler = csrfMiddleware.Protect(handler)
-	handler = cacheControl.Apply(handler)
-	handler = compress.Apply(handler)
-	handler = securityHeaders.Apply(handler)
-	handler = requestLogger.Apply(handler)
-	handler = trustedProxyHeaders.Apply(handler)
+	handler := buildMiddlewareChain(mux, &middlewareChain{
+		authMiddleware:     authMiddleware,
+		maxBodySize:        maxBodySize,
+		csrfMiddleware:     csrfMiddleware,
+		cacheControl:       cacheControl,
+		compress:           compress,
+		securityHeaders:    securityHeaders,
+		requestLogger:      requestLogger,
+		trustedProxyHeader: trustedProxyHeaders,
+	})
 
 	// Create server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -409,83 +345,6 @@ func run() error {
 	<-done
 	logger.Info("Server stopped")
 	return nil
-}
-
-func resolveAIRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv func(string) (string, bool)) int64 {
-	aiRateLimit := int64(10)
-	if cfg.Server.Environment == "development" {
-		aiRateLimit = 100
-		logger.Info("Using development AI rate limit", map[string]interface{}{"limit": aiRateLimit})
-	}
-	if v, ok := lookupEnv("AI_RATE_LIMIT"); ok && v != "" {
-		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
-			aiRateLimit = parsed
-			logger.Info("Using AI rate limit from env", map[string]interface{}{"limit": aiRateLimit})
-		} else {
-			logger.Warn("Invalid AI_RATE_LIMIT; using default", map[string]interface{}{
-				"value": v,
-				"limit": aiRateLimit,
-			})
-		}
-	}
-	return aiRateLimit
-}
-
-func resolveAIPremiumRateLimit(cfg *config.Config, logger *logging.Logger, lookupEnv func(string) (string, bool)) int64 {
-	limit := int64(cfg.AI.PremiumEndpointRateLimit)
-	if limit <= 0 {
-		limit = 60
-	}
-	if v, ok := lookupEnv("AI_PREMIUM_ENDPOINT_RATE_LIMIT"); ok && v != "" {
-		if parsed, err := strconv.ParseInt(v, 10, 64); err == nil && parsed > 0 {
-			limit = parsed
-			logger.Info("Using premium AI endpoint rate limit from env", map[string]interface{}{"limit": limit})
-		} else {
-			logger.Warn("Invalid AI_PREMIUM_ENDPOINT_RATE_LIMIT; using default", map[string]interface{}{
-				"value": v,
-				"limit": limit,
-			})
-		}
-	}
-	return limit
-}
-
-// authRateLimits holds rate limit values for auth endpoints.
-type authRateLimits struct {
-	loginIP         int64
-	loginEmail      int64
-	registerIP      int64
-	registerEmail   int64
-	emailFlowIP     int64
-	emailFlowEmail  int64
-	resetPasswordIP int64
-}
-
-// resolveAuthRateLimits returns rate limit values for auth endpoints.
-// In development mode, limits are significantly higher to avoid breaking e2e tests.
-func resolveAuthRateLimits(cfg *config.Config) authRateLimits {
-	if cfg.Server.Environment == "development" {
-		// Development: high limits to allow e2e tests to run without hitting rate limits
-		return authRateLimits{
-			loginIP:         1000,
-			loginEmail:      500,
-			registerIP:      1000,
-			registerEmail:   500,
-			emailFlowIP:     1000,
-			emailFlowEmail:  500,
-			resetPasswordIP: 1000,
-		}
-	}
-	// Production: strict limits to prevent abuse
-	return authRateLimits{
-		loginIP:         30,
-		loginEmail:      10,
-		registerIP:      10,
-		registerEmail:   5,
-		emailFlowIP:     10,
-		emailFlowEmail:  5,
-		resetPasswordIP: 10,
-	}
 }
 
 func resolveRemindersPollInterval(logger *logging.Logger, lookupEnv func(string) (string, bool)) time.Duration {

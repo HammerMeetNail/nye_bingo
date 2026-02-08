@@ -308,7 +308,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C3` Extract middleware chain builder (`S`, `Mechanical`)
+- [x] `C3` Extract middleware chain builder (`S`, `Mechanical`)
   - Scope:
     - Introduce `buildMiddlewareChain(...)` with explicit order.
   - Files:
@@ -317,7 +317,7 @@ Legend:
     - `go test ./cmd/server`
     - `go test ./...`
 
-- [ ] `C4` Extract rate limit builders/config (`M`, `Mechanical`)
+- [x] `C4` Extract rate limit builders/config (`M`, `Mechanical`)
   - Scope:
     - Move auth/AI/redeem limiter setup and env parsing helpers to `ratelimits.go`.
     - Keep defaults and development overrides unchanged.
