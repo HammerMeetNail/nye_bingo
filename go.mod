@@ -12,7 +12,7 @@ require (
 	github.com/resend/resend-go/v2 v2.28.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/image v0.35.0
-	golang.org/x/oauth2 v0.34.0
+	golang.org/x/oauth2 v0.35.0
 )
 
 require (
