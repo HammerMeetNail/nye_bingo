@@ -11,7 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.17.3
 	github.com/resend/resend-go/v2 v2.28.0
 	golang.org/x/crypto v0.48.0
-	golang.org/x/image v0.35.0
+	golang.org/x/image v0.36.0
 	golang.org/x/oauth2 v0.35.0
 )
 
