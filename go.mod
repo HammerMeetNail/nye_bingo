@@ -1,6 +1,6 @@
 module github.com/HammerMeetNail/yearofbingo
 
-go 1.24.9
+go 1.25.0
 
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
@@ -11,7 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/resend/resend-go/v2 v2.28.0
 	golang.org/x/crypto v0.48.0
-	golang.org/x/image v0.36.0
+	golang.org/x/image v0.37.0
 	golang.org/x/oauth2 v0.35.0
 )
 
@@ -25,6 +25,6 @@ require (
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 )
