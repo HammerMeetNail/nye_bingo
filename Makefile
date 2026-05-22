@@ -1,4 +1,4 @@
-.PHONY: local premium local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop premium-code premium-code-prod
+.PHONY: local premium local-billing down build up logs test lint clean assets e2e e2e-headed e2e-debug test-backend test-frontend coverage release stripe-products stripe-listen stripe-stop premium-code premium-code-prod update-prod-os
 
 # Force Podman to use a Linux compose provider (important in WSL where it may
 # otherwise auto-detect a Windows Docker Desktop docker-compose binary).
@@ -119,6 +119,17 @@ ifneq (,$(filter release,$(MAKECMDGOALS)))
 $(filter-out release,$(MAKECMDGOALS)):
 	@:
 endif
+
+# ============================================================================
+# Production Operations
+# ============================================================================
+
+# Apply host OS package updates on the production server.
+# Reboots automatically if a new kernel was installed, then verifies
+# containers and app health.
+# Override SSH key: SSH_KEY=/path/to/key make update-prod-os
+update-prod-os:
+	@./scripts/update-prod-os.sh
 
 # ============================================================================
 # Stripe (Billing) Development Targets
