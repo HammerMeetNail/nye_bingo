@@ -14,9 +14,12 @@ func TestClientIP_TrustedWithXForwardedFor(t *testing.T) {
 		expected   string
 	}{
 		{"Single IP", "203.0.113.1", "10.0.0.1:8080", "203.0.113.1"},
-		{"Multiple IPs", "203.0.113.1, 10.0.0.2, 10.0.0.3", "10.0.0.1:8080", "203.0.113.1"},
+		// Right-most entry is the one appended by the nearest trusted proxy.
+		{"Multiple IPs", "10.0.0.2, 10.0.0.3, 203.0.113.1", "10.0.0.1:8080", "203.0.113.1"},
 		{"IP with spaces", "  203.0.113.1  ", "10.0.0.1:8080", "203.0.113.1"},
-		{"Multiple IPs with spaces", "  203.0.113.1  ,  10.0.0.2  ", "10.0.0.1:8080", "203.0.113.1"},
+		{"Multiple IPs with spaces", "  10.0.0.2  ,  203.0.113.1  ", "10.0.0.1:8080", "203.0.113.1"},
+		// A client-supplied (spoofed) left-most entry must be ignored.
+		{"Spoofed left-most ignored", "1.2.3.4, 203.0.113.1", "10.0.0.1:8080", "203.0.113.1"},
 	}
 
 	for _, tt := range tests {
@@ -68,6 +71,31 @@ func TestClientIP_TrustedPrefersXForwardedFor(t *testing.T) {
 
 	if got := ClientIP(req); got != "203.0.113.1" {
 		t.Errorf("ClientIP() = %q, want %q (X-Forwarded-For should take precedence)", got, "203.0.113.1")
+	}
+}
+
+func TestClientIP_TrustedPrefersCFConnectingIP(t *testing.T) {
+	// CF-Connecting-IP wins over X-Forwarded-For and X-Real-IP.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:8080"
+	req.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	req.Header.Set("X-Forwarded-For", "1.2.3.4, 203.0.113.1")
+	req.Header.Set("X-Real-IP", "203.0.113.2")
+	req = WithTrustedForwardedHeaders(req, true)
+
+	if got := ClientIP(req); got != "203.0.113.9" {
+		t.Errorf("ClientIP() = %q, want %q (CF-Connecting-IP should win)", got, "203.0.113.9")
+	}
+}
+
+func TestClientIP_UntrustedIgnoresCFConnectingIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:8080"
+	req.Header.Set("CF-Connecting-IP", "203.0.113.9")
+	// Not trusted: header must be ignored.
+
+	if got := ClientIP(req); got != "10.0.0.1" {
+		t.Errorf("ClientIP() = %q, want %q (CF-Connecting-IP must be ignored when untrusted)", got, "10.0.0.1")
 	}
 }
 

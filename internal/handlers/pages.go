@@ -76,7 +76,23 @@ func (h *PageHandler) Index(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// canonicalBaseURL, when set, pins the scheme+host used for canonical/OG URLs,
+// ignoring request and X-Forwarded-* headers. This removes host-header influence
+// on public share/OG URLs (L-1). It is left empty in tests/dev so behavior falls
+// back to deriving the base URL from the request.
+var canonicalBaseURL string
+
+// SetCanonicalBaseURL pins the public base URL (e.g. "https://yearofbingo.com").
+// A trailing slash is trimmed. Empty input disables pinning.
+func SetCanonicalBaseURL(base string) {
+	canonicalBaseURL = strings.TrimRight(strings.TrimSpace(base), "/")
+}
+
 func resolveBaseURL(r *http.Request) string {
+	if canonicalBaseURL != "" {
+		return canonicalBaseURL
+	}
+
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"

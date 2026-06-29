@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,9 +19,13 @@ import (
 )
 
 const (
-	bcryptCost       = 12
-	sessionDuration  = 30 * 24 * time.Hour // 30 days
-	sessionKeyPrefix = "session:"
+	bcryptCost = 12
+	// sessionDuration is the sliding TTL refreshed on each request.
+	sessionDuration = 30 * 24 * time.Hour // 30 days
+	// maxSessionLifetime is an absolute cap regardless of activity. A session is
+	// rejected once it is older than this even if its sliding TTL keeps refreshing.
+	maxSessionLifetime = 90 * 24 * time.Hour // 90 days
+	sessionKeyPrefix   = "session:"
 )
 
 var (
@@ -84,11 +90,14 @@ func (s *AuthService) CreateSession(ctx context.Context, userID uuid.UUID) (toke
 		return "", err
 	}
 
-	expiresAt := time.Now().Add(sessionDuration)
+	now := time.Now()
+	expiresAt := now.Add(sessionDuration)
 
-	// Store in Redis for fast lookups
+	// Store in Redis for fast lookups. The value embeds the creation time so we can
+	// enforce an absolute max lifetime and a per-user invalidation cutoff without a
+	// per-user session index (Redis exposes no enumeration primitive here).
 	redisKey := sessionKeyPrefix + tokenHash
-	err = s.redis.Set(ctx, redisKey, userID.String(), sessionDuration)
+	err = s.redis.Set(ctx, redisKey, encodeSessionValue(userID, now), sessionDuration)
 	if err != nil {
 		// Fall back to PostgreSQL if Redis fails
 		_, err = s.db.Exec(ctx,
@@ -108,17 +117,34 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 
 	// Try Redis first
 	redisKey := sessionKeyPrefix + tokenHash
-	userIDStr, err := s.redis.Get(ctx, redisKey)
+	value, err := s.redis.Get(ctx, redisKey)
 	if err == nil {
-		// Found in Redis, extend session
-		_ = s.redis.Expire(ctx, redisKey, sessionDuration)
-
-		userID, err := uuid.Parse(userIDStr)
-		if err != nil {
-			return nil, fmt.Errorf("parsing user id: %w", err)
+		userID, createdAt, hasCreatedAt, perr := decodeSessionValue(value)
+		if perr != nil {
+			return nil, perr
 		}
 
-		return s.getUserByID(ctx, userID)
+		// Absolute lifetime cap (only enforceable when the value carries a creation time).
+		if hasCreatedAt && time.Since(createdAt) > maxSessionLifetime {
+			_ = s.redis.Del(ctx, redisKey)
+			return nil, ErrSessionExpired
+		}
+
+		user, err := s.getUserByID(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Reject sessions that predate a password change/reset invalidation cutoff.
+		// Legacy values without a creation time are treated as predating the cutoff.
+		if user.SessionsInvalidatedAt != nil && (!hasCreatedAt || !createdAt.After(*user.SessionsInvalidatedAt)) {
+			_ = s.redis.Del(ctx, redisKey)
+			return nil, ErrSessionNotFound
+		}
+
+		// Valid: extend the sliding session TTL.
+		_ = s.redis.Expire(ctx, redisKey, sessionDuration)
+		return user, nil
 	}
 
 	// Fall back to PostgreSQL
@@ -136,13 +162,46 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 		return nil, fmt.Errorf("querying session: %w", err)
 	}
 
-	if time.Now().After(session.ExpiresAt) {
+	if time.Now().After(session.ExpiresAt) || time.Since(session.CreatedAt) > maxSessionLifetime {
 		// Clean up expired session
 		_, _ = s.db.Exec(ctx, "DELETE FROM sessions WHERE id = $1", session.ID)
 		return nil, ErrSessionExpired
 	}
 
-	return s.getUserByID(ctx, session.UserID)
+	user, err := s.getUserByID(ctx, session.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Reject sessions that predate a password change/reset invalidation cutoff.
+	if user.SessionsInvalidatedAt != nil && !session.CreatedAt.After(*user.SessionsInvalidatedAt) {
+		_, _ = s.db.Exec(ctx, "DELETE FROM sessions WHERE id = $1", session.ID)
+		return nil, ErrSessionNotFound
+	}
+
+	return user, nil
+}
+
+// encodeSessionValue serializes the Redis session value as "<userID>|<unixCreatedAt>".
+func encodeSessionValue(userID uuid.UUID, createdAt time.Time) string {
+	return userID.String() + "|" + strconv.FormatInt(createdAt.Unix(), 10)
+}
+
+// decodeSessionValue parses a Redis session value. Legacy values are a bare user
+// ID with no creation time, in which case hasCreatedAt is false.
+func decodeSessionValue(value string) (userID uuid.UUID, createdAt time.Time, hasCreatedAt bool, err error) {
+	idStr, tsStr, found := strings.Cut(value, "|")
+	if found {
+		if ts, perr := strconv.ParseInt(tsStr, 10, 64); perr == nil {
+			createdAt = time.Unix(ts, 0)
+			hasCreatedAt = true
+		}
+	}
+	id, perr := uuid.Parse(idStr)
+	if perr != nil {
+		return uuid.UUID{}, time.Time{}, false, fmt.Errorf("parsing user id: %w", perr)
+	}
+	return id, createdAt, hasCreatedAt, nil
 }
 
 func (s *AuthService) DeleteSession(ctx context.Context, token string) error {
@@ -162,7 +221,14 @@ func (s *AuthService) DeleteSession(ctx context.Context, token string) error {
 }
 
 func (s *AuthService) DeleteAllUserSessions(ctx context.Context, userID uuid.UUID) error {
-	// Get all session hashes for this user from PostgreSQL
+	// Stamp an invalidation cutoff so that all existing sessions (including
+	// Redis-only sessions that have no row in the sessions table) are rejected on
+	// their next validation. This is the primary revocation mechanism.
+	if _, err := s.db.Exec(ctx, "UPDATE users SET sessions_invalidated_at = NOW() WHERE id = $1", userID); err != nil {
+		return fmt.Errorf("invalidating user sessions: %w", err)
+	}
+
+	// Best-effort cleanup of any PG-fallback sessions and their Redis mirrors.
 	rows, err := s.db.Query(ctx, "SELECT token_hash FROM sessions WHERE user_id = $1", userID)
 	if err != nil {
 		return fmt.Errorf("querying user sessions: %w", err)
@@ -197,14 +263,14 @@ func (s *AuthService) getUserByID(ctx context.Context, id uuid.UUID) (*models.Us
 	err := s.db.QueryRow(ctx,
 		`SELECT id, email, password_hash, username, email_verified, email_verified_at, ai_free_generations_used, searchable,
 		        stripe_customer_id, stripe_subscription_id, billing_plan, billing_source, billing_status,
-		        billing_current_period_end, billing_cancel_at_period_end, billing_updated_at,
+		        billing_current_period_end, billing_cancel_at_period_end, billing_updated_at, sessions_invalidated_at,
 		        created_at, updated_at
 		 FROM users WHERE id = $1 AND deleted_at IS NULL`,
 		id,
 	).Scan(
 		&user.ID, &user.Email, &user.PasswordHash, &user.Username, &user.EmailVerified, &user.EmailVerifiedAt, &user.AIFreeGenerationsUsed, &user.Searchable,
 		&user.StripeCustomerID, &user.StripeSubscriptionID, &user.BillingPlan, &user.BillingSource, &user.BillingStatus,
-		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt,
+		&user.BillingCurrentPeriodEnd, &user.BillingCancelAtPeriodEnd, &user.BillingUpdatedAt, &user.SessionsInvalidatedAt,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 

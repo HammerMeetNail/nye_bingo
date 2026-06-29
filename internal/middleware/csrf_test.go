@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -228,8 +229,11 @@ func TestCSRFMiddleware_GetToken(t *testing.T) {
 		}
 	})
 
-	t.Run("returns existing token when cookie present", func(t *testing.T) {
-		existingToken := "existing-csrf-token"
+	t.Run("returns existing token when valid cookie present", func(t *testing.T) {
+		existingToken, err := csrf.generateToken()
+		if err != nil {
+			t.Fatalf("generateToken: %v", err)
+		}
 		req := httptest.NewRequest(http.MethodGet, "/api/csrf", nil)
 		req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: existingToken})
 
@@ -240,12 +244,46 @@ func TestCSRFMiddleware_GetToken(t *testing.T) {
 			t.Errorf("expected status 200, got %d", rr.Code)
 		}
 
-		// Body should contain the existing token
+		// Body should contain the existing (valid) token
 		body := rr.Body.String()
 		if body != `{"token":"`+existingToken+`"}` {
 			t.Errorf("unexpected response body: %s", body)
 		}
 	})
+
+	t.Run("reissues when legacy unsigned cookie present", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/csrf", nil)
+		req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "legacy-unsigned-token"})
+
+		rr := httptest.NewRecorder()
+		csrf.GetToken(rr, req)
+
+		body := rr.Body.String()
+		if strings.Contains(body, "legacy-unsigned-token") {
+			t.Errorf("expected a freshly signed token, got legacy token back: %s", body)
+		}
+	})
+}
+
+func TestCSRFMiddleware_ForgedUnsignedTokenRejected(t *testing.T) {
+	csrf := NewCSRFMiddleware(false)
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for a forged (unsigned) token")
+	})
+
+	// Attacker plants a matching cookie+header pair, but it carries no valid signature.
+	forged := "attacker-chosen-value"
+	req := httptest.NewRequest(http.MethodPost, "/api/test", nil)
+	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: forged})
+	req.Header.Set(csrfHeaderName, forged)
+
+	rr := httptest.NewRecorder()
+	csrf.Protect(handler).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("forged token: expected status 403, got %d", rr.Code)
+	}
 }
 
 func TestCSRFMiddleware_SecureMode(t *testing.T) {
@@ -300,15 +338,20 @@ func TestCSRFMiddleware_SameSiteStrict(t *testing.T) {
 }
 
 func TestGenerateCSRFToken(t *testing.T) {
-	token1, err := generateCSRFToken()
+	csrf := NewCSRFMiddleware(false)
+
+	token1, err := csrf.generateToken()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if token1 == "" {
 		t.Error("token should not be empty")
 	}
+	if !csrf.validToken(token1) {
+		t.Error("freshly generated token should validate")
+	}
 
-	token2, err := generateCSRFToken()
+	token2, err := csrf.generateToken()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -317,8 +360,18 @@ func TestGenerateCSRFToken(t *testing.T) {
 		t.Error("tokens should be unique")
 	}
 
-	// Token should be base64 encoded
+	// Token should be base64 encoded payload + signature
 	if len(token1) < 40 {
 		t.Errorf("token seems too short: %d chars", len(token1))
+	}
+
+	// A token signed by a different process/secret must not validate here.
+	other := NewCSRFMiddleware(false)
+	otherTok, err := other.generateToken()
+	if err != nil {
+		t.Fatalf("generateToken: %v", err)
+	}
+	if csrf.validToken(otherTok) {
+		t.Error("token from a different secret should not validate")
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -97,6 +98,13 @@ func TestHealthHandler_Health_RedisUnhealthy(t *testing.T) {
 
 	if response.Status != "unhealthy" {
 		t.Errorf("expected status 'unhealthy', got %q", response.Status)
+	}
+	if response.Checks["redis"] != "unhealthy" {
+		t.Errorf("expected redis check 'unhealthy', got %q", response.Checks["redis"])
+	}
+	// The raw dependency error must not leak to anonymous callers.
+	if strings.Contains(rr.Body.String(), "connection timeout") {
+		t.Errorf("health response leaked internal error detail: %s", rr.Body.String())
 	}
 }
 

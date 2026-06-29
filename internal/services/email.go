@@ -537,6 +537,13 @@ func (s *EmailService) renderSupportEmail(fromEmail, category, message, userID s
 		userInfo = userID
 	}
 
+	// Escape every interpolated value, not just the message. fromEmail and
+	// category are constrained upstream, but escaping here prevents HTML injection
+	// into the operator inbox if those constraints ever regress.
+	htmlFrom := template.HTMLEscapeString(fromEmail)
+	htmlCategory := template.HTMLEscapeString(category)
+	htmlUserInfo := template.HTMLEscapeString(userInfo)
+
 	html = fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -567,7 +574,7 @@ func (s *EmailService) renderSupportEmail(fromEmail, category, message, userID s
   <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
   <p style="color: #999; font-size: 12px;">Year of Bingo Support System</p>
 </body>
-</html>`, fromEmail, category, userInfo, template.HTMLEscapeString(message))
+</html>`, htmlFrom, htmlCategory, htmlUserInfo, template.HTMLEscapeString(message))
 
 	text = fmt.Sprintf(`Support Request
 ===============
