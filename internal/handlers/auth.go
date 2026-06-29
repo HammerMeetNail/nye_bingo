@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/HammerMeetNail/yearofbingo/internal/models"
 	"github.com/HammerMeetNail/yearofbingo/internal/services"
 	"github.com/HammerMeetNail/yearofbingo/internal/services/billing"
@@ -20,11 +22,20 @@ const (
 	cookieMaxAge      = 30 * 24 * 60 * 60 // 30 days in seconds
 )
 
-// dummyPasswordHash is a fixed, valid bcrypt hash (cost 12) used to perform a
-// throwaway password comparison on login paths where the account does not exist
-// or has no password. Running bcrypt regardless flattens the timing
+// dummyPasswordHash is a bcrypt hash (cost 12) of a throwaway value, generated
+// once at startup. It is used to run a bcrypt comparison on login paths where
+// the account does not exist or has no password, flattening the timing
 // side-channel that would otherwise reveal whether an email is registered.
-var dummyPasswordHash = "$2a$12$h5C7QccIskSYAUBsbDYbYenIkt2OLJPfc9CS6HaQ.XCCtXec01jWu"
+// Generated at runtime (not a hardcoded literal) so it is not a credential.
+var dummyPasswordHash = mustGenerateDummyHash()
+
+func mustGenerateDummyHash() string {
+	h, err := bcrypt.GenerateFromPassword([]byte("login-timing-equalizer"), 12)
+	if err != nil {
+		panic("auth: failed to generate dummy password hash: " + err.Error())
+	}
+	return string(h)
+}
 
 type AuthHandler struct {
 	userService  services.UserServiceInterface

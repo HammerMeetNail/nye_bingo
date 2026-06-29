@@ -591,20 +591,19 @@ func (r *statefulRedis) Del(_ context.Context, keys ...string) error {
 	return nil
 }
 
-// TestAuthService_DeleteAllUserSessions_RevokesRedisSession is the H-1 regression
-// test: a Redis-only session (no row in the sessions table) must stop validating
-// after DeleteAllUserSessions, which is what password change/reset rely on.
-func TestAuthService_DeleteAllUserSessions_RevokesRedisSession(t *testing.T) {
-	ctx := context.Background()
-	userID := uuid.New()
+// newInvalidatingAuth builds an AuthService whose getUserByID reflects the
+// current invalidation cutoff, and DeleteAllUserSessions stamps it. The cutoff
+// pointer is returned so tests can observe/seed it.
+func newInvalidatingAuth(t *testing.T, userID uuid.UUID) (*AuthService, *statefulRedis) {
+	t.Helper()
 	now := time.Now().UTC()
+	invalidatedAt := new(*time.Time) // pointer to the *time.Time the getUserByID closure reads
 
-	var invalidatedAt *time.Time
 	db := &fakeDB{
 		ExecFunc: func(_ context.Context, sql string, _ ...any) (CommandTag, error) {
 			if strings.Contains(sql, "sessions_invalidated_at = NOW()") {
 				ts := time.Now().UTC()
-				invalidatedAt = &ts
+				*invalidatedAt = &ts
 			}
 			return fakeCommandTag{rowsAffected: 1}, nil
 		},
@@ -616,18 +615,29 @@ func TestAuthService_DeleteAllUserSessions_RevokesRedisSession(t *testing.T) {
 			return rowFromValues(
 				userID, "user@example.com", stringPtr("hash"), "username", true, nil, 0, true,
 				(*string)(nil), (*string)(nil), "free", "none", "inactive", (*time.Time)(nil), false, now,
-				invalidatedAt, // sessions_invalidated_at (reflects current state)
+				*invalidatedAt, // sessions_invalidated_at (reflects current state)
 				now, now,
 			)
 		},
 	}
 	redis := newStatefulRedis()
-	auth := NewAuthService(db, redis)
+	return NewAuthService(db, redis), redis
+}
 
-	token, err := auth.CreateSession(ctx, userID)
+// TestAuthService_DeleteAllUserSessions_RevokesRedisSession is the H-1 regression
+// test: an existing Redis-only session created before the cutoff (e.g. an
+// attacker's session) must stop validating after DeleteAllUserSessions.
+func TestAuthService_DeleteAllUserSessions_RevokesRedisSession(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	auth, redis := newInvalidatingAuth(t, userID)
+
+	// Seed an old Redis-only session (created an hour ago) directly.
+	token, hash, err := auth.GenerateSessionToken()
 	if err != nil {
-		t.Fatalf("CreateSession: %v", err)
+		t.Fatalf("GenerateSessionToken: %v", err)
 	}
+	redis.store[sessionKeyPrefix+hash] = encodeSessionValue(userID, time.Now().Add(-time.Hour))
 
 	// Sanity: the session validates before invalidation.
 	if _, err := auth.ValidateSession(ctx, token); err != nil {
@@ -638,13 +648,33 @@ func TestAuthService_DeleteAllUserSessions_RevokesRedisSession(t *testing.T) {
 	if err := auth.DeleteAllUserSessions(ctx, userID); err != nil {
 		t.Fatalf("DeleteAllUserSessions: %v", err)
 	}
-	if invalidatedAt == nil {
-		t.Fatal("expected DeleteAllUserSessions to stamp sessions_invalidated_at")
-	}
 
-	// The Redis-only session must no longer validate.
+	// The old Redis-only session must no longer validate.
 	if _, err := auth.ValidateSession(ctx, token); !errors.Is(err, ErrSessionNotFound) {
 		t.Fatalf("expected ErrSessionNotFound after revocation, got %v", err)
+	}
+}
+
+// TestAuthService_NewSessionSurvivesInvalidation guards the e2e regression: the
+// session created immediately AFTER a password reset (same instant as the
+// invalidation cutoff) must remain valid, despite whole-second createdAt
+// granularity vs the sub-second cutoff.
+func TestAuthService_NewSessionSurvivesInvalidation(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	auth, _ := newInvalidatingAuth(t, userID)
+
+	// Reset stamps the cutoff, then issues a fresh session (handler ordering).
+	if err := auth.DeleteAllUserSessions(ctx, userID); err != nil {
+		t.Fatalf("DeleteAllUserSessions: %v", err)
+	}
+	token, err := auth.CreateSession(ctx, userID)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	if _, err := auth.ValidateSession(ctx, token); err != nil {
+		t.Fatalf("freshly issued session must validate after a reset, got %v", err)
 	}
 }
 

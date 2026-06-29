@@ -26,6 +26,14 @@ const (
 	// rejected once it is older than this even if its sliding TTL keeps refreshing.
 	maxSessionLifetime = 90 * 24 * time.Hour // 90 days
 	sessionKeyPrefix   = "session:"
+	// sessionInvalidationGrace is subtracted from sessions_invalidated_at when
+	// deciding whether a session predates an invalidation cutoff. It absorbs two
+	// effects so a session created at the same moment as a password change/reset
+	// is NOT mistakenly revoked: (1) session createdAt is stored at whole-second
+	// granularity while the cutoff (DB NOW()) is sub-second, and (2) small clock
+	// skew between the app and the database. The window is tiny relative to an
+	// attacker session's age (minutes/hours), so revocation is still effective.
+	sessionInvalidationGrace = 5 * time.Second
 )
 
 var (
@@ -137,7 +145,7 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 
 		// Reject sessions that predate a password change/reset invalidation cutoff.
 		// Legacy values without a creation time are treated as predating the cutoff.
-		if user.SessionsInvalidatedAt != nil && (!hasCreatedAt || !createdAt.After(*user.SessionsInvalidatedAt)) {
+		if user.SessionsInvalidatedAt != nil && (!hasCreatedAt || createdAt.Before(user.SessionsInvalidatedAt.Add(-sessionInvalidationGrace))) {
 			_ = s.redis.Del(ctx, redisKey)
 			return nil, ErrSessionNotFound
 		}
@@ -174,7 +182,7 @@ func (s *AuthService) ValidateSession(ctx context.Context, token string) (*model
 	}
 
 	// Reject sessions that predate a password change/reset invalidation cutoff.
-	if user.SessionsInvalidatedAt != nil && !session.CreatedAt.After(*user.SessionsInvalidatedAt) {
+	if user.SessionsInvalidatedAt != nil && session.CreatedAt.Before(user.SessionsInvalidatedAt.Add(-sessionInvalidationGrace)) {
 		_, _ = s.db.Exec(ctx, "DELETE FROM sessions WHERE id = $1", session.ID)
 		return nil, ErrSessionNotFound
 	}
