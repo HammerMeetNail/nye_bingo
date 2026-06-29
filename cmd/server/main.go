@@ -135,6 +135,12 @@ func run() error {
 	friendService.SetNotificationService(notificationService)
 	inviteService.SetNotificationService(notificationService)
 
+	// In production, pin canonical/OG URLs to the configured public base URL so a
+	// spoofed Host / X-Forwarded-Host header cannot influence them (L-1).
+	if cfg.Server.Environment == "production" {
+		handlers.SetCanonicalBaseURL(cfg.Email.BaseURL)
+	}
+
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler(db, redisDB)
 	authHandler := handlers.NewAuthHandler(userService, authService, emailService, cfg.Server.Secure)

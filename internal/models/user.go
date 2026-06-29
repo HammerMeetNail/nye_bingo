@@ -23,6 +23,7 @@ type User struct {
 	BillingCurrentPeriodEnd  *time.Time `json:"-"`
 	BillingCancelAtPeriodEnd bool       `json:"-"`
 	BillingUpdatedAt         time.Time  `json:"-"`
+	SessionsInvalidatedAt    *time.Time `json:"-"`
 	CreatedAt                time.Time  `json:"created_at"`
 	UpdatedAt                time.Time  `json:"updated_at"`
 }

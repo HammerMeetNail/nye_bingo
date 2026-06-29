@@ -20,6 +20,12 @@ const (
 	cookieMaxAge      = 30 * 24 * 60 * 60 // 30 days in seconds
 )
 
+// dummyPasswordHash is a fixed, valid bcrypt hash (cost 12) used to perform a
+// throwaway password comparison on login paths where the account does not exist
+// or has no password. Running bcrypt regardless flattens the timing
+// side-channel that would otherwise reveal whether an email is registered.
+var dummyPasswordHash = "$2a$12$h5C7QccIskSYAUBsbDYbYenIkt2OLJPfc9CS6HaQ.XCCtXec01jWu"
+
 type AuthHandler struct {
 	userService  services.UserServiceInterface
 	authService  services.AuthServiceInterface
@@ -165,6 +171,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// Get user by email
 	user, err := h.userService.GetByEmail(r.Context(), req.Email)
 	if errors.Is(err, services.ErrUserNotFound) {
+		// Run a dummy bcrypt compare so unknown emails take ~the same time as known
+		// ones (mitigates user-enumeration via timing).
+		h.authService.VerifyPassword(&dummyPasswordHash, req.Password)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
@@ -175,6 +184,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.PasswordHash == nil {
+		h.authService.VerifyPassword(&dummyPasswordHash, req.Password)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}

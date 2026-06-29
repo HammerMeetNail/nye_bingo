@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -290,6 +291,7 @@ func TestAuthService_ValidateSession_RedisHit(t *testing.T) {
 				(*time.Time)(nil),
 				false,
 				now,
+				(*time.Time)(nil),
 				now,
 				now,
 			)
@@ -336,6 +338,7 @@ func TestAuthService_ValidateSession_FiltersDeletedUsers(t *testing.T) {
 				(*time.Time)(nil),
 				false,
 				time.Now().UTC(),
+				(*time.Time)(nil),
 				time.Now(),
 				time.Now(),
 			)
@@ -538,6 +541,7 @@ func TestAuthService_ValidateSession_DBHit(t *testing.T) {
 				(*time.Time)(nil),
 				false,
 				now,
+				(*time.Time)(nil),
 				now,
 				now,
 			)
@@ -552,6 +556,109 @@ func TestAuthService_ValidateSession_DBHit(t *testing.T) {
 	}
 	if user.ID != userID {
 		t.Fatalf("expected user ID %v, got %v", userID, user.ID)
+	}
+}
+
+// statefulRedis is an in-memory RedisClient that actually stores values by key,
+// so we can exercise full create/invalidate/validate round-trips.
+type statefulRedis struct {
+	store map[string]string
+}
+
+func newStatefulRedis() *statefulRedis {
+	return &statefulRedis{store: make(map[string]string)}
+}
+
+func (r *statefulRedis) Set(_ context.Context, key string, value any, _ time.Duration) error {
+	r.store[key] = fmt.Sprint(value)
+	return nil
+}
+
+func (r *statefulRedis) Get(_ context.Context, key string) (string, error) {
+	v, ok := r.store[key]
+	if !ok {
+		return "", errors.New("redis: nil")
+	}
+	return v, nil
+}
+
+func (r *statefulRedis) Expire(_ context.Context, _ string, _ time.Duration) error { return nil }
+
+func (r *statefulRedis) Del(_ context.Context, keys ...string) error {
+	for _, k := range keys {
+		delete(r.store, k)
+	}
+	return nil
+}
+
+// TestAuthService_DeleteAllUserSessions_RevokesRedisSession is the H-1 regression
+// test: a Redis-only session (no row in the sessions table) must stop validating
+// after DeleteAllUserSessions, which is what password change/reset rely on.
+func TestAuthService_DeleteAllUserSessions_RevokesRedisSession(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	now := time.Now().UTC()
+
+	var invalidatedAt *time.Time
+	db := &fakeDB{
+		ExecFunc: func(_ context.Context, sql string, _ ...any) (CommandTag, error) {
+			if strings.Contains(sql, "sessions_invalidated_at = NOW()") {
+				ts := time.Now().UTC()
+				invalidatedAt = &ts
+			}
+			return fakeCommandTag{rowsAffected: 1}, nil
+		},
+		// No PG-fallback sessions exist for this user.
+		QueryFunc: func(_ context.Context, _ string, _ ...any) (Rows, error) {
+			return &fakeRows{}, nil
+		},
+		QueryRowFunc: func(_ context.Context, _ string, _ ...any) Row {
+			return rowFromValues(
+				userID, "user@example.com", stringPtr("hash"), "username", true, nil, 0, true,
+				(*string)(nil), (*string)(nil), "free", "none", "inactive", (*time.Time)(nil), false, now,
+				invalidatedAt, // sessions_invalidated_at (reflects current state)
+				now, now,
+			)
+		},
+	}
+	redis := newStatefulRedis()
+	auth := NewAuthService(db, redis)
+
+	token, err := auth.CreateSession(ctx, userID)
+	if err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	// Sanity: the session validates before invalidation.
+	if _, err := auth.ValidateSession(ctx, token); err != nil {
+		t.Fatalf("session should validate before invalidation: %v", err)
+	}
+
+	// Revoke all sessions (as password change/reset does).
+	if err := auth.DeleteAllUserSessions(ctx, userID); err != nil {
+		t.Fatalf("DeleteAllUserSessions: %v", err)
+	}
+	if invalidatedAt == nil {
+		t.Fatal("expected DeleteAllUserSessions to stamp sessions_invalidated_at")
+	}
+
+	// The Redis-only session must no longer validate.
+	if _, err := auth.ValidateSession(ctx, token); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("expected ErrSessionNotFound after revocation, got %v", err)
+	}
+}
+
+func TestAuthService_ValidateSession_AbsoluteLifetimeExpiry(t *testing.T) {
+	ctx := context.Background()
+	userID := uuid.New()
+	// A session created beyond the absolute lifetime must be rejected even though
+	// the sliding TTL would otherwise keep it alive.
+	old := time.Now().Add(-maxSessionLifetime - time.Hour)
+	redis := &fakeRedis{getValue: encodeSessionValue(userID, old)}
+	auth := NewAuthService(&fakeDB{}, redis)
+
+	if _, err := auth.ValidateSession(ctx, "token"); !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("expected ErrSessionExpired for over-aged session, got %v", err)
 	}
 }
 

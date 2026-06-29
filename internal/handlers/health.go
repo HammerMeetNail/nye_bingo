@@ -39,10 +39,12 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	// Check PostgreSQL
+	// Check PostgreSQL. The raw error can leak internal hostnames/DSN fragments,
+	// so report a generic status publicly and log the detail server-side only.
 	if err := h.db.Health(ctx); err != nil {
 		response.Status = "unhealthy"
-		response.Checks["postgres"] = "unhealthy: " + err.Error()
+		response.Checks["postgres"] = "unhealthy"
+		logError("Health check failed: postgres", err)
 	} else {
 		response.Checks["postgres"] = "healthy"
 	}
@@ -50,7 +52,8 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 	// Check Redis
 	if err := h.redis.Health(ctx); err != nil {
 		response.Status = "unhealthy"
-		response.Checks["redis"] = "unhealthy: " + err.Error()
+		response.Checks["redis"] = "unhealthy"
+		logError("Health check failed: redis", err)
 	} else {
 		response.Checks["redis"] = "healthy"
 	}

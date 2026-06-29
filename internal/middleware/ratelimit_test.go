@@ -48,11 +48,11 @@ func TestClientIP(t *testing.T) {
 			expected: "10.0.0.1",
 		},
 		{
-			name:     "X-Forwarded-For Multiple",
+			name:     "X-Forwarded-For Multiple (right-most wins)",
 			headers:  map[string]string{"X-Forwarded-For": "10.0.0.1, 10.0.0.2"},
 			remote:   "192.168.1.1:1234",
 			trusted:  true,
-			expected: "10.0.0.1",
+			expected: "10.0.0.2",
 		},
 		{
 			name:     "X-Real-IP",
