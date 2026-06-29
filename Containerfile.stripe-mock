@@ -8,7 +8,7 @@ COPY tests/stripe_mock ./tests/stripe_mock
 WORKDIR /src/tests/stripe_mock
 RUN go build -o /stripe-mock .
 
-FROM docker.io/library/alpine:3.20
+FROM docker.io/library/alpine:3.22
 RUN adduser -D stripe
 USER stripe
 COPY --from=build /stripe-mock /usr/local/bin/stripe-mock

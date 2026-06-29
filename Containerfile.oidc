@@ -8,7 +8,7 @@ COPY tests/oidc ./tests/oidc
 WORKDIR /src/tests/oidc
 RUN go build -o /oidc-server .
 
-FROM docker.io/library/alpine:3.20
+FROM docker.io/library/alpine:3.22
 RUN adduser -D oidc
 USER oidc
 COPY --from=build /oidc-server /usr/local/bin/oidc-server
