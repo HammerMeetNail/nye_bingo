@@ -462,7 +462,7 @@ jobs:
           echo "Image tag: $TAG"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.34.0
+        uses: aquasecurity/trivy-action@v0.34.0
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           format: "table"
