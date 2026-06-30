@@ -462,9 +462,9 @@ jobs:
           echo "Image tag: $TAG"
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@v0.34.0
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
-          # Pin the Trivy binary: trivy-action@v0.34.0 defaults to v0.69.1, which
+          # Pin the Trivy binary: trivy-action@v0.35.0 defaults to v0.69.1, which
           # has no GitHub Release/assets, so the binary download 404s. Pin a real
           # release explicitly (also makes scans reproducible).
           version: v0.71.2
