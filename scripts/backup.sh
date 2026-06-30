@@ -83,7 +83,10 @@ CURRENT_STEP="dump"
 
 # For containerized PostgreSQL, connect via podman if localhost
 if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
-    POSTGRES_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'postgres' | head -1)
+    # Match this app's postgres container specifically. A bare 'postgres' match
+    # would also catch other stacks' containers (e.g. nabu_postgres_1) when they
+    # sort first in `podman ps`, dumping the wrong database.
+    POSTGRES_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'yearofbingo.*postgres' | head -1)
 
     if [[ -n "$POSTGRES_CONTAINER" ]]; then
         echo "Using podman exec for database dump (container: $POSTGRES_CONTAINER)..."
