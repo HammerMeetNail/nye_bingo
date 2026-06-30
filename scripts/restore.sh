@@ -87,7 +87,7 @@ mkdir -p "$BACKUP_DIR"
 
 # Detect target container for warning
 if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
-    TARGET_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'postgres' | head -1)
+    TARGET_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'yearofbingo.*postgres' | head -1)
 else
     TARGET_CONTAINER="remote: ${DB_HOST}:${DB_PORT}"
 fi
@@ -127,8 +127,10 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Decrypting and decompressing..."
 
 # For containerized PostgreSQL
 if [[ "$DB_HOST" == "localhost" ]] || [[ "$DB_HOST" == "127.0.0.1" ]]; then
-    POSTGRES_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'postgres' | head -1)
-    APP_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'app' | head -1)
+    # Scope to this app's containers; a bare match could target another stack
+    # (e.g. nabu_postgres_1 / nabu_app_1) when it sorts first in `podman ps`.
+    POSTGRES_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'yearofbingo.*postgres' | head -1)
+    APP_CONTAINER=$(podman ps --format '{{.Names}}' 2>/dev/null | grep -E 'yearofbingo.*app' | head -1)
 
     if [[ -n "$POSTGRES_CONTAINER" ]]; then
         echo "Found PostgreSQL container: $POSTGRES_CONTAINER"
