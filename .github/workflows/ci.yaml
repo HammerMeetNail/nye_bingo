@@ -356,7 +356,7 @@ jobs:
 
       - name: Build image (no push)
         if: "!startsWith(github.ref, 'refs/tags/v')"
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
@@ -367,7 +367,7 @@ jobs:
       - name: Build and push by digest (tags only)
         if: startsWith(github.ref, 'refs/tags/v')
         id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
